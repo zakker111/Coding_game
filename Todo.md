@@ -81,11 +81,14 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - deterministic spawn algorithm details (seeded RNG stream)
 
 ### Daily competition format
-- Locked direction: **everyone entered fights everyone** (round-robin style).
+- Locked direction: **daily competition with 4-player matches** and **season points**.
+- Bots that drop below a **points threshold** stop being scheduled until re-enabled.
+- Weekly: highlight **top 10** and reset/start a new season.
 - Still to define:
-  - match grouping (1v1 only vs 3–4 bots per match)
-  - daily points formula (win/loss only vs win/loss + performance stats)
-  - tie-break rules
+  - points formula (placement-only vs placement + stats)
+  - exact threshold value and whether it applies per-day vs across days
+  - rejoin rules (must meet threshold vs “rejoin allowance”)
+  - number of rounds/matches per day caps
   - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing

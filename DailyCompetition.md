@@ -1,6 +1,6 @@
-# DailyCompetition.md — Daily Server-Side Competition (All Bots Fight)
+# DailyCompetition.md — Daily Server-Side Competition (Season Points + Threshold)
 
-This document captures the current plan for **daily server-side simulations** where all eligible bots compete and receive points based on performance.
+This document captures the current plan for **daily server-side simulations** where eligible bots are grouped into matches and earn **points**. Bots that fall below a configured **points threshold** stop being scheduled until the owner re-enables them.
 
 It complements:
 - `ServerPlan.md`
@@ -12,111 +12,165 @@ It complements:
 ## 1) Goal
 
 Each day:
-- the server collects the set of eligible bot versions,
-- runs deterministic headless matches,
-- computes **daily points** per bot from match performance,
+- the server snapshots the set of eligible bots,
+- runs deterministic headless matches in **groups of 4**,
+- awards points from match outcomes,
+- updates each bot’s **season points**,
+- stops scheduling bots that drop below a configured threshold,
 - publishes a daily leaderboard and stores replays.
 
----
-
-## 2) Eligibility snapshot
-
-At the start of a daily run (e.g., midnight UTC):
-- Snapshot the set of participating **BotVersion** IDs.
-- Freeze the ruleset reference (`ruleset_version`).
-
-Typical eligibility policies (pick one later):
-- “Latest submitted version per bot before cutoff”
-- “User explicitly selects the version to enter today”
-- “Only bots marked active”
+Each week:
+- highlight the **top 10 bots**,
+- reset and start a new season.
 
 ---
 
-## 3) Matchup model
+## 2) Key concepts
 
-You requested: **every bot that is entered fights each other**.
+### 2.1 Season
+A season is a fixed period (e.g., 7 days) during which points accumulate.
 
-That is a **round-robin** schedule.
+Recommended fields:
+- `season_id`
+- `starts_at`, `ends_at`
+- `ruleset_version`
+- `eligible_points_threshold`
 
-For N bots:
-- number of matches = `N * (N-1) / 2` (for 1v1)
+### 2.2 Bot season status
+Each bot needs a per-season status:
+- `season_points` (integer)
+- `active_for_next_run` (boolean)
+- `last_active_run_date`
 
-If matches can contain 3–4 bots:
-- the schedule is not a simple pair list; you choose a grouping algorithm (still deterministic from `run_seed`).
-
-### 3.1 Why this matters
-
-- Round-robin is the most fair, but it becomes expensive as N grows.
-- If N is large, you may need to cap matches per bot and use a Swiss-style schedule.
+Interpretation:
+- Bots **above threshold** can remain active automatically.
+- Bots **below threshold** are not scheduled, unless the owner explicitly re-enables them.
 
 ---
 
-## 4) Determinism requirements
+## 3) Eligibility snapshot (daily run)
 
-For a given day, results must be reproducible:
-- daily run seed (`run_seed`)
-- match seeds (`match_seed` derived from run_seed + matchup index)
+At the start of the daily run (e.g., midnight UTC):
+- snapshot all bot entries where:
+  - `active_for_next_run == true`, and
+  - `season_points >= eligible_points_threshold`
+- freeze:
+  - `ruleset_version`
+  - a `run_seed`
+
+This prevents mid-run edits from affecting the run.
+
+---
+
+## 4) Match format and scheduling
+
+### 4.1 Match format (locked direction)
+- Daily run matches are **4-player matches** (four bots in one arena).
+
+> Note: You wrote “4v4”. The current engine planning assumes up to 4 bots per arena. If you truly mean 8 bots per match (4v4 teams), the arena/simulation spec must be updated.
+
+### 4.2 Scheduling model (multi-round grouping)
+
+Within a daily run, the server repeatedly:
+1) deterministically shuffles the active bot list using `run_seed`
+2) groups bots into batches of 4
+3) runs each match and assigns points
+4) updates `season_points`
+5) removes bots that fall below the threshold from the remaining schedule
+
+This continues until one of these stop conditions is met:
+- fewer than 4 bots remain eligible for another match
+- a configured `max_rounds_per_day` is reached
+
+This provides the behavior you described: bots that drop below a threshold “are not included in another match” for that day (and potentially future days unless re-enabled).
+
+---
+
+## 5) Points and elimination threshold
+
+### 5.1 Points
+The scoring formula is not finalized. The server should compute points as a pure function:
+- inputs: match placements + match stats
+- output: points delta per bot
+
+Common v1 approach (simple):
+- 4-bot match placement points:
+  - 1st: +X
+  - 2nd: +Y
+  - 3rd: +Z
+  - 4th: +W
+
+Optional add-ons (later):
+- damage dealt bonus
+- survival ticks bonus
+
+### 5.2 Threshold
+A bot is considered "in" the competition if:
+- `season_points >= eligible_points_threshold`
+
+When a bot drops below threshold:
+- it finishes the current match (obviously)
+- it is **not scheduled** for additional matches
+- it remains excluded until the owner re-enables it
+
+---
+
+## 6) Re-enabling a bot (owner intent)
+
+You described a manual “verify intent” action to allow a bot back into daily runs.
+
+Server-side interpretation (no UI details):
+- a user can set `active_for_next_run = true` for a bot version
+- eligibility still requires meeting the threshold rules (or you may optionally allow a “rejoin grace” mechanic)
+
+This should be recorded as an auditable event:
+- who re-enabled
+- when
+- which bot version/loadout was active
+
+---
+
+## 7) Determinism requirements
+
+For a given daily run, results must be reproducible from stored artifacts:
+- `season_id`
+- `run_seed`
+- per-match `match_seed` derived from (`run_seed`, round index, match index)
 - exact bot versions (source hashes + loadouts)
 - exact ruleset version
 
 ---
 
-## 5) Daily points (scoring)
+## 8) Outputs to publish/store
 
-The exact scoring formula is intentionally not locked yet. The server should be designed so that scoring is a pure function:
-
-- inputs: match results + per-match stats
-- output: per-bot daily points
-
-### 5.1 Common scoring building blocks
-
-- **Placement points**
-  - 1v1: win/loss points
-  - 4-bot: 1st/2nd/3rd/4th points
-
-- **Performance stats** (optional)
-  - damage dealt
-  - damage taken
-  - survival time (ticks alive)
-  - powerups collected
-
-### 5.2 Tie-break rules (deterministic)
-
-If two bots have equal points:
-- use deterministic tie-breakers, e.g.:
-  1) head-to-head record
-  2) total wins
-  3) total damage dealt
-  4) bot id ordering (last resort)
-
----
-
-## 6) “Matchup tree” interpretation
-
-If you truly mean a **tree/bracket** (single-elimination or double-elimination), that is different from “everyone fights everyone”.
-
-The server can support either, but they produce different outcomes:
-- **Round-robin**: maximum fairness; expensive at scale.
-- **Bracket**: cheaper; more variance; seeding matters.
-
----
-
-## 7) Outputs (what to store/publish)
+Per match:
+- placements
+- points deltas
+- replay reference
 
 Per daily run:
-- per-bot daily points
-- per-match outcomes
-- replays (or replay references)
+- list of participating bot versions
+- updated season points table
 - daily leaderboard snapshot
+
+Per season:
+- final rankings
+- top 10 snapshot
 
 ---
 
-## 8) Open decisions
+## 9) Open decisions (need confirmation)
 
-- Match format used for the daily competition:
-  - 1v1 only, or 2–4 bots per match?
-- Scoring:
-  - win/loss only vs win/loss + performance stats
-- Scaling strategy:
-  - full round-robin always vs cap matches per bot when N is large
-- Cutoff rules for which bot version enters today
+1) When a bot drops below threshold, is it excluded:
+   - **A)** only for the remainder of today’s run, or
+   - **B)** for all future days until re-enabled?
+
+2) If a bot is below threshold, can the owner re-enable it and have it participate:
+   - **A)** only if it already meets the threshold, or
+   - **B)** with a “rejoin allowance” (e.g., reset its points to threshold, or give a minimum points floor)?
+
+3) How many matches should each eligible bot play per day (cap)?
+   - unlimited until eliminated vs `max_matches_per_bot_per_day`.
+
+4) Weekly reset:
+   - what happens to points at reset? (set to 0 vs set to default baseline)
