@@ -21,15 +21,20 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>`
   - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`)
   - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)
-- New sample scripts: `examples/bot1.md` (combat bot variants).
+- New sample scripts:
+  - `examples/bot1.md` (combat bot variants)
+  - `examples/bot2.md` (Chaser Shooter)
+  - `examples/bot3.md` (Corner Bunker)
+  - `examples/bot4.md` (Saw Rusher)
 
 ### Changed
 - Loadout rules: slots may be empty; at most one weapon equipped (v1: `BULLET` or `SAW`).
 - Gameplay timing locked in docs: `ticksPerSecond = 1` and powerup spawn interval is 10–20 seconds.
-- UI plan clarified: Landing page is a single **Start Game** button for v1 (auth planned later).
+- UI plan updated: v1 is **Landing (`/`) → Workshop (`/workshop`)**; the workshop includes the editor, live local preview, replay controls, and 3 built-in opponent bots with viewable code.
 - Docs authoring rule: keep a stable core language and add “sugar” only as explicit aliases.
 - `BotInstructions.md` clarified **why aliases exist**, why they’re deterministic, and when to use the **target register** vs **inline selectors**.
-- Planning trackers updated (`Todo.md`): added next-step items to formalize the canonical alias table, deprecation strategy, parser/token list, and more beginner examples.
+- `BotInstructions.md` clarified source preprocessing for v1: `;` comments + blank lines ignored; `LABEL` is compile-time only; `pc` is indexed into the compiled executable instruction list (with an optional `pc -> sourceLine` mapping for UI).
+- Planning trackers updated (`Todo.md`): added v1 client UI plan tasks and new built-in opponents.
 
 ### Fixed
 - Documentation formatting/copy issues across planning docs.

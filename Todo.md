@@ -249,11 +249,23 @@ Speed/weight (locked direction):
 - Store bot versions (immutable) + loadouts.
 - Validate scripts on submission (reject duplicates in slots; reject invalid instructions/labels).
 
-### 8) Client UI (later)
-- Landing + login.
-- Bot editor.
-- Local match runner for testing.
-- Replay viewer.
+### 8) Client UI (v1)
+- **Route `/`**: minimal landing with one primary action: **Start Game** → `/workshop`.
+- **Route `/workshop`**: the main “coding page”:
+  - bot code editor (with inline parse/validation errors)
+  - local simulation preview + replay controls
+  - always a **4-bot match**: `BOT1=Your Bot` + three built-in opponents
+  - read-only code viewer for the built-in opponents
+- **Built-in opponents (v1)**: ship 3 bundled scripts under `examples/`:
+  - `examples/bot2.md` (Chaser Shooter)
+  - `examples/bot3.md` (Corner Bunker)
+  - `examples/bot4.md` (Saw Rusher)
+- **Persistence/memory (v1)**:
+  - persist the user’s bot draft across refresh (guest/local)
+  - persist minimal run config: seed (optional), tick cap (optional), opponent selection (if configurable), UI layout
+  - suggested storage: `localStorage` for small settings + `IndexedDB` for drafts if we support multiple drafts/large text
+
+Defer (post-v1): auth/login, cloud saving, replay library, sharing links.
 
 ---
 

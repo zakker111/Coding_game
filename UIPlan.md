@@ -1,11 +1,12 @@
-# UIPlan.md — Client UI Plan (Landing → Workshop → Match/Replay)
+# UIPlan.md — Client UI Plan (v1: Simple Landing → Workshop)
 
 This document describes the **client-first UI/UX** for the bot battle game:
 - players write bot code
 - run local simulations
 - inspect/replay what happened (deterministic ticks)
 
-Server-side simulation is a future step; this plan keeps server integration in mind without blocking the client prototype.
+v1 goal: ship the smallest UI that proves the core loop:
+**edit bot → run a 4-bot match locally → replay/debug → iterate**.
 
 It builds on:
 - `BotInstructions.md` (bot language)
@@ -18,37 +19,33 @@ It builds on:
 
 ## 1) App flow + routes (client-first)
 
-### 1.1 MVP flow
+### 1.1 v1 routes (minimal)
 
 1) **Landing** (`/`)
-   - v1: one button **Start Game** → `/workshop`
-   - later: auth / accounts
+   - one button: **Start Game** → `/workshop`
+   - no auth gating in v1
 
 2) **Workshop** (`/workshop`)
-   - choose bot name + avatar
-   - write bot script
-   - choose opponents + match mode
-   - click **Start Match**
+   - the main “coding page”
+   - contains:
+     - code editor for **your bot**
+     - an **arena preview** (live local simulation + replay controls)
+     - **three built-in opponent bots** (read-only code view)
 
-3) **Match (live simulation + replay viewer)** (`/match`)
-   - run the simulation locally (live)
-   - render via the replay viewer UI (same UI used for saved replays)
-   - save replay to local library
-
-Optional (can be a page later, or a drawer/modal first):
+Optional (post-v1, can be added later without changing the v1 funnel):
 - **Replay Library** (`/matches`)
 - **Replay viewer deep-link** (`/replay/:replayId`)
 
 ### 1.2 URL state (refresh/debug-friendly)
 
-Recommended query params on match/replay pages:
+Recommended query params on workshop/replay pages:
 - `tick` (current playhead)
 - `bot` (selected bot id, e.g. `BOT2`)
 - `speed` (playback speed multiplier)
 - `follow` (0/1, whether the viewer follows the newest tick during live run)
 
 Example:
-- `/replay/abc123?tick=120&bot=BOT2&speed=2&follow=0`
+- `/workshop?tick=120&bot=BOT2&speed=2&follow=0`
 
 ---
 
@@ -61,52 +58,79 @@ Goal: minimal friction to start.
 v1 UI (locked):
 - a single primary button: **Start Game** → goes to `/workshop`
 
-Future (planned, not v1):
-- optional auth (username/password)
+(Optionally add a single line of copy under the button, but no extra CTAs in v1.)
 
-### 2.2 Workshop (`/workshop`)
+### 2.2 Workshop (`/workshop`) — Editor + Arena + Opponents
 
-Primary UI:
-- **Bot profile**: display name + avatar (v1: colored 32×32 circle; later GIF)
-- **Code editor**: multiline, line numbers, basic validation/errors
-- **Instruction reference**: summarized from `BotInstructions.md`
+The workshop is the entire v1 experience.
 
-Match setup:
-- mode: `1v1` (client-only testing) or `1v1v1v1`
-- opponents: choose from preset bots (and optionally view their code)
-- seed (optional): random or user-specified
-- tick cap (optional): default sensible value
+#### Layout (simple 2-column)
+- **Left pane**: your bot
+  - Bot code editor (multiline, line numbers)
+  - Inline validation/errors (syntax errors, invalid instructions, etc.)
+  - Minimal instruction reference link (optional)
 
-CTA:
-- **Start Match** → navigates to `/match` in a “ready” state
+- **Right pane**: match preview
+  - Arena viewport
+  - Playback controls (play/pause, step +1, restart, speed)
+  - Bot list + inspector (select BOT1..BOT4 → show stats + code with pc highlight)
 
-### 2.3 Match / Replay (`/match`, `/replay/:replayId`)
+#### Bots in the preview match (v1 default)
+- The preview match is always **4 bots** (`BOT1..BOT4`).
+- Default mapping in workshop:
+  - `BOT1` = **Your Bot** (editable)
+  - `BOT2` = Built-in opponent A
+  - `BOT3` = Built-in opponent B
+  - `BOT4` = Built-in opponent C
 
-This screen is the **same UI** for:
-- live simulation (local runner produces replay ticks continuously)
-- viewing a saved replay
+Built-in opponents are bundled with the client as static examples (see `examples/`):
+- `bot2.md` (Chaser Shooter)
+- `bot3.md` (Corner Bunker)
+- `bot4.md` (Saw Rusher)
 
-Layout regions:
-1) **Arena viewport** (left/center)
-2) **Inspector panel** (right)
-3) **Playback bar** (bottom)
-4) (optional) **Event log panel**
+#### Primary actions
+- **Run / Preview** (primary)
+  - compiles/validates your bot
+  - runs a local match (live) and records a replay
+  - the preview run should stop when the simulation ends (e.g. last bot alive) or when it reaches a tick cap (default cap is a UI setting until match rules are fully locked)
+- **Reset match** (secondary)
+  - resets the current local run to tick 0 and replays
 
-Live-run UX:
-- start in `ready` state with a **Start** button
-- when running, the viewer can **Follow Live** (auto-jumps to newest tick)
-- if the user scrubs back, Follow Live automatically turns off
-- provide **Jump to Live** button
+#### Opponent configuration (v1)
+- v1 can keep opponents fixed (the same 3 bots every time).
+- Optional (still v1-friendly): allow selecting which built-in bot is in BOT2/BOT3/BOT4.
 
 ---
 
-## 3) Client state model (recommended)
+## 3) Persistence / memory (v1)
+
+v1 goal: don’t lose your bot when you refresh.
+
+- Persist your bot draft locally (guest mode).
+- Persist minimal run config: seed (optional), tick cap (optional), last selected opponent set.
+
+Recommended storage:
+- `localStorage` for small settings (seed, tick cap, selected bot ids, UI layout)
+- `IndexedDB` for bot drafts (source text + metadata), if/when drafts become larger
+
+MVP localStorage keys (concrete, v1-friendly):
+- `ws:storageVersion` = `1`
+- `ws:myBotSourceText` = string
+- `ws:myBotLoadout` = JSON (if/when loadout selection exists)
+- `ws:opponents` = JSON array of built-in ids in BOT2..BOT4 order (default: `["bot2","bot3","bot4"]`)
+- `ws:runConfig` = JSON (`{seedMode: "random"|"fixed", seed?: number, tickCap?: number}`)
+
+(If/when drafts become larger or you support multiple drafts, move the draft bodies to IndexedDB and keep only ids in localStorage.)
+
+---
+
+## 4) Client state model (recommended)
 
 Keep three layers of state:
 
 1) **Persistent workshop state** (survives refresh)
 - bot drafts: `{name, avatar, sourceText, lastEditedAt}`
-- match defaults: `{mode, lastOpponents, tickCap, seedMode}`
+- match defaults: `{tickCap, seedMode, lastOpponents}`
 
 Storage:
 - localStorage for small drafts/settings
@@ -129,9 +153,9 @@ Single-source-of-truth rule:
 
 ---
 
-## 4) Arena rendering (sectors + zones)
+## 5) Arena rendering (sectors + zones)
 
-### 4.1 World model + scaling
+### 5.1 World model + scaling
 
 From `ArenaPlan.md`:
 - zone: 32×32 world units
@@ -144,7 +168,7 @@ Render scaling:
 - `sectorRenderPx = 64 * scale`
 - `arenaRenderPx = 192 * scale`
 
-### 4.2 Grid visibility requirements
+### 5.2 Grid visibility requirements
 
 - draw **sector boundaries** as **thicker green** lines
 - draw **zone boundaries** as **thinner green** lines
@@ -152,7 +176,7 @@ Render scaling:
 
 Note: the sector center anchor (`SECTOR s`, `zone=0`) is the center point of the sector (intersection of the four zones).
 
-### 4.3 Entity rendering
+### 5.3 Entity rendering
 
 - bots: 32×32 sprite + name + slot id (`BOT1..BOT4`) + small resource bars
 - powerups: icons at their anchor location
@@ -168,7 +192,7 @@ Walls:
 
 ---
 
-## 5) Inspector panel (right)
+## 6) Inspector panel (right)
 
 - bot list with display names + slot ids
 - code viewer with current `pc` highlight
@@ -176,7 +200,7 @@ Walls:
 
 ---
 
-## 6) Playback + tick timing
+## 7) Playback + tick timing
 
 Ruleset timing (locked for v1):
 - `1 tick = 1 second` (see `Ruleset.md`, `ticksPerSecond = 1`)
@@ -193,7 +217,7 @@ Default playback:
 
 ---
 
-## 7) Replay saving/loading (client)
+## 8) Replay saving/loading (client)
 
 - On match end: show **Save Replay** dialog (name + save/discard)
 - Store replays in **IndexedDB** (recommended)
@@ -206,7 +230,7 @@ Default playback:
 
 ---
 
-## 8) Open UI decisions
+## 9) Open UI decisions
 
 1) Rendering tech: DOM/CSS vs Canvas2D
 2) Replay storage for MVP: full snapshot per tick vs event log + checkpoints

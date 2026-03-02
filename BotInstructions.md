@@ -56,6 +56,23 @@ A useful mental model:
 - `TARGET_*` instructions are **verbs**: they update the bot’s target register.
 - `*_BOT` tokens (`CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc.) are **nouns**: they are inline selectors passed to other instructions and resolved deterministically when that instruction executes.
 
+### 0.1 Source format (comments, blank lines, labels)
+
+The language is line-based for readability, but the engine uses a compiled form.
+
+Preprocessing rules (v1):
+- **Blank lines are ignored**.
+- **Comment lines are ignored**:
+  - any line whose first non-whitespace character is `;` is a comment.
+- `LABEL <name>` is a **compile-time directive**, not a runtime instruction:
+  - it does **not** consume a tick.
+  - it does **not** appear in the executable instruction list.
+  - labels are resolved to jump targets during compilation.
+
+Program counter (pc) model (v1):
+- `pc` is **1-indexed** into the compiled executable instruction list (after preprocessing).
+- For replay/UI debugging, the engine should retain a mapping: `pc -> originalSourceLine`.
+
 ## 1) Control flow
 
 - `LABEL <name>`
