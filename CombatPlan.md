@@ -1,4 +1,4 @@
-# CombatPlan.md — Projectiles, Weapon Cooldowns, and Resource Costs (Draft)
+# CombatPlan.md — Projectiles, Weapon Cooldowns, Resource Costs, Grenades, Mines (Draft)
 
 This document defines **combat mechanics** that bots can trigger via slot modules (e.g., bullet weapons) while keeping the bot instruction set small.
 
@@ -37,7 +37,7 @@ Store per bot, per slot:
 - optional module-specific state:
   - toggles (on/off)
   - charges / stacks
-  - spawned entity references (for minions)
+  - spawned entity references (for helpers/minions)
 
 ### 2.2 Resource costs (vector)
 
@@ -48,7 +48,9 @@ Define module resource costs as a vector so we can add hybrid weapons:
 Rule:
 - `USE_SLOTn` succeeds only if **all required resources** are available.
 - If successful, **all costs are deducted** together.
-- If not enough resources, the attempt is a no-op (no cost; no cooldown applied).
+- If not enough resources, the attempt is a deterministic no-op:
+  - no cost
+  - no cooldown applied
 
 Toggle modules:
 - may also define a per-tick drain (e.g., `drainEnergyPerTick` while active).
@@ -62,9 +64,6 @@ Rule:
 - if `cooldownRemaining > 0`, `USE_SLOTn` is a no-op.
 - when a use succeeds, set `cooldownRemaining = cooldownOnUseTicks`.
 - at the end of each simulation tick, decrement down to `0`.
-
-Notes:
-- cooldown should be per-slot (not global) so future duplicates or different module instances work naturally.
 
 ---
 
@@ -83,7 +82,7 @@ When a bot successfully executes `USE_SLOTn <BOT_TARGET>` for a slot containing 
 
 - `bulletId` (monotonic, deterministic)
 - `ownerBotId`
-- `targetBotId` (optional, for metadata/debug; not required for guidance)
+- `targetBotId` (optional, for metadata/debug)
 - `sector` (current sector)
 - `dir` (UP/DOWN/LEFT/RIGHT)
 - `ttlRemaining` (ticks)
@@ -97,45 +96,36 @@ Choose one:
 - **B) Larger-axis-first**: fire along the axis with larger absolute delta; tie-break fixed.
 - **C) Fixed direction priority**: choose the first direction (e.g., UP, RIGHT, DOWN, LEFT) that reduces Manhattan distance.
 
-(Once chosen, document it as a locked rule to preserve determinism.)
-
 ### 3.4 Projectile motion
 
 - Bullets are “slow”: move **1 sector per tick** in `dir`.
 - Bullets do **not** retarget in v1 (direction is locked at spawn).
-  - Future homing weapons can be implemented as different modules.
 
 ### 3.5 Walls
 
-Locked rule from `Todo.md` / `ArenaPlan.md`:
+Locked (from `ArenaPlan.md` / `Todo.md`):
 - bullets **stop at walls** (outer boundary in v1).
 
 Recommended v1 behavior:
-- if a bullet’s next sector step would go outside the arena:
-  - bullet is removed immediately
-  - emit a replay event (useful for debugging)
+- if a bullet’s next step would go outside the arena: remove bullet immediately and emit a replay event.
 
 ### 3.6 Hit resolution
 
-Locked rule:
+Locked:
 - bullets can hit **any bot** in the sector they enter (not only the intended target).
 
 Recommended v1 behavior:
-- when the bullet moves into a sector:
+- after moving into a sector:
   - if one or more alive bots occupy that sector, the bullet hits **exactly one** bot
-  - victim selection tie-break: lowest bot id among alive bots in that sector
-  - apply a damage event:
+  - victim tie-break: lowest bot id in that sector
+  - emit damage:
     - `source = BOT`, `sourceBotId = ownerBotId`, `kind = BULLET`
-  - remove the bullet after a hit
-
-Notes:
-- bullets do not apply damage on spawn (only on entering a sector after moving).
+  - remove bullet after a hit
 
 ### 3.7 TTL
 
-Bullets should have a TTL to avoid infinite entities.
 - `ttlRemaining` decrements each tick
-- when it reaches 0, bullet is removed
+- when it reaches 0, remove bullet
 
 Suggested TTL for a 3×3 arena: 6–10 ticks (tunable).
 
@@ -143,7 +133,7 @@ Suggested TTL for a 3×3 arena: 6–10 ticks (tunable).
 
 ## 4) Future weapon archetype: Sniper (hitscan)
 
-A sniper weapon is a module that resolves damage **instantly** rather than spawning a projectile.
+A sniper weapon resolves damage **instantly** rather than spawning a projectile.
 
 Recommended properties:
 - `delivery = HITSCAN`
@@ -153,48 +143,33 @@ Recommended properties:
 Hit semantics (draft):
 - on successful `USE_SLOTn <BOT_TARGET>`:
   - immediately apply damage to the resolved target bot (if valid/alive)
-  - emit a `BULLET`-kind damage event (or `SNIPER` kind if you want separate stats)
-
-This preserves the “bot has no control over mechanics” rule: bots request an attack; the module defines delivery.
+  - emit a damage event:
+    - `kind = BULLET` (or `SNIPER` if you want separate stats later)
 
 ---
 
-## 5) Deterministic tick ordering (integration)
-
-This document assumes the match loop ordering already described in `ServerPlan.md` / `Todo.md`.
+## 5) Deterministic tick ordering (combat-focused)
 
 Recommended high-level phases:
-1) each bot executes 1 instruction (may spawn projectiles / schedule hits)
+1) each bot executes 1 instruction (may spawn projectiles / deployables)
 2) apply toggle drains (saw/shield)
-3) advance projectiles
-4) resolve projectile hits + damage
-5) pickups
-6) death removal + win checks
+3) advance bullets/grenades
+4) resolve bullet hits
+5) resolve explosions
+6) pickups
+7) death removal + win checks
 
 Within phases:
 - process bots in `BOT1..BOT4`
-- process bullets by `bulletId` ascending
+- process entities in id order (`bulletId`, `grenadeId`, `mineId` ascending)
 
 ---
 
-## 6) Future-proofing for energy+ammo hybrid modules
+## 6) Timed explosive projectile: Grenade (delayed bullet)
 
-To support modules that use both resources:
-- represent costs as a vector (ammo, energy)
-- apply an “all-or-nothing” affordability check
+A grenade is a projectile that detonates after a fixed delay (fuse).
 
-Examples of future modules supported without new opcodes:
-- energy-assisted bullets (ammo + energy)
-- beam weapon (energy only; hitscan)
-- drone spawner (energy to spawn + energy drain per tick)
-
----
-
-## 7) Timed explosive projectile: Grenade (delayed bullet)
-
-A grenade is a **projectile** that detonates after a fixed delay (fuse) instead of dealing damage on first contact.
-
-### 7.1 Grenade entity fields
+### 6.1 Grenade entity fields
 
 - `grenadeId` (monotonic, deterministic)
 - `ownerBotId`
@@ -203,58 +178,49 @@ A grenade is a **projectile** that detonates after a fixed delay (fuse) instead 
 - `fuseRemaining` (ticks)
 - `ttlRemaining` (ticks)
 
-### 7.2 Movement + fuse update
+### 6.2 Movement + fuse update
 
-Recommended v1 semantics (deterministic):
-- Each tick:
-  1) grenade attempts to move 1 sector along `dir`
-     - if blocked by a wall: grenade stops and remains in its current sector
-  2) decrement `fuseRemaining`
-  3) if `fuseRemaining == 0`: detonate (see below) and remove grenade
-  4) decrement `ttlRemaining`; if it reaches 0, remove grenade (failsafe)
+Recommended deterministic update per tick:
+1) grenade attempts to move 1 sector along `dir`
+   - if blocked by a wall: grenade stops and remains in its current sector
+2) decrement `fuseRemaining`
+3) if `fuseRemaining == 0`: detonate and remove grenade
+4) decrement `ttlRemaining`; if it reaches 0, remove grenade (failsafe)
 
-### 7.3 Detonation (AoE)
+### 6.3 Detonation (AoE)
 
-Recommended v1 AoE for the 3×3 arena:
-- damage all alive bots in:
-  - the grenade’s sector (distance 0)
-  - optionally adjacent sectors (distance 1) depending on the radius you pick
+Locked v1 AoE shape:
+- **radius = 1 sector**
+  - center: grenade sector (distance 0)
+  - ring: adjacent sectors (distance 1)
+
+Locked v1 falloff:
+- bots in the **center sector** take **more** damage than bots in adjacent sectors.
+
+Module-defined numbers:
+- `damageCenter`
+- `damageAdjacent`
 
 Attribution:
-- every damage event uses:
-  - `source = BOT`, `sourceBotId = ownerBotId`, `kind = OTHER` (or add `EXPLOSION` later)
+- `source = BOT`, `sourceBotId = ownerBotId`, `kind = OTHER` (or `EXPLOSION` later)
 
-Deterministic victim ordering:
-- when multiple bots are damaged, apply damage in `BOT1..BOT4` order.
-
-### 7.4 Triggering grenades
-
-A grenade module is triggered by:
-- `USE_SLOTn <TARGET>`
-
-The module defines:
-- resource costs (`costAmmo`, `costEnergy`)
-- cooldown
-- fuse ticks
-- AoE radius
-- damage
-
-Bots do not control the fuse or AoE mechanics.
+Deterministic ordering:
+- apply explosion damage in `BOT1..BOT4` order.
 
 ---
 
-## 8) Deployable: Mines
+## 7) Deployable: Mines
 
-A mine is a persistent entity placed into the arena that detonates later.
+A mine is a persistent entity placed into the arena that detonates after a bot hits it.
 
-### 8.1 Placement model (decision to lock)
+### 7.1 Placement model (still to decide)
 
 Choose one deterministic placement rule:
 - **A) Drop-at-feet (simplest):** mine spawns in the bot’s current sector.
 - **B) Drop adjacent:** mine spawns in the sector the bot is moving toward / facing (requires defining “facing”).
 - **C) Place by target sector:** extend targeting to allow `USE_SLOTn SECTOR <N>`.
 
-### 8.2 Mine entity fields
+### 7.2 Mine entity fields
 
 - `mineId` (monotonic, deterministic)
 - `ownerBotId`
@@ -262,45 +228,52 @@ Choose one deterministic placement rule:
 - `armRemaining` (ticks; arming delay)
 - `ttlRemaining` (ticks)
 
-### 8.3 Arming + trigger
+### 7.3 Arming + trigger
 
-Recommended baseline:
-- mines do nothing while `armRemaining > 0`
-- once armed, mine detonates when a bot enters its sector
+Baseline:
+- mine does nothing while `armRemaining > 0`
+- once armed, mine detonates when a bot enters its sector ("hits it")
 
-Trigger targeting (decision to lock):
+Trigger targeting (still to decide):
 - **A) Any bot triggers** (including owner)
 - **B) Enemies only trigger** (owner immune)
 
-### 8.4 Detonation
+### 7.4 Detonation (AoE)
 
-Recommended baseline:
-- on detonation:
-  - apply damage in mine sector (and optionally adjacent sectors if you want AoE mines)
-  - remove the mine
+Locked v1 AoE shape:
+- **radius = 1 sector**
+  - center: mine sector (distance 0)
+  - ring: adjacent sectors (distance 1)
+
+Locked v1 falloff:
+- bots in the **mine sector** take **more** damage than bots in adjacent sectors.
+
+Module-defined numbers:
+- `damageCenter`
+- `damageAdjacent`
 
 Attribution:
-- `source = BOT`, `sourceBotId = ownerBotId`
+- `source = BOT`, `sourceBotId = ownerBotId`, `kind = OTHER` (or `MINE` later)
 
 Deterministic ordering:
-- if multiple armed mines would trigger in the same tick, resolve in `mineId` ascending order.
+- if multiple mines trigger in the same tick: resolve in `mineId` ascending order
+- for a given mine explosion, apply damage in `BOT1..BOT4` order
 
 ---
 
-## 9) Decisions to lock next
+## 8) Decisions to lock next
 
-1) Grenade AoE radius:
-   - **A)** same sector only
-   - **B)** same + adjacent sectors
+1) Bullet direction selection: **A / B / C** (see §3.3)
 
-2) Mine placement model:
-   - **A)** drop-at-feet
-   - **B)** drop adjacent (requires facing)
-   - **C)** target sector placement (requires extending target syntax)
+2) Bullet default numbers for v1 (placeholders are fine):
+- `costAmmo` per shot: 1 / 2 / 5
+- `cooldownOnUseTicks`: 0 / 1 / 3 / 5
+- `ttlRemaining`: 6 / 8 / 10
 
-3) Mine trigger targeting:
-   - **A)** any bot triggers
-   - **B)** enemies only
+3) Mine placement model: **A / B / C** (see §7.1)
 
-4) Do you want explosions to have their own damage `kind` (e.g., `EXPLOSION|MINE`) in `Ruleset.md`, or keep using `OTHER` until stats need it?
+4) Mine trigger targeting: **A / B** (see §7.3)
 
+5) Damage event kinds:
+- keep using `OTHER` for explosions, or
+- add explicit kinds like `EXPLOSION` and `MINE`

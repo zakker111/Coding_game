@@ -44,10 +44,13 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Powerups** exist for `HEALTH|AMMO|ENERGY` and refill up to 100 (no overflow).
 - Resource failure behavior (locked): bots may attempt actions, but if out of ammo/energy the action **does nothing**.
 
-### Projectiles (bullets)
+### Projectiles / explosives
 - Bullets are **slow-moving projectiles** updated each tick (not instant hits).
 - Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
 - **Bullets stop at walls** (locked).
+- Explosives (grenades/mines) (locked v1):
+  - AoE radius = **1 sector** (center + adjacent)
+  - damage falloff: **center sector takes more damage** than adjacent sectors
 - Weapon mechanics planning (cooldowns, ammo/energy costs, projectile/hitscan delivery, grenades, mines): see `CombatPlan.md`.
 
 ### Fault tolerance / corrupted bot code

@@ -33,7 +33,7 @@ All health reduction happens via **damage events**. Each damage event must inclu
   - `BOT` (another bot caused the damage)
   - `ENV` (environment; e.g., wall)
 - `sourceBotId` (only present when `source == BOT`)
-- `kind` (optional; helps replays/UI): `BULLET|SAW|BUMP_BOT|BUMP_WALL|OTHER`
+- `kind` (optional; helps replays/UI): `BULLET|SAW|BUMP_BOT|BUMP_WALL|EXPLOSION|MINE|OTHER`
 
 ### 2.1 Last-damage dealer (kill credit rule)
 
