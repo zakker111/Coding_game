@@ -53,7 +53,12 @@ Non-goals (until explicitly requested):
 
 - **Be explicit, deterministic, and data-driven.**
   - Never use `Math.random()` in simulation/gameplay; always use a seeded RNG.
-  - Avoid silent fallbacks in core gameplay—fail loudly in dev.
+  - Avoid fallbacks by default.
+    - In simulation, compilation, and rules enforcement: **do not silently fall back** (fail loudly in dev; surface errors clearly in UI/tests).
+    - If a fallback is truly required for UX (example: avatar image fails to load → use fallback color), it must be:
+      - explicitly specified in the relevant plan/spec
+      - deterministic
+      - observable (logged or visible in the inspector)
 
 - **Security is a first-class feature.**
   - Treat all bot code as untrusted.

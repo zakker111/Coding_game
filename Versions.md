@@ -6,7 +6,22 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - **MINOR**: new features that are backwards-compatible.
 - **PATCH**: bug fixes and small improvements.
 
+## Release discipline (required)
+
+- Every deployable build (client and/or server) must have a **version string**.
+  - The deployed version should be visible somewhere (UI footer/about panel) and logged on startup.
+- Every merge that changes user-visible behavior or spec contracts must update `Versions.md`.
+- **Bump the version before merging** (no “we’ll do it later”).
+- Every release entry must include a **timestamp**.
+  - Format: ISO 8601 in UTC (example: `2026-03-02T12:34:56Z`).
+
+---
+
 ## Unreleased
+
+### Planned (first implementation target)
+- **0.1.0 (first playable implementation):** Landing (`/`) → Workshop (`/workshop`) with local deterministic simulation + replay viewer.
+  - Bot visuals: placeholder circle tokens (later replaceable with avatars/images/GIFs).
 
 ### Definitions (planning)
 - `rulesetVersion`: the version of **gameplay rules + deterministic simulation semantics** (SemVer).
@@ -16,6 +31,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 Naming convention note:
 - Docs/replay/client JSON examples tend to use `camelCase` (e.g. `rulesetVersion`).
 - Server DB fields tend to use `snake_case` (e.g. `ruleset_version`).
+
+---
+
+## 0.0.2 — 2026-03-02T00:00:00Z
 
 ### Added
 - Project documentation scaffolding: `Prompt.md`, `Versions.md`, `Bugs.md`, `Todo.md`.
@@ -53,7 +72,6 @@ Naming convention note:
   - `;@appearance ...` (v1: `#RRGGBB`; future: asset/hash refs)
 - Daily competition docs clarified the deterministic end-of-run rule:
   - if fewer than 4 eligible bots remain, **stop scheduling** and end the run.
-- Planning trackers updated (`Todo.md`): added v1 client UI plan tasks and new built-in opponents.
 
 ### Fixed
 - Documentation formatting/copy issues across planning docs.
