@@ -32,6 +32,16 @@ This is a **single-line-per-tick** language:
 - `IF <EXPR> DO <INSTR>`
   - Convenience form: evaluate `<EXPR>`; if true, execute `<INSTR>`; otherwise do nothing.
   - `<INSTR>` must be a **single non-control instruction** (movement / module action / target selection).
+
+Timing:
+- `WAIT <TICKS>`
+  - Pauses execution for `<TICKS>` ticks.
+  - While waiting, the bot does not execute other instructions (equivalent to repeated `NOP`).
+  - Deterministic semantics (recommended):
+    - on first execution, store `waitRemaining = <TICKS>` and do **not** advance `pc`
+    - each subsequent tick, decrement `waitRemaining`
+    - when `waitRemaining == 0`, advance `pc` to the next line and continue next tick
+
 - `NOP`
 
 ---
@@ -228,8 +238,20 @@ Arena edges / walls (outer boundary in v1):
 Bumps (read last tick result):
 - `BUMPED_WALL()` → bool
 - `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+
 - `BUMPED_BOT()` → bool
 - `BUMPED_BOT_IS(<BOT>)` → bool
+- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+
+Bump semantics:
+- Bump flags represent the bot’s **most recent bump event**.
+- Bump flags are readable as a **"last tick" result**:
+  - collisions are detected/resolved during tick `t`
+  - bump flags are readable by the bot when it executes tick `t+1`
+- Bump state resets after it is exposed to the bot (and/or written into the replay).
+- Bot-to-bot collision bumps should apply to **both** bots involved:
+  - mover sees the direction it moved
+  - the other bot sees the opposite direction
 
 ### 6.4 Common patterns
 
@@ -238,6 +260,13 @@ Bumps (read last tick result):
 
 ```text
 IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
+```
+
+"React to collisions" should use bump sensors from the previous tick:
+
+```text
+IF (BUMPED_BOT()) DO SAW ON
+IF (BUMPED_WALL()) DO MOVE RIGHT
 ```
 
 ---
@@ -273,7 +302,21 @@ IF (DIST_TO_CLOSEST_BOT() <= 1) DO MOVE_TO_CLOSEST_BOT
 GOTO LOOP
 ```
 
-### Example D — If too close to a wall, move away
+### Example D — If bumped another bot, turn SAW on for 5 ticks
+
+```text
+LABEL LOOP
+IF (BUMPED_BOT()) GOTO SAW_BURST
+GOTO LOOP
+
+LABEL SAW_BURST
+SAW ON
+WAIT 5
+SAW OFF
+GOTO LOOP
+```
+
+### Example E — If too close to a wall, move away
 
 ```text
 LABEL LOOP

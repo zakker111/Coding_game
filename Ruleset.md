@@ -85,7 +85,27 @@ Walls are gameplay:
 
 ---
 
-## 4) Simultaneous damage and deterministic ordering
+## 4) Bot-to-bot collisions (bump events)
+
+Bots can collide with each other. The simulation should emit/track **bump events** so bot code can react (see `BUMPED_BOT*` predicates in `BotInstructions.md`).
+
+Event requirements:
+- A bot-to-bot collision produces a bump event for **both** bots.
+- The bump event should include:
+  - which bot it collided with (`otherBotId`)
+  - direction of impact relative to the bot (`dir`)
+
+Direction rule (recommended for v1):
+- If the collision was caused by a bot’s movement attempt in direction `<DIR>`, then:
+  - mover records `dir = <DIR>`
+  - the other bot records `dir = OPPOSITE(<DIR>)`
+
+Damage (to finalize):
+- If you decide that bot-to-bot bumps cause damage, it should be recorded as `source == BOT` with `kind == BUMP_BOT`, so it participates in kill credit via `lastDamageByBotId`.
+
+---
+
+## 5) Simultaneous damage and deterministic ordering
 
 Multiple damage events may apply in one tick.
 
@@ -106,7 +126,7 @@ Kill credit in multi-hit ticks:
 
 ---
 
-## 5) Match stats vs season points
+## 6) Match stats vs season points
 
 Match stats should include (at minimum):
 - placement (1st–4th)
