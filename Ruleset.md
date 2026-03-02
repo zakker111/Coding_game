@@ -9,9 +9,54 @@ It complements:
 
 ---
 
-## 1) Bot life + death
+## 1) Bot base stats + life/death
 
-- Each bot has `health` as an integer in **0..100**.
+### 1.1 Base stats (v1)
+
+Bots have a small set of core stats.
+
+Locked v1 ranges:
+- `health` is an integer in **0..100** (max health = 100)
+
+New (locked direction): bots also have:
+- `botBaseArmor` (integer or small fixed-point; exact reduction math is defined elsewhere)
+  - v1 recommended default: `0`
+- `baseSpeed` (implemented as a deterministic movement cooldown model; see §1.2)
+
+Loadout constraints (v1 validation rules):
+- bots have 3 slot positions; slots may be empty
+- at most one **weapon** module equipped (v1 weapons: `BULLET | SAW`)
+
+> Note: we keep the exact armor reduction formula intentionally simple in v1 and tune it later.
+
+### 1.2 Speed model (movement cooldown; loadout affects speed)
+
+Bots execute **1 instruction per tick** (see `BotInstructions.md`).
+
+Movement speed is represented as a deterministic cooldown so bots can be “faster” or “slower” without changing tick length:
+
+Ruleset parameters (v1):
+- `baseMoveCooldownOnMoveTicks` (recommended default: `0`)
+- `perEquippedSlotMoveCooldownPenaltyTicks` (recommended default: `1`)
+
+Derived per bot each tick:
+- `equippedSlotCount` = number of non-empty slots in the bot’s 3-slot loadout
+- `moveCooldownOnMoveTicks = baseMoveCooldownOnMoveTicks + equippedSlotCount * perEquippedSlotMoveCooldownPenaltyTicks`
+
+Runtime state per bot:
+- `moveCooldownRemaining` (integer >= 0)
+
+Rules:
+- a movement attempt (from an immediate move instruction or an auto-move goal) **only succeeds** when `moveCooldownRemaining == 0`.
+- if a move succeeds, set `moveCooldownRemaining = moveCooldownOnMoveTicks`.
+- at end-of-tick maintenance, decrement `moveCooldownRemaining` down to `0`.
+
+Effect (intended gameplay):
+- empty slots ⇒ smaller `equippedSlotCount` ⇒ **faster movement**
+- more equipped slots ⇒ **slower movement**
+
+### 1.3 Life + death
+
 - When a bot’s `health` reaches **0** (or below) at any point during tick resolution:
   - the bot becomes **dead** immediately for the remainder of the match
   - the bot is **removed from the arena** (no longer occupies a sector / no longer collidable)
@@ -175,6 +220,9 @@ Powerup spawning is driven by a **single global spawn timer** so the overall spa
 Ruleset parameters (must be stored with `rulesetVersion`):
 - `ticksPerSecond` (integer; v1 fixed to `1`)
   - `1 tick = 1 second` of simulated time
+- Movement speed parameters (see §1.2):
+  - `baseMoveCooldownOnMoveTicks` (v1 recommended: `0`)
+  - `perEquippedSlotMoveCooldownPenaltyTicks` (v1 recommended: `1`)
 - `powerupSpawnIntervalMinTicks` (v1: `10`)
 - `powerupSpawnIntervalMaxTicks` (v1: `20`)
   - must satisfy:

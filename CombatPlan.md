@@ -261,7 +261,32 @@ Deterministic ordering:
 
 ---
 
-## 8) Decisions to lock next
+## 8) Force effects (future; draft)
+
+This section outlines a deterministic way to add "forces" later (knockback, pull, recoil) while keeping the simulation replayable.
+
+Design constraints:
+- no floating point physics in v1
+- forces must be expressible as **anchor moves** (`loc = {sector, zone}`)
+
+Recommended force primitives (add later if desired):
+- **Knockback**: move a bot 1 anchor-step away from a source location/sector.
+- **Pull**: move a bot 1 anchor-step toward a source location/sector.
+- **Stun/slow**: temporarily increase `moveCooldownRemaining` (ties into `Ruleset.md` §1.2).
+- **Recoil**: a weapon use applies a knockback to the shooter.
+
+Deterministic ordering (recommended):
+- resolve forced moves in a dedicated phase after explosions but before pickups
+- apply in `BOT1..BOT4` order
+- if a forced move would hit the outer wall, treat as a wall bump (optional) or clamp/no-op (must be specified)
+
+Replay requirements:
+- add explicit events (so UI does not infer):
+  - `FORCE_APPLIED { botId, kind: KNOCKBACK|PULL|STUN, fromLoc, toLoc?, magnitude?, source }`
+
+---
+
+## 9) Decisions to lock next
 
 1) Bullet direction selection: **A / B / C** (see §3.3)
 

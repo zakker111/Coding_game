@@ -27,7 +27,9 @@ This is a **single-line-per-tick** language:
 > - Bots may also have a **display name** in UI/server contexts, but scripts still refer to match slots as `BOT1..BOT4`.
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
-> - No duplicate modules in slots in v1.
+> - Each bot has 3 slot positions (`SLOT1..SLOT3`); a slot may be **empty**.
+> - No duplicate modules among equipped slots in v1.
+> - At most **one weapon module** equipped in v1 (weapons in v1: `BULLET | SAW`).
 
 ---
 
@@ -120,6 +122,10 @@ Movement is **zone-aware** and operates on deterministic location anchors from `
 
 These instructions attempt **exactly one** movement step (one **location-anchor** step) during the movement phase of the current tick.
 
+Speed note (important):
+- Movement attempts can be blocked by the bot’s **movement cooldown** (see `Ruleset.md` §1.2).
+- If `moveCooldownRemaining > 0`, any movement request for that tick results in **no movement**.
+
 - `MOVE <DIR>`
   - Moves to a neighboring location anchor in direction `<DIR>` if one exists.
   - If multiple neighboring anchors match the direction, ties are resolved deterministically:
@@ -186,6 +192,7 @@ Resolution rules (recommended):
   - if the bot executed an **immediate movement** instruction this tick (§3.0), use that movement
   - else if the bot has a **movement goal** active, derive a movement step from the goal
   - else: no movement
+- Speed rule (from `Ruleset.md` §1.2): the `moveRequest` only results in movement if `moveCooldownRemaining == 0`.
 
 Goal completion:
 - `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches the **sector center**.
@@ -219,7 +226,7 @@ Notes:
   - Energy-based. When ON, drains energy per tick; auto-OFF at `energy == 0`.
   - Exact mitigation/reflect behavior is intentionally deferred.
 
-> Armor is passive (no instruction). If equipped, it reduces incoming damage (exact math deferred).
+> Armor is passive (no instruction). It provides additional damage reduction on top of the bot’s base armor (exact math deferred; see `Ruleset.md`).
 
 ---
 

@@ -104,7 +104,9 @@ A replay should support 2 independent requirements:
   - `botId` (`BOT1..BOT4`)
   - `displayName`
   - `avatar` (color for v1)
-  - `loadout` (slot module ids)
+  - `loadout` (3 slot positions; each entry is a module id or `null`)
+    - v1 validation: no duplicate modules among equipped slots
+    - v1 validation: at most one weapon module equipped (`BULLET` or `SAW`)
   - `sourceText` (or `sourceHash` + URL)
 
 ### 3.2 Two storage strategies
@@ -151,7 +153,7 @@ The UI should not infer combat; it should render what the replay says.
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
   - `result`: `EXECUTED | NOOP | ERROR`
-  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | ...`
+  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | MOVE_COOLDOWN | ...`
 
 ### 4.2 Locations (`loc`)
 

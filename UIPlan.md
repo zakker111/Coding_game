@@ -10,8 +10,8 @@ Server-side simulation is a future step; this plan keeps server integration in m
 It builds on:
 - `BotInstructions.md` (bot language)
 - `ArenaPlan.md` (sectors/zones/anchors)
-- `Ruleset.md` (powerups + collision + timing)
-- `ReplayViewerPlan.md` (replay data contract)
+- `Ruleset.md` (timing, powerups, damage)
+- `ReplayViewerPlan.md` (replay UX + schema)
 - `Todo.md` (locked decisions)
 
 ---
@@ -21,8 +21,8 @@ It builds on:
 ### 1.1 MVP flow
 
 1) **Landing** (`/`)
-   - sign in / create account (optional for v1)
-   - or **Continue locally** (no account required)
+   - v1: one button **Start Game** → `/workshop`
+   - later: auth / accounts
 
 2) **Workshop** (`/workshop`)
    - choose bot name + avatar
@@ -58,12 +58,11 @@ Example:
 
 Goal: minimal friction to start.
 
-UI elements:
-- short pitch + CTA
-- **Continue locally** button
-- optional auth card:
-  - username + password
-  - sign in / create account
+v1 UI (locked):
+- a single primary button: **Start Game** → goes to `/workshop`
+
+Future (planned, not v1):
+- optional auth (username/password)
 
 ### 2.2 Workshop (`/workshop`)
 

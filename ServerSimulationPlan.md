@@ -123,6 +123,7 @@ Recommended tick phases:
    - positions are deterministic location anchors:
      - `SECTOR s` (sector center)
      - `SECTOR s ZONE z` (zone center)
+   - speed rule: a movement request only succeeds when `moveCooldownRemaining == 0` (see `Ruleset.md` §1.2)
    - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps
 
 3) **Toggle drains**
@@ -147,7 +148,7 @@ Recommended tick phases:
    - in this phase, emit `BOT_DIED` and remove dead bots from the arena (so the replay/stat updates happen at a stable point)
 
 8) **End-of-tick maintenance**
-   - decrement cooldowns and bot-local timers
+   - decrement cooldowns, bot-local timers, and `moveCooldownRemaining`
    - decrement the global powerup spawn timer; if it reaches `0`, attempt to spawn one powerup and reset the timer (see `Ruleset.md`)
    - because spawn happens after pickups, newly spawned powerups cannot be picked up until the next tick
 

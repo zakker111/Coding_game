@@ -41,7 +41,10 @@ Implementation guidance (recommended stack):
   - `id`, `bot_id`, `created_at`
   - `source_text` (the instruction script)
   - `source_hash` (content hash; used in replays)
-  - `loadout` (3 slots; no duplicates in v1)
+  - `loadout` (3 slot positions; slots may be empty)
+    - no duplicate modules among equipped slots (v1)
+    - at most one weapon module equipped (v1: `BULLET` or `SAW`)
+    - note: equipped slot count affects bot movement speed (see `Ruleset.md`)
   - `ruleset_version`
   - `validation_status` + `validation_errors`
 
@@ -91,7 +94,10 @@ A replay should minimally include:
   - body: `{ source_text, loadout }`
   - server:
     - validates syntax + labels + instruction set (`BotInstructions.md`)
-    - enforces **no duplicates** in loadout
+    - validates loadout:
+      - 3 slot positions; slots may be empty
+      - no duplicate modules among equipped slots
+      - at most one weapon module equipped (v1: `BULLET` or `SAW`)
     - computes `source_hash`
     - stores immutable version
 - `GET /bots/:botId/versions`
@@ -118,9 +124,11 @@ Bot submissions are data. The server should never `eval` them.
   - `LABEL name` unique
   - `GOTO name` / `IF ... GOTO name` must reference an existing label
 - Validate loadout:
-  - exactly 3 slots
+  - 3 slot positions (`SLOT1..SLOT3`)
+  - slots may be empty
   - only allowed module types
-  - **no duplicates** (v1)
+  - **no duplicates** among equipped modules (v1)
+  - **at most one weapon module** equipped (v1: `BULLET` or `SAW`)
 
 Compile to internal representation:
 - compile instructions into a small deterministic opcode form

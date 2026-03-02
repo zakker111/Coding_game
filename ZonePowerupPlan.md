@@ -77,6 +77,9 @@ From `Ruleset.md`:
   - `ticksPerSecond = 1` (so `1 tick = 1 second`)
   - after each spawn attempt, reset the timer by sampling an integer uniformly from **[10, 20] ticks** (so **10–20 seconds**)
   - equivalently: `powerupSpawnIntervalMinTicks = 10`, `powerupSpawnIntervalMaxTicks = 20`
+
+Related v1 mechanics:
+- bot movement speed is affected by equipped slot count (see `Ruleset.md` §1.2)
 - General constraint (still applies if timing becomes configurable later):
   - `powerupSpawnIntervalMaxTicks <= ticksPerSecond * 60` (≥ 1 spawn/min)
 

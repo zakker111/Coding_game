@@ -39,15 +39,25 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 
 ### Loadout / modules
-- Each bot has **3 slots**.
-- Each slot holds exactly one module from:
+- Each bot has **3 slot positions**: `SLOT1|SLOT2|SLOT3`.
+- A slot may be **empty**.
+- Allowed v1 modules:
   - `BULLET` (ammo weapon)
   - `SAW` (energy toggle weapon)
   - `SHIELD` (energy toggle defense)
-  - `ARMOR` (passive defense)
-- **No duplicate modules** in v1.
-- If bot code calls an instruction for a module it doesn’t have equipped → **no-op**.
-- **Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
+  - `ARMOR` (passive defense; adds to base armor)
+- **No duplicate modules** among equipped modules in v1.
+- **At most one weapon** equipped in v1:
+  - weapon modules (v1) = `BULLET | SAW`
+  - remaining slots may be defensive modules or empty
+- If bot code calls an instruction for a module/slot it doesn’t have equipped → **no-op**.
+
+Speed/weight (locked direction):
+- Bots have a base movement speed, and **each equipped slot reduces speed**.
+- Empty slots make a bot **faster**.
+- The speed system is defined in `Ruleset.md` as a deterministic **movement cooldown** model.
+
+**Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
 
 ### Resources
 - `health`, `ammo`, `energy` are integers in **0..100**.
