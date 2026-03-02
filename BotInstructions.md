@@ -136,7 +136,13 @@ Close-range (named concept; exact radius can be tuned in ruleset):
 
 Bots can react to bump/collision outcomes (for example: "if I bumped a wall on the left, turn shield on").
 
-These sensors refer to the bot’s **most recent bump event** (typically caused by its own movement attempt). The engine should reset bump state each tick after it is observed/logged.
+These sensors refer to the bot’s **most recent bump event** (typically caused by its own movement attempt).
+
+Because the bot executes only one line per tick, bump information is most useful as a **"last tick" result**:
+- collisions are detected/resolved during tick `t`
+- bump flags are readable by the bot when it executes tick `t+1`
+
+The engine should reset bump state each tick after it is exposed to the bot and/or written into the replay.
 
 Walls:
 - `BUMPED_WALL()`

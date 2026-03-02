@@ -43,7 +43,29 @@ Open: whether sector boundaries are always open for movement (like rooms connect
 
 ---
 
-## 3) Movement model options (needs a decision)
+## 3) Collision representation (new)
+
+You specified:
+- each bot has a **32×32 collision box**.
+
+This affects how we define:
+- bot-vs-wall bumps (which side was hit)
+- bot-vs-bot bumps (which bot was hit)
+- future projectile collision precision (optional)
+
+Two interpretations are possible:
+
+- **A) Sector-first (logical), collision-box used for UI + tie-break precision**
+  - bots still move sector-to-sector
+  - the “collision box” primarily defines UI footprint and can be used for more precise hit testing later
+
+- **B) Continuous positions (physical), collision-box used for real collisions**
+  - bots have continuous `(x,y)` positions
+  - the 32×32 box is used for true wall/bot collisions and bounce resolution
+
+---
+
+## 4) Movement model options (needs a decision)
 
 Because our bot language currently uses sector-level commands (`MOVE UP`, `MOVE_TO_SECTOR`, etc.), there are two compatible ways to interpret wall bumps.
 
@@ -81,18 +103,28 @@ Cons:
 
 ---
 
-## 4) Recommended next step
+## 5) Recommended next step
 
 Before we finalize walls and movement, we should choose **Option A vs Option B**.
 
-Given the current language + 9-sector design, Option A is the consistent v1 choice; Option B is a later expansion.
+Your recent requirement (“each bot has a 32×32 collision box” + wall bumps with bounce direction) is compatible with either option, but it pushes us toward one of these v1 choices:
+
+- **If you want bounce to be mostly a gameplay penalty** (damage + feedback), with simple deterministic rules:
+  - choose **Option A (sector-only)**
+  - interpret `BUMPED_WALL_DIR(LEFT)` as "the bot attempted to move LEFT but hit a blocking wall"
+
+- **If you want true physical bounce** (position reflect) and collisions based on the 32×32 box:
+  - choose **Option B (continuous positions)**
+  - use integer/fixed-point coordinates for determinism
 
 ---
 
-## 5) Open parameters (regardless of option)
+## 6) Open parameters (regardless of option)
 
 - `wall_bump_damage` (small integer)
 - Do bullets collide with walls? (stop/bounce/pass-through)
 - Are internal sector boundaries always passable, or do some walls block passage?
 - If internal walls can block passage, how are “doors” represented?
+
+
 

@@ -64,9 +64,10 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).
 - **Walls are gameplay** (new):
   - when a bot bumps into a wall it takes a small amount of damage and “bounces”.
+  - bots have a **32×32 collision box** (new).
   - decide whether this is implemented as:
-    - **sector-only collisions** (attempted illegal move => no move + bump damage; "bounce" is mostly visual), or
-    - **continuous positions/velocity** inside the arena (true bounce/reflect; implies a larger simulation model).
+    - **sector-only collisions** (attempted illegal move => no move + bump damage; "bounce" is mostly visual; collision box mainly for UI/hit testing), or
+    - **continuous positions/velocity** inside the arena (true bounce/reflect; collision box used for real collisions; implies a larger simulation model).
 - Movement semantics for `MOVE_TO_*`:
   - shortest-path rules + deterministic tie-breaks when multiple shortest paths exist.
 - Bullet pathing:
