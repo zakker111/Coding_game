@@ -131,3 +131,22 @@ Close-range (named concept; exact radius can be tuned in ruleset):
 - `TARGET_ALIVE()`
 - `TARGET_IN_SAME_SECTOR()`
 - `TARGET_IN_ADJ_SECTOR()`
+
+### 6.6 Collision / bump sensors (new)
+
+Bots can react to bump/collision outcomes (for example: "if I bumped a wall on the left, turn shield on").
+
+These sensors refer to the bot’s **most recent bump event** (typically caused by its own movement attempt). The engine should reset bump state each tick after it is observed/logged.
+
+Walls:
+- `BUMPED_WALL()`
+- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)`
+
+Bots:
+- `BUMPED_BOT()`
+- `BUMPED_BOT_IS(BOT1|BOT2|BOT3|BOT4)`
+- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)`
+
+Notes / open rules (to finalize in the ruleset):
+- Define exactly when a “bump into another bot” occurs (e.g., attempted move into an occupied sector vs collision inside a sector).
+- If multiple bumps could occur in one tick, define which one is recorded (recommended: only record the bump caused by the bot’s own movement instruction; otherwise pick a deterministic priority order).
