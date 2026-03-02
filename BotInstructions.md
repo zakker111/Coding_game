@@ -3,6 +3,7 @@
 This is a **single-line-per-tick** language:
 - Each bot executes **exactly 1 instruction per tick** at its current `pc` (program counter).
 - If an instruction is invalid or malformed at runtime, it is treated as `NOP`, and `pc` resets to `1` next tick (per-bot; does not crash the match).
+- If a bot’s `HEALTH` reaches `0`, the bot is **dead** and stops being considered by targeting/movement helpers (details in `Ruleset.md`).
 
 > Notation:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`

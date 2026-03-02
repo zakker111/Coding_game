@@ -79,6 +79,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Match tick cap.
 - Win condition (last alive vs score).
 - How ties are handled.
+- **Death + kill credit rule (new, desired):**
+  - when `health` reaches 0 the bot dies and is removed from the arena.
+  - kill credit goes to the bot that dealt the **last non-environment damage** to the victim, even if the final damage was from a wall bump (self/environment).
 
 ### Powerup spawning
 - Locked: powerups spawn **randomly (seeded)**.

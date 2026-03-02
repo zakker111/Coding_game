@@ -105,6 +105,7 @@ Common v1 approach (simple):
 Optional add-ons (later):
 - damage dealt bonus
 - survival ticks bonus
+- **kills bonus** (based on deterministic kill attribution; see `Ruleset.md`)
 
 ### 5.2 Threshold
 A bot is considered "in" the competition if:
