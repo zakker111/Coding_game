@@ -21,6 +21,79 @@ It builds on:
 
 ---
 
+## 1.1 MVP app flow (new)
+
+The client should have a minimal, end-to-end loop:
+
+1) **Landing / Auth**
+2) **Bot Workshop** (avatar + code editor + instruction reference)
+3) **Match Screen** (arena + playback + click bots to inspect code)
+
+This is client-first UX planning; server integration can come later.
+
+### 1.1.1 Landing / Auth screen (rough v1)
+
+Goal: let a user either create an account or sign in.
+
+UI elements:
+- Title + short description
+- Tabs or two buttons:
+  - **Create account**
+  - **Sign in**
+- Minimal form fields (exact fields can change later):
+  - username
+  - password
+- Primary CTA:
+  - **Continue** (navigates to Bot Workshop)
+
+Notes:
+- No advanced flows in v1 (forgot password, email verification) unless needed.
+
+### 1.1.2 Bot Workshop screen (rough v1)
+
+This is the main build/test screen.
+
+Left / center:
+- **Bot avatar selection**
+  - For now: a palette of **different colored circles** rendered inside a **32×32** square.
+  - Later: replace with GIF upload/selection.
+
+- **Code editor**
+  - multiline editor for the bot script
+  - basic validation feedback later
+
+Right side panel:
+- **Instruction reference**
+  - show the contents/summary of `BotInstructions.md`
+  - include small examples (e.g., `IF (...) DO MOVE_TO_POWERUP HEALTH`)
+
+Match setup block:
+- Mode selector:
+  - **1v1** (client-only testing)
+  - **1v1v1v1 deathmatch** (4 bots total)
+- Start button:
+  - **Load Match** (navigates to Match Screen)
+
+Opponents (v1):
+- opponents are **dummy bots** (preset scripts + preset avatars)
+- user can inspect their code on the Match Screen
+
+### 1.1.3 Match Screen (rough v1)
+
+When the user clicks **Load Match**:
+- show the arena + bot list
+- show a **Start** button to begin ticking the simulation
+
+Playback:
+- default is “real-time feeling” by advancing ticks automatically at a modest speed
+- user can pause and step ticks
+
+Inspection:
+- user can click any bot in the arena (or in a bot list) to view that bot’s code
+- the code viewer highlights the current instruction per tick
+
+---
+
 ## 2) Screen layout (proposed)
 
 ### 2.1 Primary regions
@@ -179,10 +252,15 @@ This implies the replay format should store at least:
 ## 5) Timeline + playback
 
 ### 5.1 Controls
-- Play / Pause
+- Start / Pause (Start begins automatic ticking)
 - Step +1 tick
 - Step -1 tick (if replay supports reverse stepping by storing states or using checkpoints)
-- Speed: 0.25× / 0.5× / 1× / 2× / 4×
+- Speed (recommended presets):
+  - 0.5× / 1× / 2×
+
+"Real-time feeling" default (recommended):
+- Start at **1×** with a tick cadence that is readable (for example: **6–12 ticks/sec**).
+- The UI should visually smooth movement between ticks, but state changes must remain tick-accurate.
 
 ### 5.2 Jumping to tick
 Two approaches:
