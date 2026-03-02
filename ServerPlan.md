@@ -9,6 +9,9 @@ It is intentionally **implementation-agnostic** (no required framework/DB yet). 
 - `CombatPlan.md`
 - `ServerSimulationPlan.md`
 
+Implementation guidance (recommended stack):
+- `ServerTechStack.md`
+
 ---
 
 ## 1) Server goals (what the server must guarantee)
