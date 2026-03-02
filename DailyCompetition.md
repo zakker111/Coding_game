@@ -64,10 +64,12 @@ This prevents mid-run edits from affecting the run.
 
 ## 4) Match format and scheduling
 
-### 4.1 Match format (locked direction)
-- Daily run matches are **4-player matches** (four bots in one arena).
+### 4.1 Match format (locked)
+- Daily run matches are **4-player matches** (four bots total in one arena).
+- Spawn rule (locked): bots spawn in the **four corners** of the 9-sector arena:
+  - `BOT1 → sector 1`, `BOT2 → sector 3`, `BOT3 → sector 7`, `BOT4 → sector 9` (unless you later introduce randomized assignment by seed).
 
-> Note: You wrote “4v4”. The current engine planning assumes up to 4 bots per arena. If you truly mean 8 bots per match (4v4 teams), the arena/simulation spec must be updated.
+> Note: If a match has fewer than 4 eligible bots (late in a run), you’ll need a deterministic rule: either stop scheduling or allow 2–3 player matches.
 
 ### 4.2 Scheduling model (multi-round grouping)
 
@@ -159,18 +161,20 @@ Per season:
 
 ---
 
-## 9) Open decisions (need confirmation)
+## 9) Open decisions (updated status)
 
-1) When a bot drops below threshold, is it excluded:
-   - **A)** only for the remainder of today’s run, or
-   - **B)** for all future days until re-enabled?
+Locked from latest decisions:
+- When a bot drops below threshold, it is excluded **for all future days** until re-enabled.
+- Re-enable uses a **rejoin allowance** (points floor) so the bot can re-enter even if it was below threshold.
+- Match size: **4 bots total**.
+- Spawn positions: **four corners** of the 9-sector arena (1, 3, 7, 9).
 
-2) If a bot is below threshold, can the owner re-enable it and have it participate:
-   - **A)** only if it already meets the threshold, or
-   - **B)** with a “rejoin allowance” (e.g., reset its points to threshold, or give a minimum points floor)?
-
-3) How many matches should each eligible bot play per day (cap)?
+Still open:
+1) Rejoin allowance details:
+   - set points to exactly `eligible_points_threshold`, or to a separate `rejoin_points_floor`?
+2) How many matches should each eligible bot play per day (cap)?
    - unlimited until eliminated vs `max_matches_per_bot_per_day`.
-
-4) Weekly reset:
+3) Weekly reset:
    - what happens to points at reset? (set to 0 vs set to default baseline)
+4) If fewer than 4 eligible bots remain late in a daily run:
+   - stop scheduling, or allow 2–3 player matches?

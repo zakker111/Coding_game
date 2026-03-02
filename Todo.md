@@ -82,13 +82,15 @@ This file is the **single source of truth** for near-term engineering tasks and 
 
 ### Daily competition format
 - Locked direction: **daily competition with 4-player matches** and **season points**.
-- Bots that drop below a **points threshold** stop being scheduled until re-enabled.
+- Spawn: bots start in the **four corners** of the 9-sector arena (1, 3, 7, 9).
+- Elimination: bots that drop below a **points threshold** are excluded from **future days** until re-enabled.
+- Rejoin: re-enable uses a **rejoin allowance** (points floor) so bots can come back even if below threshold.
 - Weekly: highlight **top 10** and reset/start a new season.
 - Still to define:
   - points formula (placement-only vs placement + stats)
-  - exact threshold value and whether it applies per-day vs across days
-  - rejoin rules (must meet threshold vs “rejoin allowance”)
+  - exact threshold value and exact rejoin allowance amount
   - number of rounds/matches per day caps
+  - what happens when fewer than 4 eligible bots remain (stop vs allow 2–3 player matches)
   - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing
