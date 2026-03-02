@@ -48,7 +48,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Bullets are **slow-moving projectiles** updated each tick (not instant hits).
 - Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
 - **Bullets stop at walls** (locked).
-- Weapon mechanics planning (cooldowns, ammo/energy costs, projectile/hitscan delivery): see `CombatPlan.md`.
+- Weapon mechanics planning (cooldowns, ammo/energy costs, projectile/hitscan delivery, grenades, mines): see `CombatPlan.md`.
 
 ### Fault tolerance / corrupted bot code
 - Bot code must never crash the match.

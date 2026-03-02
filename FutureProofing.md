@@ -47,7 +47,11 @@ Recommended module schema fields (high-level):
 - costs (vector): `costAmmo`, `costEnergy`
 - cooldown: `cooldownOnUseTicks`
 - optional drains while active: `drainEnergyPerTick`
-- delivery model for attacks: `PROJECTILE | HITSCAN`
+
+Delivery / behavior kind (examples):
+- attacks: `PROJECTILE | HITSCAN | TIMED_EXPLOSIVE`
+- deployables: `DEPLOYABLE` (mines, turrets, traps)
+- spawns: `SPAWN_HELPER`
 
 See `CombatPlan.md` for projectile + cooldown details.
 
