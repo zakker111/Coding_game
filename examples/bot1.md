@@ -14,6 +14,28 @@ This doc contains two complete **BotInstructions v1** scripts that focus on **at
 
 ---
 
+## Optional: shorthand aliases (newer convenience names)
+
+The scripts below use the more explicit v1 names. If you prefer the newer shorthand aliases (same behavior), you can swap in lines like these:
+
+```text
+; Targeting
+TARGET_CLOSEST_BOT            ; or: TARGET_CLOSEST / TARGET_NEAREST
+TARGET_LOWEST_HEALTH          ; or: TARGET_WEAKEST
+
+; Shooting (slot-addressed)
+USE_SLOT1 TARGET              ; or: FIRE_SLOT1 TARGET        ; alias of USE_SLOT1
+                              ; or: FIRE_TARGET SLOT1        ; uses the current target bot
+USE_SLOT1 NEAREST_BOT         ; fire at the closest bot without using the target register
+USE_SLOT1 WEAKEST_BOT         ; fire at the lowest-health bot without using the target register
+
+; Toggle modules via slots (useful if you later change what module is in a slot)
+SAW ON                        ; or: USE_SLOT1 NONE
+SAW OFF                       ; or: STOP_SLOT1
+SHIELD ON                     ; or: USE_SLOT2 NONE
+SHIELD OFF                    ; or: STOP_SLOT2
+```
+
 ## Variant A — “Shielded Shooter” (BULLET + SHIELD)
 
 ### Intended behavior (plain English)

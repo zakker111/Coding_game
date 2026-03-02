@@ -67,6 +67,10 @@ Powerup sensing (examples):
 - `POWERUP_EXISTS(HEALTH)`
 - `DIST_TO_CLOSEST_POWERUP(HEALTH)`
 
+Powerup targeting/movement convenience (aliases):
+- `TARGET_CLOSEST_POWERUP <TYPE>` (alias of `TARGET_POWERUP <TYPE>` in v1)
+- `MOVE_TO_CLOSEST_POWERUP <TYPE>` (alias of `MOVE_TO_POWERUP <TYPE>`)
+
 Powerup targeting invalidation:
 - if no powerup of a targeted type exists anymore, the target becomes invalid and is cleared (so bots stop “chasing a non-existent item”).
 

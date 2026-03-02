@@ -157,7 +157,7 @@ Event ordering + compatibility:
   - `tick`, `botId`
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
-  - `result`: `EXECUTED | NOOP | ERROR`
+  - `result`: `EXECUTED | NOP | ERROR`
   - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | MOVE_COOLDOWN | ...`
 
 ### 4.2 Locations (`loc`)

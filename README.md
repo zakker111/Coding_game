@@ -8,7 +8,7 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 
 - **4 bots per match** (`BOT1..BOT4`)
 - **Deterministic tick simulation**: `ticksPerSecond = 1` (so **1 tick = 1 simulated second**)
-- Each bot executes **exactly 1 instruction per tick** in a small DSL
+- Each bot executes **exactly 1 instruction per tick** in a small DSL (with a few readability aliases like `TARGET_CLOSEST`, `MOVE_TO_ZONE`, `IN_ZONE`, etc.)
 - Arena is a **3×3 grid of sectors** (1–9). Each sector has **4 zones** (2×2). Movement is **anchor-based** (sector centers + zone centers).
 - Bots equip up to **3 module slots** (slots may be empty). **More equipped slots = slower movement**.
 - Powerups (`HEALTH|AMMO|ENERGY`) spawn deterministically (seeded RNG) every **10–20 ticks** and are picked up by occupying the same anchor.

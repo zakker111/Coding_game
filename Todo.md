@@ -31,7 +31,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - JS-like **line-based instruction language** (see `BotInstructions.md`).
 - Scripts compile/validate to a safe internal form (no `eval`).
 - Slot targeting supports a generalized `<TARGET>` union:
-  - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`)
+  - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`/`NEAREST_BOT`, `LOWEST_HEALTH_BOT`/`WEAKEST_BOT`)
   - location targets:
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
@@ -40,6 +40,10 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
   - `IN_ZONE(<ZONE>)`
+- Beginner-friendly shorthand aliases (readability only):
+  - `TARGET_CLOSEST` / `TARGET_NEAREST` (aliases of `TARGET_CLOSEST_BOT`)
+  - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
+  - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
 
 ### Loadout / modules
 - Each bot has **3 slot positions**: `SLOT1|SLOT2|SLOT3`.

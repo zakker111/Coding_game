@@ -11,7 +11,9 @@ This is a **single-line-per-tick** language:
 > Notation:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
 > - `<TYPE>`: `HEALTH|AMMO|ENERGY`
-> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
+> - `<BOT_TARGET>`: `<BOT>|TARGET|CLOSEST_BOT|NEAREST_BOT|LOWEST_HEALTH_BOT|WEAKEST_BOT` (subset of `<TARGET>`)
+>   - `NEAREST_BOT` is an alias of `CLOSEST_BOT`.
+>   - `WEAKEST_BOT` is an alias of `LOWEST_HEALTH_BOT`.
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..4`
@@ -81,9 +83,15 @@ The bot maintains:
 ### 2.1 Target a bot
 
 - `SET_TARGET <BOT>`
+
 - `TARGET_CLOSEST` (alias: `TARGET_CLOSEST_BOT`)
+- `TARGET_NEAREST` (alias: `TARGET_CLOSEST_BOT`)
+  - sets `targetBotId` to the **closest alive bot** (ties: lowest bot id)
+
 - `TARGET_LOWEST_HEALTH`
+- `TARGET_WEAKEST` (alias: `TARGET_LOWEST_HEALTH`)
   - sets `targetBotId` to the alive bot with the lowest health (ties: lowest bot id)
+
 - `TARGET_NEXT`
 - `TARGET_NEXT_IF_DEAD`
 
@@ -209,6 +217,9 @@ Instructions:
     - behave as if the script had written: `SET_MOVE_TO_SECTOR S ZONE <ZONE>`
   - Sets a navigation goal to zone `<ZONE>` **in your current sector**.
 - `SET_MOVE_TO_BOT <BOT_TARGET>`
+  - If `<BOT_TARGET>` is a dynamic selector (`CLOSEST_BOT`/`NEAREST_BOT`/`LOWEST_HEALTH_BOT`/`WEAKEST_BOT`), it is re-resolved each tick.
+  - If `<BOT_TARGET>` is `TARGET`, it follows your current `targetBotId`.
+  - If `<BOT_TARGET>` is a specific bot id (`BOT1..BOT4`), it follows that bot until it dies.
 - `SET_MOVE_TO_POWERUP <TYPE>`
 - `SET_MOVE_TO_TARGET`
 - `CLEAR_MOVE`
@@ -241,6 +252,11 @@ Notes:
 
 - `FIRE_BULLET <BOT_TARGET>`
   - Ammo-based. If `ammo == 0`, does nothing.
+  - `<BOT_TARGET>` can be:
+    - a specific bot id: `BOT1..BOT4`
+    - `TARGET` (your current `targetBotId`; if invalid/dead, no-op)
+    - `CLOSEST_BOT` / `NEAREST_BOT` (closest alive bot; ties: lowest bot id)
+    - `LOWEST_HEALTH_BOT` / `WEAKEST_BOT` (lowest-health alive bot; ties: lowest bot id)
   - Bullets are slow projectiles; bullets can hit **any bot** in the sector they enter (not only the chosen target).
 
 - `SAW ON`
@@ -269,7 +285,7 @@ Slot-addressed actions are the **future-proof** layer for adding new modules wit
 Semantics:
 - Triggers the **primary action** of whatever module is equipped in that slot.
 - Target is passed to the module:
-  - bot targets: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`
+  - bot targets: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`/`NEAREST_BOT`, `LOWEST_HEALTH_BOT`/`WEAKEST_BOT`
   - location targets:
     - `SECTOR <SECTOR>` (sector center)
     - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
@@ -539,7 +555,7 @@ SET_MOVE_TO_SECTOR 1
 LABEL LOOP
 
 ; keep firing when ready, even while auto-moving
-IF (SLOT_READY(SLOT1)) DO USE_SLOT1 CLOSEST_BOT
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 NEAREST_BOT
 
 ; if we bumped a bot last tick, turn saw on
 IF (BUMPED_BOT()) DO SAW ON
@@ -566,5 +582,21 @@ GOTO LOOP
 ```text
 LABEL LOOP
 IF (HEALTH < 10 && POWERUP_EXISTS(HEALTH)) DO MOVE_TO_POWERUP HEALTH
+GOTO LOOP
+```
+
+### Example J — Fire at the nearest bot (no explicit targeting register)
+
+```text
+LABEL LOOP
+IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 NEAREST_BOT
+GOTO LOOP
+```
+
+### Example K — Fire at the weakest bot (lowest health)
+
+```text
+LABEL LOOP
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 WEAKEST_BOT
 GOTO LOOP
 ```

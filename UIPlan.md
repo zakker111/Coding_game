@@ -172,7 +172,7 @@ Walls:
 
 - bot list with display names + slot ids
 - code viewer with current `pc` highlight
-- per-tick execution result (`EXECUTED | NOOP | ERROR`) and reason (when available)
+- per-tick execution result (`EXECUTED | NOP | ERROR`) and reason (when available)
 
 ---
 
