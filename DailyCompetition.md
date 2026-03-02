@@ -66,8 +66,12 @@ This prevents mid-run edits from affecting the run.
 
 ### 4.1 Match format (locked)
 - Daily run matches are **4-player matches** (four bots total in one arena).
-- Spawn rule (locked): bots spawn in the **four corners** of the 9-sector arena:
-  - `BOT1 → sector 1`, `BOT2 → sector 3`, `BOT3 → sector 7`, `BOT4 → sector 9` (unless you later introduce randomized assignment by seed).
+- Spawn rule (locked): bots spawn in the **four corners** of the arena:
+  - `BOT1 → SECTOR 1 ZONE 1` (top-left)
+  - `BOT2 → SECTOR 3 ZONE 2` (top-right)
+  - `BOT3 → SECTOR 7 ZONE 3` (bottom-left)
+  - `BOT4 → SECTOR 9 ZONE 4` (bottom-right)
+  - (unless you later introduce randomized assignment by seed)
 
 > Note: If a match has fewer than 4 eligible bots (late in a run), you’ll need a deterministic rule: either stop scheduling or allow 2–3 player matches.
 
@@ -168,7 +172,11 @@ Locked from latest decisions:
 - When a bot drops below threshold, it is excluded **for all future days** until re-enabled.
 - Re-enable uses a **rejoin allowance** (points floor) so the bot can re-enter even if it was below threshold.
 - Match size: **4 bots total**.
-- Spawn positions: **four corners** of the 9-sector arena (1, 3, 7, 9).
+- Spawn positions: **four corners** of the arena (`SECTOR+ZONE` anchors):
+  - `BOT1 → SECTOR 1 ZONE 1`
+  - `BOT2 → SECTOR 3 ZONE 2`
+  - `BOT3 → SECTOR 7 ZONE 3`
+  - `BOT4 → SECTOR 9 ZONE 4`
 
 Still open:
 1) Rejoin allowance details:

@@ -137,3 +137,69 @@ Match stats should include (at minimum):
 
 Season points are computed from match stats by a configurable formula (see `DailyCompetition.md`).
 
+---
+
+## 7) Powerups (spawn + pickup)
+
+Powerups are the only way to restore resources in v1.
+
+Types:
+- `HEALTH`
+- `AMMO`
+- `ENERGY`
+
+### 7.1 Spawn locations (sector + zone anchors)
+
+Powerups can spawn at the location anchors from `ArenaPlan.md`:
+- sector centers: `SECTOR 1..9`
+- zone centers: `SECTOR 1..9 ZONE 1..4`
+
+Total spawn locations: `9 + 9*4 = 45`.
+
+At most one powerup can exist at a given spawn location at a time.
+
+### 7.2 Respawn timers (random but deterministic)
+
+Each spawn location maintains its own respawn timer:
+- `respawnRemainingTicks` (integer, >= 0)
+
+Rules:
+- At match start, each location is initialized with `respawnRemainingTicks` sampled from a seeded RNG.
+- At the end of each tick, if there is **no** powerup currently occupying the location, decrement `respawnRemainingTicks` down to `0`.
+- When `respawnRemainingTicks == 0` and the location is empty:
+  - spawn exactly one powerup at that location
+  - then immediately reset `respawnRemainingTicks` by sampling again from the seeded RNG
+
+Parameters (to decide later, but must be stored in ruleset version):
+- `powerupRespawnMinTicks`
+- `powerupRespawnMaxTicks`
+
+Deterministic requirement:
+- Locations must be processed in a stable order when ticking timers/spawning:
+  - sector id ascending
+  - sector center first
+  - then zones 1..4
+
+### 7.3 Choosing the spawned powerup type
+
+When a spawn occurs, choose the type using the seeded RNG.
+
+Options (pick one and lock in the ruleset):
+- A) uniform among `HEALTH|AMMO|ENERGY`
+- B) weighted distribution (example: less `HEALTH`, more `AMMO/ENERGY`)
+
+If you choose weights, the weights must be part of `rulesetVersion`.
+
+### 7.4 Pickup semantics
+
+Pickup phase (see tick ordering in `ServerSimulationPlan.md`):
+- If a bot occupies the same location anchor as a powerup, it automatically picks it up.
+- Apply refill (locked; no overflow):
+  - `HEALTH` sets `health = 100`
+  - `AMMO` sets `ammo = 100`
+  - `ENERGY` sets `energy = 100`
+- Remove the powerup entity from the arena.
+
+Deterministic ordering:
+- If multiple pickups would occur in the same tick (different bots at different powerups), process bots in `BOT1..BOT4` order.
+

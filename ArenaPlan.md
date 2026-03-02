@@ -18,31 +18,28 @@ It is aligned with:
   - `7 8 9`
 
 - Matches run with up to **4 bots**.
-- Default spawn positions for 4-bot matches (locked): corners
-  - `BOT1 → 1`, `BOT2 → 3`, `BOT3 → 7`, `BOT4 → 9`
+- Default spawn positions for 4-bot matches (locked): arena corners
+  - `BOT1 → SECTOR 1 ZONE 1` (top-left)
+  - `BOT2 → SECTOR 3 ZONE 2` (top-right)
+  - `BOT3 → SECTOR 7 ZONE 3` (bottom-left)
+  - `BOT4 → SECTOR 9 ZONE 4` (bottom-right)
 
 Client-only testing note:
-- The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `1` and `9`).
+- The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `SECTOR 1 ZONE 1` and `SECTOR 9 ZONE 4`).
 - This is a UI/testing feature; server daily matches remain 4-bot.
 
 ### 1.1 World units: sectors + zones (locked)
-
-The arena is still a **3×3 grid of sectors (1..9)**, but each sector is subdivided into **4 zones**.
 
 - Each **sector** contains **zones `1..4`** arranged as a 2×2 grid:
   - `1 2`
   - `3 4`
 - Each **zone** is **32×32 world units**.
-- Therefore each **sector** is **64×64 world units**.
-- Therefore the full arena is:
+- Each **sector** is therefore **64×64 world units**.
+- The full arena is:
   - **width = 3 × 64 = 192 world units**
   - **height = 3 × 64 = 192 world units**
 
-Why zones matter:
-- It gives us a simple, integer coordinate system for rendering + future collision detail.
-- It gives deterministic, non-overlapping placement anchors inside each sector (up to 4 bots).
-
-### 1.1.1 Coordinate mapping (sector/zone → world)
+### 1.2 Coordinate mapping (sector/zone → world)
 
 Assume world coordinates:
 - origin `(0,0)` at the **top-left** of the arena
@@ -62,9 +59,29 @@ Zone mapping inside a sector:
 Therefore:
 - `zoneOrigin = sectorOrigin + zoneOffset`
 
+### 1.3 Anchor points (sector center + zone centers)
+
+We treat a "location" used by bot scripts and powerups as one of these deterministic anchors:
+
+- **Sector center** (`SECTOR s`):
+  - `sectorCenter = sectorOrigin + (32, 32)`
+
+- **Zone center** (`SECTOR s ZONE z`):
+  - `zoneCenter = zoneOrigin + (16, 16)`
+
 This maps cleanly to a **32×32 bot collision box** (a bot in a zone occupies exactly that zone in world units).
 
-### 1.2 Client-side render sizing
+### 1.4 Powerup spawn anchors
+
+Powerups can spawn at deterministic location anchors:
+- **sector center**: `SECTOR <SECTOR>`
+- **zone center**: `SECTOR <SECTOR> ZONE <ZONE>`
+
+So each sector has **5** possible powerup locations (center + 4 zones), and the arena has **45**.
+
+The **spawn timers/logic** are specified in `Ruleset.md`.
+
+### 1.5 Client-side render sizing
 
 The UI may scale world units to screen pixels.
 
@@ -88,94 +105,80 @@ You confirmed walls are part of gameplay:
   - bot takes a **small amount of damage**
   - bot **bounces**
 
-This requires specifying what a “wall” means in the movement model.
-
 ### 2.1 Wall layout
 
 At minimum, walls include:
 - an **outer boundary** around the 3×3 arena
 
-Sector boundaries (the lines between the 9 sectors) are **visual boundaries** in v1, not blocking walls.
-- This matches your statement that there are **no doors** (we are not modeling door openings between sectors).
-- Bots can still move between sectors normally.
+Sector boundaries and zone boundaries are **visual grid lines** in v1, not blocking walls.
+- This matches the "no doors" model (we are not modeling door openings).
 
-Future: you can introduce internal blocking walls later, but then you’ll need a data-driven wall layout and likely a door/opening mechanic.
+Future:
+- you can introduce internal blocking walls later, but then you’ll need a data-driven wall layout and likely a door/opening mechanic.
 
 ---
 
-## 3) Collision representation (new)
+## 3) Collision representation (zone-aware)
 
-You specified:
-- each bot has a **32×32 collision box**.
+Locked geometry:
+- each bot has a **32×32 collision box**
+- each **zone** is **32×32**
 
-This affects how we define:
-- bot-vs-wall bumps (which side was hit)
-- bot-vs-bot bumps (which bot was hit)
-- future projectile collision precision (optional)
-
-Two interpretations are possible:
-
-- **A) Sector-first (logical), collision-box used for UI + tie-break precision**
-  - bots still move sector-to-sector
-  - the “collision box” primarily defines UI footprint and can be used for more precise hit testing later
-
-- **B) Continuous positions (physical), collision-box used for real collisions**
-  - bots have continuous `(x,y)` positions
-  - the 32×32 box is used for true wall/bot collisions and bounce resolution
+Recommended v1 semantics:
+- a bot’s authoritative location is a deterministic anchor (`SECTOR s` or `SECTOR s ZONE z`)
+- two bots cannot occupy the same anchor
 
 ---
 
 ## 4) Movement model options (needs a decision)
 
-Because our bot language currently uses sector-level commands (`MOVE UP`, `MOVE_TO_SECTOR`, etc.), there are two compatible ways to interpret wall bumps.
+Because we want commands like:
+- `MOVE_TO_SECTOR 1` (go to sector center)
+- `MOVE_TO_SECTOR 1 ZONE 2` (go to a specific zone)
 
-### Option A — Sector-only movement with “bump” penalties (smallest change)
+…the simulation should pick one of these models.
 
-- Bots exist in exactly one sector at a time.
-- A movement instruction attempts a sector transition.
-- If a move is blocked by a wall (outer boundary or an internal wall that blocks passage):
-  - the bot stays in the same sector
-  - bot takes `wall_bump_damage`
-  - record a deterministic event `WALL_BUMP`
-  - “bounce” is represented visually as a small nudge in the UI
+### Option A — Discrete anchors (recommended)
 
-Pros:
-- preserves the current deterministic sector-based simulation
-- easy to debug and replay
+Bots do **discrete movement** between anchors:
+- sector centers (`SECTOR s`)
+- zone centers (`SECTOR s ZONE z`)
 
-Cons:
-- bounce is mostly visual; there is no true physical reflection
-
-### Option B — Continuous positions with true bounce (bigger change)
-
-- Bots have `(x,y)` positions and velocity/heading inside the arena.
-- Movement instructions affect velocity/heading.
-- Walls are geometric boundaries; collision reflects velocity.
-- Bump damage applies on collision.
+Rules:
+- movement is 1 anchor-step per tick (when a move occurs)
+- collisions are grid-like:
+  - attempting to step outside the outer boundary → wall bump (no movement + bump damage)
+  - attempting to step into an occupied anchor → bot bump (no movement + bump event)
 
 Pros:
-- real bounce behavior
-- richer movement
+- deterministic, easy to replay/debug
+- matches the language (“move to sector/zone”) without introducing physics
 
 Cons:
-- requires a new physics-ish layer (more complexity)
-- determinism across environments requires careful integer math or fixed-point
+- bounce is mostly visual feedback
+
+### Option B — Continuous positions (true physics)
+
+- bots have continuous `(x,y)` positions
+- movement is velocity/heading based
+- walls reflect velocity
+- collision uses the 32×32 box against geometry
+
+Pros:
+- richer movement and true bounce
+
+Cons:
+- significantly more complex
+- determinism requires strict integer/fixed-point rules
 
 ---
 
 ## 5) Recommended next step
 
-Before we finalize walls and movement, we should choose **Option A vs Option B**.
+Given the current design goals (determinism + easy replays), prefer:
+- **Option A (discrete anchors)**
 
-Your recent requirement (“each bot has a 32×32 collision box” + wall bumps with bounce direction) is compatible with either option, but it pushes us toward one of these v1 choices:
-
-- **If you want bounce to be mostly a gameplay penalty** (damage + feedback), with simple deterministic rules:
-  - choose **Option A (sector-only)**
-  - interpret `BUMPED_WALL_DIR(LEFT)` as "the bot attempted to move LEFT but hit a blocking wall"
-
-- **If you want true physical bounce** (position reflect) and collisions based on the 32×32 box:
-  - choose **Option B (continuous positions)**
-  - use integer/fixed-point coordinates for determinism
+If later you want physics-style bounce and more granular positioning, you can migrate to Option B (but it will be a major ruleset/version change).
 
 ---
 
@@ -186,10 +189,6 @@ Your recent requirement (“each bot has a 32×32 collision box” + wall bumps 
   - still to define: do they disappear immediately, or remain as a stuck entity for 1+ ticks?
 - Doors:
   - **Locked:** there are **no doors**.
-- Sector boundaries:
-  - **Locked (v1):** sector boundaries are **not blocking walls**; only the outer boundary is a wall.
-  - implication: bump damage only occurs when trying to move outside the 3×3 arena.
-  - implication: bullets stop at the outer boundary (and any future internal walls, if added).
 
 
 

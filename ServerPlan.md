@@ -4,6 +4,7 @@ This document describes the **server-side responsibilities, data flow, and inter
 
 It is intentionally **implementation-agnostic** (no required framework/DB yet). It assumes the gameplay rules captured in:
 - `Todo.md`
+- `ArenaPlan.md`
 - `Ruleset.md`
 - `BotInstructions.md`
 - `CombatPlan.md`
@@ -41,7 +42,7 @@ Implementation guidance (recommended stack):
   - `source_text` (the instruction script)
   - `source_hash` (content hash; used in replays)
   - `loadout` (3 slots; no duplicates in v1)
-  - `ruleset_version` (so future rules changes don’t break replay meaning)
+  - `ruleset_version`
   - `validation_status` + `validation_errors`
 
 ### 2.2 Daily runs + matches
@@ -58,19 +59,14 @@ Implementation guidance (recommended stack):
   - `result` (winner, placements, scores, etc.)
   - `replay_ref` (pointer to stored replay)
 
-### 2.3 Replay storage (strongly recommended)
+### 2.3 Replay storage
 
 A replay should minimally include:
 - `ruleset_version`
 - `match_seed`
 - participant bot version hashes
 - initial placements (or enough info to derive them from the seed)
-- per-tick events (or at least per-tick executed instruction + resulting actions)
-
-This enables:
-- debugging determinism
-- user trust (“why did I lose?”)
-- future replay viewer
+- per-tick events + instruction trace (see `ReplayViewerPlan.md`)
 
 ---
 
@@ -109,18 +105,11 @@ This enables:
 - `GET /matches/:matchId`
 - `GET /matches/:matchId/replay`
 
-### 3.5 Leaderboards (shape TBD)
-
-- `GET /leaderboard/daily/:runDate`
-- `GET /leaderboard/global`
-
 ---
 
 ## 4) Submission validation pipeline (must not execute code)
 
 Bot submissions are data. The server should never `eval` them.
-
-### 4.1 Parse + validate
 
 - Normalize line endings.
 - Enforce size limits (max lines, max chars per line).
@@ -133,20 +122,13 @@ Bot submissions are data. The server should never `eval` them.
   - only allowed module types
   - **no duplicates** (v1)
 
-### 4.2 Compile to internal representation
+Compile to internal representation:
+- compile instructions into a small deterministic opcode form
+- resolve labels to numeric instruction indices
 
-To run matches efficiently and safely:
-- Compile instructions into a small internal opcode form (e.g. `[{op, args}]`).
-- Resolve labels to numeric instruction indices.
-
-### 4.3 Runtime error policy (per-bot fault isolation)
-
-Matches must keep running even if a bot’s program is malformed at runtime.
-
-Policy (already agreed):
+Runtime error policy (locked):
 - invalid/malformed instruction at execution time => treat as `NOP`
 - bot `pc` resets to `1` next tick
-- optionally emit a replay event for debugging
 
 ---
 
@@ -158,23 +140,20 @@ For each match:
 - use `match_seed`
 - use a single seeded RNG stream
 - update bots in stable order `BOT1..BOT4`
-- apply tick update order consistently:
-  1) execute 1 instruction per bot
-  2) apply actions
-  3) apply toggle drains (saw/shield)
-  4) advance bullets/projectiles
-  5) resolve hits/damage
-  6) resolve pickups
-  7) check win condition
+- follow the tick loop defined in `ServerSimulationPlan.md`
 
 ### 5.2 Powerup spawning (random, but replayable)
 
 Powerups spawn randomly, but must be deterministic:
-- all spawns derive from the match RNG
-- define explicit constraints later:
-  - spawn frequency
-  - max concurrent powerups
-  - per-type distribution
+- all randomness derives from the match RNG
+- spawn locations are fixed deterministic anchors (see `ArenaPlan.md`):
+  - `SECTOR 1..9` (sector centers)
+  - `SECTOR 1..9 ZONE 1..4` (zone centers)
+- each location has an independent respawn timer (see `Ruleset.md`)
+
+Still to define:
+- respawn timer range
+- per-type distribution
 
 ### 5.3 Match scheduling for the daily run
 
@@ -188,30 +167,18 @@ A daily run should:
 
 ## 6) Operational concerns (non-functional requirements)
 
-### 6.1 Rate limiting and abuse controls
-
 - Rate limit login and submissions.
 - Cap bot submission size.
-- Cap number of versions per user per day (optional).
-
-### 6.2 Observability
-
 - Structured logs per daily run and per match.
-- Store enough info to reproduce a match from stored artifacts.
 
-### 6.3 Versioning
-
-Every replay/result should reference:
-- `ruleset_version`
-- `source_hash` of each bot version
-
-This prevents “old replays changed meaning after rules update”.
+Versioning requirement:
+- every replay/result references `ruleset_version` and each bot `source_hash`
 
 ---
 
 ## 7) Open server-side decisions (to confirm later)
 
-- How the server schedules daily runs (cron vs internal scheduler).
-- Where replays are stored (DB vs object store vs filesystem).
-- Auth mechanism (session cookies vs JWT).
-- Expected scale (users/bots/matches per day), which affects concurrency and storage needs.
+- Scheduling (cron vs internal scheduler)
+- Replay storage (DB vs object store)
+- Auth (session cookies vs JWT)
+- Expected scale (users/bots/matches/day)

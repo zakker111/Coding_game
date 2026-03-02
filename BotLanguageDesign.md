@@ -89,7 +89,8 @@ Define a generic `<TARGET>` that can represent multiple target kinds:
   - `CLOSEST_BOT`
 
 - **Location targets**:
-  - `SECTOR <N>` (1..9)
+  - `SECTOR <N>` (1..9, sector center)
+  - `SECTOR <N> ZONE <Z>` (`Z` = 1..4, zone center)
 
 - **Self/none**:
   - `SELF`

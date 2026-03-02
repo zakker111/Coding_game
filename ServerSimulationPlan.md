@@ -4,7 +4,8 @@ This document describes how the server should **simulate battles deterministical
 
 It complements:
 - `ServerPlan.md` (overall server responsibilities + entity model + endpoints)
-- `Ruleset.md` (damage attribution, collisions, ordering)
+- `ArenaPlan.md` (arena topology + anchors)
+- `Ruleset.md` (damage attribution, collisions, powerup spawning)
 - `BotInstructions.md` (bot VM semantics)
 - `CombatPlan.md` (weapons: cooldowns, bullets, grenades, mines)
 - `DailyCompetition.md` (daily competition format)
@@ -52,7 +53,7 @@ A match is fully determined by:
 
 The engine must use stable, documented ordering:
 - bots update in `BOT1..BOT4` order
-- bullets/grenades/mines update in ascending entity id order
+- entities update in ascending id order (bullets/grenades/mines/powerups)
 - multi-victim AoE damage applies in `BOT1..BOT4` order
 
 ---
@@ -68,7 +69,6 @@ At the start of each day:
    - `run_seed`
    - `status = planned`
 2) Snapshot the participating `BotVersion` ids for that run.
-   - This prevents later submissions from changing the run.
 
 ### 3.2 Match generation
 
@@ -85,79 +85,45 @@ A match worker:
 1) loads the `Match` row + referenced bot versions
 2) loads the ruleset implementation pinned to `ruleset_version`
 3) executes the simulation to completion or tick-cap
-4) writes:
-   - results + stats
-   - replay payload (events + optional checkpoints)
+4) writes results + replay
 5) marks match as `complete` (or `failed` with error metadata)
 
 ---
 
 ## 4) Worker architecture (recommended)
 
-For the initial test scale you described (≈10 bots, ≈10 matches/day), you can run **API + worker in a single process** and still keep the architecture compatible with future split services.
-
-### 4.1 Components
-
-- **Scheduler**: triggers a daily run (cron or internal scheduler)
-- **Match queue**: persistent job queue (e.g., DB-based or Redis)
-- **Workers**: N processes that run matches
-- **Artifact store**:
-  - DB for metadata + small payloads
-  - object storage for replays (recommended once replays grow)
-
-### 4.2 Failure isolation
-
-A single match must not crash the whole run.
-
-Worker policy:
-- hard timeout per match (prevents infinite loops)
-- memory cap per worker
-- if a match fails:
-  - mark as failed
-  - store failure reason
-  - continue the run
+For small initial scale (≈10 bots, ≈10 matches/day), you can run **API + worker in a single process** and still keep the architecture compatible with future split services.
 
 ---
 
 ## 5) Simulation engine boundary
 
-### 5.1 Shared engine vs server-only engine
-
 Recommended:
-- implement the simulation engine as a **pure library** that both client and server can call.
-- the server remains authoritative by:
-  - controlling inputs
-  - storing official artifacts
-  - running the canonical ruleset version
-
-### 5.2 Engine API (logical)
+- implement the simulation engine as a **pure library** shared by client and server
+- the server remains authoritative by controlling inputs and storing canonical artifacts
 
 A minimal engine interface:
 - `initMatch({ rulesetVersion, matchSeed, bots[] }) -> state`
 - `step(state) -> { state, events[] }` (one tick)
 - `runToEnd(state, tickCap) -> { finalState, events[], stats }`
 
-All side effects (logging, persistence) live outside the engine.
-
 ---
 
 ## 6) Tick loop specification (server-side)
 
-This must align with `Todo.md` and `ServerPlan.md` ordering.
+This must align with `Todo.md` and the rules documents.
 
 Recommended tick phases:
 
 1) **Bot VM instruction phase** (`BOT1..BOT4`)
    - each alive bot executes exactly 1 instruction
-   - instructions may:
-     - move
-     - set targets
-     - `USE_SLOTn` / `STOP_SLOTn`
-     - `WAIT` / timers
 
 2) **Movement + collision resolution**
    - apply movement attempts
-   - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps (bump events)
+   - positions are deterministic location anchors:
+     - `SECTOR s` (sector center)
+     - `SECTOR s ZONE z` (zone center)
+   - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps
 
 3) **Toggle drains**
    - apply energy drains for active toggles (saw/shield)
@@ -169,50 +135,37 @@ Recommended tick phases:
 
 5) **Hit / explosion resolution**
    - bullet hit resolution (sector-enter hit, lowest bot id)
-   - grenade detonation:
-     - AoE radius = 1 sector (center + adjacent)
-     - falloff: center damage > adjacent damage
-   - mine detonation on trigger:
-     - AoE radius = 1 sector (center + adjacent)
-     - falloff: center damage > adjacent damage
+   - grenade detonation (AoE)
+   - mine detonation (AoE)
 
 6) **Pickups**
+   - powerup pickup: bot occupies same location anchor as a powerup
 
 7) **Deaths + win checks**
-   - apply `BOT_DIED` events and remove dead bots from the arena
+   - apply `BOT_DIED` and remove dead bots from the arena
+
+8) **End-of-tick maintenance**
+   - decrement cooldowns and bot-local timers
+   - powerup respawn timers tick/spawn (see `Ruleset.md`)
 
 ---
 
 ## 7) Bot VM execution (server-side concerns)
 
-### 7.1 Compilation pipeline
-
 On submission:
 - parse + validate source
 - resolve labels
 - compile to a compact deterministic IR/opcode form
-- store:
-  - original source
-  - compiled representation (or hash)
-  - validation errors
 
-### 7.2 Runtime fault policy
-
-Locked behavior (see `BotInstructions.md` / `ServerPlan.md`):
+Runtime fault policy (locked):
 - invalid/malformed instruction at runtime => treat as `NOP`
 - bot `pc` resets to `1` next tick
 
-### 7.3 Resource + cooldown enforcement
-
-Bots cannot bypass weapon mechanics by scripting.
-
-Server rules:
+Resource + cooldown enforcement:
 - `USE_SLOTn` succeeds only if:
   - slot exists
   - module is ready (`cooldownRemaining == 0`)
   - resources are sufficient (ammo/energy vector)
-
-If not, no-op.
 
 ---
 
@@ -220,59 +173,30 @@ If not, no-op.
 
 Replays are critical to user trust.
 
-### 8.1 Minimum replay fields
-
-Replay header:
-- `ruleset_version`
-- `match_seed`
-- participant bot version hashes
-- spawn assignments
-
-Per-tick:
-- executed instruction trace per bot:
-  - `tick`, `botId`, `pc_before`, `pc_after`, `instruction_text` (or index), `result`
-- events:
-  - damage events (with `kind`)
-  - deaths
-  - wall bumps / bot bumps
-  - projectile spawns/moves/hits
-  - grenade detonation
-  - mine placement/arming/trigger
-  - pickups
-
-### 8.2 Checkpoints (optional but recommended)
-
-To support fast seeking in the replay viewer:
-- store full snapshots every N ticks (e.g., 50)
-- store events for intermediate ticks
+Minimum replay fields:
+- replay header: `ruleset_version`, `match_seed`, bot version hashes, spawn assignments
+- per tick:
+  - executed instruction trace per bot
+  - events (see `ReplayViewerPlan.md`):
+    - movement/bump events using `loc = { sector, zone }`
+    - powerup spawns/pickups
+    - damage + deaths
+    - projectile events
 
 ---
 
 ## 9) Storage model (server)
 
 Recommended division:
-- DB tables store:
-  - users, bots, bot versions
-  - daily runs, matches
-  - match stats
-  - replay metadata pointers
-- object storage stores:
-  - replay payload blobs (compressed)
+- DB tables store metadata + stats
+- object storage stores replay blobs once replays get large
 
 Key requirement:
-- every stored replay must reference `ruleset_version` so future rules changes do not rewrite history.
+- every stored replay references `ruleset_version` so future rules changes do not rewrite history.
 
 ---
 
-## 10) Operational and scaling notes
-
-- Matches are embarrassingly parallel: run many workers.
-- Throughput bound is CPU; storage bound is replay size.
-- Use deterministic seeds to enable reruns and debugging.
-
----
-
-## 11) Decisions required to implement (pick one option per row)
+## 10) Decisions required to implement (pick one option per row)
 
 1) Scheduling:
 - A) OS cron + HTTP/CLI trigger
@@ -284,7 +208,7 @@ Key requirement:
 
 3) Replay storage:
 - A) DB (only if small)
-- B) object store (recommended)
+- B) object store
 
 4) Auth:
 - A) session cookies

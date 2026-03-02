@@ -177,7 +177,14 @@ If you want clamping, clamp `sectorRenderPx` or `arenaRenderPx` directly (exampl
   - `1 2 3`
   - `4 5 6`
   - `7 8 9`
-- Corner spawns: sectors `1, 3, 7, 9`.
+- Each sector contains **4 zones**:
+  - `1 2`
+  - `3 4`
+- Corner spawns (4-bot matches):
+  - `BOT1 → SECTOR 1 ZONE 1`
+  - `BOT2 → SECTOR 3 ZONE 2`
+  - `BOT3 → SECTOR 7 ZONE 3`
+  - `BOT4 → SECTOR 9 ZONE 4`
 
 ### 4.5 Entity overlays
 
@@ -196,25 +203,32 @@ Deterministic placement (recommended):
   - zone `4`: bottom-right
 - Assign bots to sector-zones deterministically (by bot id order):
   - lowest bot id gets the lowest available zone number
-- Place powerup icon at the sector center.
+- Place powerup icon at its deterministic spawn location:
+  - sector center (`SECTOR s`) or
+  - zone center (`SECTOR s ZONE z`)
 - Render bullets on an overlay layer above sector background.
 
-### 4.7 Walls (distinct sector boundaries, and gameplay-relevant)
+### 4.7 Grid lines (green) + walls
 
-Walls are part of gameplay:
-- when a bot bumps into a wall it takes a small amount of damage
-- the bot visually “bounces” from the wall
+You want sectors and zones to be visible **clearly**.
+
+Grid rendering (v1):
+- Render **sector boundaries** as **thicker green lines**.
+- Render **zone boundaries** inside each sector as **thinner green lines**.
+
+Walls (gameplay):
+- In v1, only the **outer boundary** is a gameplay wall.
+- When a bot bumps the outer wall:
+  - it takes a small amount of damage
+  - it visually “bounces” from the wall
 
 UI requirements:
-- Walls must be very clear visually.
+- Outer wall must be visually distinct from the green grid:
+  - thick border (can be darker/stronger than grid lines)
 - Render collision feedback:
   - a small hit flash on the bot
   - a floating damage number (optional)
   - a short bounce animation (tiny positional nudge) while keeping tick stepping clear
-
-Recommended v1 wall styling:
-- thick outer border around the whole arena
-- clear inner walls between sectors
 
 ---
 

@@ -11,11 +11,14 @@ This is a **single-line-per-tick** language:
 > Notation:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
 > - `<TYPE>`: `HEALTH|AMMO|ENERGY`
-> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
-> - `<TARGET>`: `<BOT_TARGET>|SECTOR <SECTOR>|SELF|NONE`
+> - `<BOT_TARGET>`: `BOT1|BOT2|BOT3|BOT4|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
-> - Zones: each sector contains **zones `1..4`** (2×2). Zones are used for deterministic placement/collision but are **not addressable** by bot instructions in v1.
+> - `<ZONE>`: `1..4`
+> - `<LOC>`:
+>   - `SECTOR <SECTOR>` (sector center)
+>   - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
+> - `<TARGET>`: `<BOT_TARGET>|<LOC>|SELF|NONE`
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 > - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >
@@ -90,11 +93,14 @@ Bots know where powerups are (global knowledge).
 - `TARGET_CLOSEST_POWERUP <TYPE>`
   - alias of `TARGET_POWERUP <TYPE>` in v1 (kept for readability)
 
-Notes:
-- If no powerup of that type exists, the target is treated as **invalid**:
-  - `MOVE_TO_TARGET` / `MOVE_TO_POWERUP` will no-op
-  - at the end of the tick, `targetPowerupType` is automatically **cleared** (so "target is false" next tick)
-- If both a bot target and powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
+Invalidation rule (important for "someone else took it"):
+- `targetPowerupType` refers to a **type**, not a specific instance.
+- When *no* powerup of that type currently exists anywhere in the arena:
+  - `MOVE_TO_TARGET` / `MOVE_TO_POWERUP <TYPE>` no-op
+  - and at end of tick, `targetPowerupType` is automatically **cleared** (so "target is false" next tick)
+
+Priority rule:
+- If both a bot target and a powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
 
 ### 2.3 Clearing targets
 
@@ -106,22 +112,41 @@ Notes:
 
 ## 3) Movement
 
+Movement is **zone-aware** and operates on deterministic location anchors from `ArenaPlan.md`:
+- `SECTOR <SECTOR>` (sector center)
+- `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
+
 ### 3.0 One-step movement (immediate)
 
-These instructions attempt **exactly one** sector step during the movement phase of the current tick.
+These instructions attempt **exactly one** movement step (one **location-anchor** step) during the movement phase of the current tick.
 
 - `MOVE <DIR>`
+  - Moves to a neighboring location anchor in direction `<DIR>` if one exists.
+  - If multiple neighboring anchors match the direction, ties are resolved deterministically:
+    1) lowest destination sector id
+    2) sector center before zones
+    3) lowest destination zone id
+
 - `MOVE_TO_SECTOR <SECTOR>`
+  - Moves one step toward `SECTOR <SECTOR>` (the destination sector center).
+
+- `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
+  - Moves one step toward `SECTOR <SECTOR> ZONE <ZONE>` (the destination zone center).
 
 Bot chasing:
 - `MOVE_TO_BOT <BOT>`
-  - Moves one step toward that bot.
+  - Moves one step toward that bot’s current location.
   - If the bot is dead, this is a no-op.
 
 Powerups:
 - `MOVE_TO_POWERUP <TYPE>`
-  - Moves one step toward the **closest** powerup of that type.
-  - Deterministic ties: smallest sector id.
+  - Moves one step toward the **closest currently-existing** powerup of that type.
+  - Powerups may exist at **sector centers** or **zone centers**.
+  - Tie-breaks (deterministic):
+    1) shortest distance (anchor steps)
+    2) lowest sector id
+    3) sector center before zones
+    4) lowest zone id
 - `MOVE_TO_CLOSEST_POWERUP <TYPE>` (alias of `MOVE_TO_POWERUP <TYPE>`)
 
 Enemy convenience:
@@ -135,6 +160,7 @@ Enemy convenience:
 Walls / arena edge (v1 = outer boundary only):
 - `MOVE_TO_ARENA_EDGE <DIR>`
   - Moves one step toward the outer boundary in that direction.
+  - If already at the edge in that direction, no-op.
 - `MOVE_TO_WALL <DIR>` (alias of `MOVE_TO_ARENA_EDGE <DIR>`)
 
 Target-driven movement:
@@ -147,10 +173,9 @@ Target-driven movement:
 
 These instructions set a **movement goal** in bot state. When a goal is set, the bot will attempt to move **1 step per tick** toward that goal **even on ticks where its instruction is something else** (shooting, targeting, timers, etc.).
 
-This is the mechanism that enables: “move to sector 1 until I say otherwise, and keep shooting while moving”.
-
 Instructions:
 - `SET_MOVE_TO_SECTOR <SECTOR>`
+- `SET_MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
 - `SET_MOVE_TO_BOT <BOT_TARGET>`
 - `SET_MOVE_TO_POWERUP <TYPE>`
 - `SET_MOVE_TO_TARGET`
@@ -158,13 +183,13 @@ Instructions:
 
 Resolution rules (recommended):
 - Each tick, the engine determines one `moveRequest` per bot:
-  - if the bot executed an **immediate movement** instruction this tick (§3.0), use that movement.
-  - else if the bot has a **movement goal** active, derive a movement step from the goal.
-  - else: no movement.
-- Movement goals are evaluated deterministically (same path tie-break rules as `MOVE_TO_*`).
+  - if the bot executed an **immediate movement** instruction this tick (§3.0), use that movement
+  - else if the bot has a **movement goal** active, derive a movement step from the goal
+  - else: no movement
 
 Goal completion:
-- `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches that sector.
+- `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches the **sector center**.
+- `SET_MOVE_TO_SECTOR ... ZONE ...`: clears automatically when the bot reaches the **zone center**.
 - `SET_MOVE_TO_POWERUP`:
   - each tick, the goal re-resolves to the **closest currently-existing** powerup of that type
   - clears when the bot picks up a powerup of that type
@@ -212,7 +237,9 @@ Semantics:
 - Triggers the **primary action** of whatever module is equipped in that slot.
 - Target is passed to the module:
   - bot targets: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`
-  - location targets: `SECTOR <SECTOR>`
+  - location targets:
+    - `SECTOR <SECTOR>` (sector center)
+    - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
   - `SELF` / `NONE`
 - Modules may ignore targets that are not relevant.
 - If a module requires a different target kind, using the wrong target kind is a no-op.
@@ -277,17 +304,29 @@ Bot / target state:
   - true iff `targetBotId` is set and the target bot is alive
 - `BOT_ALIVE(<BOT>)` → bool
 
+Location:
+- `SECTOR()` → int
+  - current sector id (1..9)
+- `ZONE()` → int
+  - current zone id (1..4) if at a zone anchor
+  - returns `0` if currently at the sector center anchor
+
 Sector proximity:
 - `BOT_IN_SAME_SECTOR(<BOT>)` → bool
 - `BOT_IN_ADJ_SECTOR(<BOT>)` → bool
 
-Distances (Manhattan distance over sectors):
+Distances (anchor steps)
 - `DIST_TO_BOT(<BOT>)` → int
 - `DIST_TO_TARGET_BOT()` → int
   - if no valid target bot exists, returns `999`
 - `DIST_TO_CLOSEST_BOT()` → int
   - distance to the closest alive bot (ties: lowest bot id); returns `999` if none
+
+Location distances:
 - `DIST_TO_SECTOR(<SECTOR>)` → int
+  - distance to `SECTOR <SECTOR>` (sector center)
+- `DIST_TO_SECTOR_ZONE(<SECTOR>, <ZONE>)` → int
+  - distance to `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
 
 Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool
@@ -296,9 +335,17 @@ Powerups (global knowledge):
 - `HAS_TARGET_POWERUP()` → bool
   - true iff `targetPowerupType` is set and at least one powerup of that type currently exists
 
+Powerups (by location):
+- `POWERUP_IN_SECTOR(<TYPE>, <SECTOR>)` → bool
+  - true if a powerup of that type exists anywhere in that sector (center or any zone)
+- `POWERUP_IN_SECTOR_CENTER(<TYPE>, <SECTOR>)` → bool
+  - true if a powerup of that type exists at the sector center
+- `POWERUP_IN_ZONE(<TYPE>, <SECTOR>, <ZONE>)` → bool
+  - true if a powerup of that type exists in that sector+zone
+
 Powerups (local convenience):
 - `POWERUP_IN_SAME_SECTOR(<TYPE>)` → bool
-- `POWERUP_IN_ADJ_SECTOR(<TYPE>)` → bool
+- `POWERUP_IN_SAME_ZONE(<TYPE>)` → bool
 
 Bullets/projectiles:
 - `BULLET_IN_SAME_SECTOR()` → bool
@@ -306,7 +353,7 @@ Bullets/projectiles:
 
 Arena edges / walls (outer boundary in v1):
 - `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)` → int
-  - returns how many sector-steps to the outer wall in that direction
+  - returns how many **anchor steps** to the outer wall in that direction
   - `0` means you are currently at the edge
 - `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` → int (alias of `DIST_TO_ARENA_EDGE`)
 
@@ -352,10 +399,16 @@ Slot/module state:
 ### 6.4 Common patterns
 
 "Powerup close" should be expressed using distance:
-- close = **same or adjacent sector**
+- close = **same anchor or 1 anchor-step away**
 
 ```text
 IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
+```
+
+"If a specific zone has a specific powerup, go there":
+
+```text
+IF (POWERUP_IN_ZONE(HEALTH, 1, 2)) DO MOVE_TO_SECTOR 1 ZONE 2
 ```
 
 "React to collisions" should use bump sensors from the previous tick:
@@ -382,7 +435,7 @@ MOVE_TO_TARGET
 GOTO LOOP
 ```
 
-### Example B — One-line form: if health powerup is close, move to it
+### Example B — If health powerup is close, move to it
 
 ```text
 LABEL LOOP
@@ -443,10 +496,8 @@ GOTO LOOP
 
 ### Example G — Set a move goal once, keep shooting while moving
 
-This demonstrates the “move to a sector until told otherwise” style.
-
 ```text
-; start navigating to sector 1
+; start navigating to sector 1 center
 SET_MOVE_TO_SECTOR 1
 
 LABEL LOOP

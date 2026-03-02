@@ -22,13 +22,19 @@ This file is the **single source of truth** for near-term engineering tasks and 
 
 ### Arena model
 - **9 sectors (1..9)** arranged as a 3×3 grid.
+- Each sector contains **4 zones (1..4)** arranged as a 2×2 grid.
+- Bots and powerups are placed on deterministic **location anchors**:
+  - sector center: `SECTOR s`
+  - zone center: `SECTOR s ZONE z`
 
 ### Bot language
 - JS-like **line-based instruction language** (see `BotInstructions.md`).
 - Scripts compile/validate to a safe internal form (no `eval`).
 - Slot targeting supports a generalized `<TARGET>` union:
   - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`)
-  - location targets (`SECTOR n`)
+  - location targets:
+    - `SECTOR n` (sector center)
+    - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 
@@ -96,15 +102,23 @@ This file is the **single source of truth** for near-term engineering tasks and 
 
 ### Powerup spawning
 - Locked: powerups spawn **randomly (seeded)**.
+- Locked: powerups can spawn at **sector centers and sector zones**:
+  - `SECTOR 1..9`
+  - `SECTOR 1..9 ZONE 1..4`
+  - total spawn locations = **45**
 - Still to define:
-  - spawn frequency / cooldown
+  - respawn timer range (`minTicks`, `maxTicks`) per location
   - per-type distribution (health vs ammo vs energy)
-  - max concurrent powerups
-  - deterministic spawn algorithm details (seeded RNG stream)
+  - whether powerups are full refills (`=100`) or partial refills (+N, capped at 100)
+  - deterministic spawn algorithm details (seeded RNG stream + stable per-location processing order)
 
 ### Daily competition format
 - Locked direction: **daily competition with 4-player matches** and **season points**.
-- Spawn: bots start in the **four corners** of the 9-sector arena (1, 3, 7, 9).
+- Spawn: bots start in the **four corners** of the arena:
+  - `BOT1 → SECTOR 1 ZONE 1`
+  - `BOT2 → SECTOR 3 ZONE 2`
+  - `BOT3 → SECTOR 7 ZONE 3`
+  - `BOT4 → SECTOR 9 ZONE 4`
 - Elimination: bots that drop below a **points threshold** are excluded from **future days** until re-enabled.
 - Rejoin: re-enable uses a **rejoin allowance** (points floor) so bots can come back even if below threshold.
 - Weekly: highlight **top 10** and reset/start a new season.

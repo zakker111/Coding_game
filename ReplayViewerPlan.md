@@ -9,6 +9,7 @@ It is written **client-first** (local simulations), but designed so the same UI 
 
 It complements:
 - `UIPlan.md`
+- `ArenaPlan.md`
 - `ServerSimulationPlan.md`
 - `Ruleset.md`
 - `CombatPlan.md`
@@ -22,12 +23,14 @@ It complements:
 - **Debugging-first**:
   - show tick number
   - show which bot instruction executed
-  - show why an action did/didn’t happen (cooldown, out of ammo/energy)
+  - show why an action happened / no-op happened
 - **Visual correctness**:
+  - sector + zone grid visible
   - bullets moving sector-to-sector
   - grenade fuse + detonation
   - mine placement, arming, trigger, detonation
   - wall bumps + bot bumps
+  - powerup spawns + pickups
 
 ---
 
@@ -47,15 +50,10 @@ List item fields (minimum):
 - placement / winner
 - quick actions: **Open**, **Delete** (local-only)
 
-Filters (later):
-- by bot
-- by date range
-- by win/loss
-
 ### 2.2 Replay Viewer (Match Screen)
 
 Core regions (align with `UIPlan.md`):
-- arena viewport (3×3)
+- arena viewport (3×3 sectors, each with 2×2 zones)
 - right inspection panel (bot list + code)
 - bottom timeline (ticks)
 - optional event log
@@ -127,8 +125,6 @@ Client-first recommendation:
 
 The UI should not infer combat; it should render what the replay says.
 
-Minimum event list (suggested):
-
 ### 4.1 Bot execution trace
 
 - `BOT_EXEC`:
@@ -136,26 +132,45 @@ Minimum event list (suggested):
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
   - `result`: `EXECUTED | NOOP | ERROR`
-  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | ...`
+  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | ...`
 
-### 4.2 Movement + bumps
+### 4.2 Locations (`loc`)
 
-- `BOT_MOVED`: `botId`, `fromSector`, `toSector`
+Bots and powerups live on deterministic **location anchors** (see `ArenaPlan.md`).
+
+Encode every location as:
+- `loc = { sector: 1..9, zone: 0..4 }`
+  - `zone=0` means sector center
+  - `zone=1..4` means zone center
+
+### 4.3 Movement + bumps
+
+- `BOT_MOVED`: `botId`, `fromLoc`, `toLoc`
 - `BUMP_WALL`: `botId`, `dir`, `damage`
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
-### 4.3 Resources
+### 4.4 Powerups
+
+- `POWERUP_SPAWN`:
+  - `powerupId`, `type`, `loc`
+- `POWERUP_PICKUP`:
+  - `botId`, `powerupId`, `type`, `loc`
+- `POWERUP_DESPAWN`:
+  - `powerupId`, `reason` (`PICKUP|RULES`)
+
+### 4.5 Resources
 
 - `RESOURCE_DELTA`: `botId`, `ammoDelta`, `energyDelta`, `healthDelta`, `cause`
+  - include `cause` values like: `PICKUP_HEALTH|PICKUP_AMMO|PICKUP_ENERGY|DAMAGE|DRAIN|...`
 
-### 4.4 Projectiles (bullets)
+### 4.6 Projectiles (bullets)
 
 - `BULLET_SPAWN`: `bulletId`, `ownerBotId`, `sector`, `dir`
 - `BULLET_MOVE`: `bulletId`, `fromSector`, `toSector`
 - `BULLET_HIT`: `bulletId`, `victimBotId`, `damage`
 - `BULLET_DESPAWN`: `bulletId`, `reason` (`TTL|WALL|HIT`)
 
-### 4.5 Grenades
+### 4.7 Grenades
 
 - `GRENADE_SPAWN`: `grenadeId`, `ownerBotId`, `sector`, `dir`, `fuse`
 - `GRENADE_MOVE`: `grenadeId`, `fromSector`, `toSector`
@@ -164,7 +179,7 @@ Minimum event list (suggested):
   - `grenadeId`, `centerSector`
   - `damageCenter`, `damageAdjacent`
 
-### 4.6 Mines
+### 4.8 Mines
 
 - `MINE_PLACE`: `mineId`, `ownerBotId`, `sector`, `armTicks`
 - `MINE_ARMED`: `mineId`
@@ -173,7 +188,7 @@ Minimum event list (suggested):
   - `mineId`, `centerSector`
   - `damageCenter`, `damageAdjacent`
 
-### 4.7 Damage + deaths
+### 4.9 Damage + deaths
 
 - `DAMAGE`:
   - `victimBotId`, `amount`, `source`, `sourceBotId?`, `kind`
@@ -204,7 +219,7 @@ Minimum event list (suggested):
 
 These endpoints are enough to power the browser replay UX:
 
-- `GET /api/matches?userId=...` (or current user)
+- `GET /api/matches` (for current user)
   - returns match list summaries
 
 - `GET /api/matches/:matchId`
@@ -219,11 +234,11 @@ These endpoints are enough to power the browser replay UX:
 ## 7) UI implementation notes
 
 - Rendering should be driven by replay state/events, not by re-running logic in the UI.
-- Use the same coordinate system as `UIPlan.md` (sector anchors).
+- Use the same coordinate system as `UIPlan.md` / `ArenaPlan.md` (sector + zone grid).
 - Provide an "event log" panel that can be filtered by:
   - bot
   - tick range
-  - event types (damage, spawns, explosions)
+  - event types (moves, bumps, damage, pickups, spawns)
 
 ---
 
@@ -233,10 +248,6 @@ These endpoints are enough to power the browser replay UX:
 - A) full state per tick
 - B) event log + checkpoints
 
-2) For the battle picker, should local matches be stored per:
-- A) per-browser profile only
-- B) per-logged-in user (even before server matches exist)
-
-3) Source code display:
+2) Source code display:
 - A) embed bot source in replay
 - B) store source separately and reference via hash/url

@@ -90,7 +90,10 @@ To support many kinds of abilities, define a stable target model.
 
 Recommended target kinds (expandable):
 - bot slot: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`
-- arena locations: `SECTOR 1..9` (and later `POS x y` if continuous targeting is ever exposed)
+- arena locations:
+  - `SECTOR 1..9` (sector centers)
+  - `SECTOR 1..9 ZONE 1..4` (zone centers)
+  - (and later `POS x y` if continuous targeting is ever exposed)
 - self/none: `SELF`, `NONE`
 
 Rule:
