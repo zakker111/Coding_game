@@ -15,17 +15,13 @@ This is a **single-line-per-tick** language:
 > Where:
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
-> - No duplicate modules in slots in v1.
+> - No duplicate modules i</old_code><new_code>## 1) Control flow
 
----
-
-## 1) Control flow
-
-- `LABEL <name>`
-- `GOTO <name>`
-- `IF <EXPR> GOTO <name>`
-  - `<EXPR>` is a **C-like boolean expression** (see §6).
-- `NOP`
+- `LABE <<name>`
+- `GOT <<name>`
+- `I <<EXPR> GOT <<name>`
+   `<<EXPR>` is a **C-like boolean expression** (see §6).
+- `I <`EXPR
 
 ---
 
@@ -70,7 +66,24 @@ Notes:
 - `MOVE <DIR>`
 - `MOVE_TO_SECTOR <SECTOR>`
 - `MOVE_TO_BOT <BOT>`
+  - Moves one step toward that bot.
+
 - `MOVE_TO_POWERUP <TYPE>`
+  - Moves one step toward the **closest** powerup of that type.
+  - Deterministic ties: smallest sector id, then (if needed) stable spawn order.
+
+Convenience (single-instruction “closest” behaviors):
+- `MOVE_TO_CLOSEST_BOT`
+  - Moves one step toward the closest **alive** bot.
+  - Ties: lowest bot id.
+
+- `MOVE_TO_LOWEST_HEALTH_BOT`
+  - Moves one step toward the alive bot with the lowest health.
+  - Ties: lowest bot id.
+
+Walls / arena edge (v1 = outer boundary only):
+- `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT`
+  - Moves one step toward the outer boundary in that direction.
 
 Target-driven movement:
 - `MOVE_TO_TARGET`
@@ -171,6 +184,8 @@ Distances (Manhattan distance over sectors):
 - `DIST_TO_BOT(<BOT>)` → int
 - `DIST_TO_TARGET_BOT()` → int
   - if no valid target bot exists, returns `999`
+- `DIST_TO_CLOSEST_BOT()` → int
+  - distance to the closest alive bot (ties: lowest bot id)
 
 Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool
@@ -184,6 +199,11 @@ Powerups (local convenience):
 Bullets/projectiles:
 - `BULLET_IN_SAME_SECTOR()` → bool
 - `BULLET_IN_ADJ_SECTOR()` → bool
+
+Arena edges / walls (outer boundary in v1):
+- `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)` → int
+  - returns how many sector-steps to the outer wall in that direction
+  - `0` means you are currently at the edge
 
 Bumps (read last tick result):
 - `BUMPED_WALL()` → bool
@@ -244,13 +264,48 @@ IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
 GOTO FIGHT
 
 LABEL GET_HP
-TARGET_POWERUP HEALTH
-MOVE_TO_TARGET
+MOVE_TO_POWERUP HEALTH
 GOTO LOOP
 
 LABEL FIGHT
 TARGET_CLOSEST
 FIRE_SLOT1 TARGET
 MOVE_TO_TARGET
+GOTO LOOP
+```
+
+### Example D — If enemy is close, chase it
+
+```text
+LABEL LOOP
+IF (DIST_TO_CLOSEST_BOT() <= 1) GOTO CHASE
+GOTO LOOP
+
+LABEL CHASE
+MOVE_TO_CLOSEST_BOT
+GOTO LOOP
+```
+
+### Example E — If too close to a wall, move away
+
+```text
+LABEL LOOP
+IF (DIST_TO_ARENA_EDGE(LEFT) == 0) GOTO MOVE_RIGHT
+IF (DIST_TO_ARENA_EDGE(RIGHT) == 0) GOTO MOVE_LEFT
+IF (DIST_TO_ARENA_EDGE(UP) == 0) GOTO MOVE_DOWN
+IF (DIST_TO_ARENA_EDGE(DOWN) == 0) GOTO MOVE_UP
+GOTO LOOP
+
+LABEL MOVE_RIGHT
+MOVE RIGHT
+GOTO LOOP
+LABEL MOVE_LEFT
+MOVE LEFT
+GOTO LOOP
+LABEL MOVE_DOWN
+MOVE DOWN
+GOTO LOOP
+LABEL MOVE_UP
+MOVE UP
 GOTO LOOP
 ```
