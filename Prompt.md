@@ -48,6 +48,8 @@ Non-goals (until explicitly requested):
 - **Prefer modular, composable code.**
   - Keep modules focused; avoid “god modules”.
   - Extract helpers when logic is reused in 2+ places.
+  - **Keep files small**: if a source file grows beyond ~**600 lines**, refactor by splitting into smaller modules (new files are encouraged when it improves clarity).
+  - Keep the directory structure orderly: group by domain (simulation / bots / sandbox / UI / data) and name files by responsibility.
 
 - **Be explicit, deterministic, and data-driven.**
   - Never use `Math.random()` in simulation/gameplay; always use a seeded RNG.
@@ -181,6 +183,14 @@ Code implements mechanics; data defines *what exists* and *with what numbers*.
 - Prefer clear names and simple control flow.
 - Keep functions small; extract helpers for complex logic.
 - Use early returns over deep nesting.
+- **Keep files manageable**: prefer modules under ~**600 lines**; split large files by responsibility.
+- When splitting code:
+  - prefer creating new files over adding more nested conditionals in a single file
+  - keep exports narrow and intentional (small public surface area)
+  - keep related helpers colocated with the code they support
+- Use comments when needed:
+  - explain *why* (tradeoffs, invariants, determinism constraints)
+  - avoid redundant comments that restate the code
 - Add JSDoc on public modules and any tricky functions.
 
 ---
