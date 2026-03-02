@@ -14,9 +14,9 @@ This doc contains two complete **BotInstructions v1** scripts that focus on **at
 
 ---
 
-## Optional: shorthand aliases (newer convenience names)
+## Optional: equivalent alias names
 
-The scripts below use the more explicit v1 names. If you prefer the newer shorthand aliases (same behavior), you can swap in lines like these:
+Some instructions in `BotInstructions.md` have multiple accepted spellings (aliases). If you prefer different spellings (same behavior), you can swap in lines like these:
 
 ```text
 ; Targeting

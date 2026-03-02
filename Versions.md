@@ -15,11 +15,12 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
   - `IN_ZONE(<ZONE>)`
 - Readability-only instruction aliases in the bot language:
-  - `TARGET_CLOSEST` / `TARGET_NEAREST` (aliases of `TARGET_CLOSEST_BOT`)
+  - `TARGET_CLOSEST` (aliases: `TARGET_CLOSEST_BOT`, `TARGET_NEAREST`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
   - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>`
-  - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`) and `FIRE_TARGET <SLOT>`
+  - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`)
+  - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)
 - New sample scripts: `examples/bot1.md` (combat bot variants).
 
 ### Changed
@@ -27,6 +28,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Gameplay timing locked in docs: `ticksPerSecond = 1` and powerup spawn interval is 10–20 seconds.
 - UI plan clarified: Landing page is a single **Start Game** button for v1 (auth planned later).
 - Docs authoring rule: keep a stable core language and add “sugar” only as explicit aliases.
+- `BotInstructions.md` clarified **why aliases exist**, why they’re deterministic, and when to use the **target register** vs **inline selectors**.
+- Planning trackers updated (`Todo.md`): added next-step items to formalize the canonical alias table, deprecation strategy, parser/token list, and more beginner examples.
 
 ### Fixed
 - Documentation formatting/copy issues across planning docs.

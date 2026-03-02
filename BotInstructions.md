@@ -12,8 +12,10 @@ This is a **single-line-per-tick** language:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
 > - `<TYPE>`: `HEALTH|AMMO|ENERGY`
 > - `<BOT_TARGET>`: `<BOT>|TARGET|CLOSEST_BOT|NEAREST_BOT|LOWEST_HEALTH_BOT|WEAKEST_BOT` (subset of `<TARGET>`)
+>   - These `*_BOT` values are **inline selectors**: they are passed as arguments to other instructions (e.g. `USE_SLOT1`, `FIRE_BULLET`, `SET_MOVE_TO_BOT`) and are resolved deterministically when that instruction executes.
 >   - `NEAREST_BOT` is an alias of `CLOSEST_BOT`.
 >   - `WEAKEST_BOT` is an alias of `LOWEST_HEALTH_BOT`.
+>   - Contrast: `TARGET_CLOSEST` / `TARGET_LOWEST_HEALTH` are instructions that **write** the target register; `CLOSEST_BOT` / `LOWEST_HEALTH_BOT` are argument tokens that do **not** write any state.
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..4`
@@ -35,6 +37,24 @@ This is a **single-line-per-tick** language:
 > - At most **one weapon module** equipped in v1 (weapons in v1: `BULLET | SAW`).
 
 ---
+
+## 0) Aliases and determinism (read this first)
+
+This language intentionally has a **small canonical core**, then layers **aliases** on top for readability.
+
+Why aliases exist:
+- To keep the opcode list stable (fewer primitives to implement/test).
+- To make scripts more beginner-friendly (common words like “nearest” and “weakest”).
+- To support future modules via `USE_SLOTn` without needing a new opcode for every module.
+
+Why aliases are safe / deterministic:
+- Most aliases are **compile-time name mappings** (“normalization”). For example, `TARGET_NEAREST` and `TARGET_CLOSEST` mean the same thing in v1. A compiler/parser can rewrite the source to a canonical form before execution.
+- This mapping is **pure and deterministic**: it does not depend on random numbers, time, or hidden state.
+- The few “macro-like” conveniences (notably `MOVE_TO_ZONE` / `SET_MOVE_TO_ZONE`) evaluate `SECTOR()` once when the instruction executes and then behave exactly like the equivalent `...SECTOR <current> ZONE <zone>` form. This still remains deterministic because `SECTOR()` is derived from simulation state.
+
+A useful mental model:
+- `TARGET_*` instructions are **verbs**: they update the bot’s target register.
+- `*_BOT` tokens (`CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc.) are **nouns**: they are inline selectors passed to other instructions and resolved deterministically when that instruction executes.
 
 ## 1) Control flow
 
@@ -80,16 +100,38 @@ The bot maintains:
 - `targetBotId` (optional)
 - `targetPowerupType` (optional)
 
+### 2.0 Target register vs inline selectors (when to use which)
+
+You can pick targets in two different ways:
+
+1) **Write the target register** with `SET_TARGET ...` or `TARGET_*` instructions.
+- Use this when you want to “lock in” a bot id and reuse it across multiple future ticks.
+- It pairs naturally with `TARGET` (the `<BOT_TARGET>` token) and with `MOVE_TO_TARGET` / `SET_MOVE_TO_TARGET`.
+- Example pattern:
+
+```text
+TARGET_CLOSEST
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 TARGET
+SET_MOVE_TO_TARGET
+```
+
+2) **Inline select a bot** by passing `CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc. as a `<BOT_TARGET>` argument.
+- Use this for one-off actions (`USE_SLOT1 NEAREST_BOT`) where you don’t want to mutate the target register.
+- These selectors are resolved deterministically when the instruction executes (ties use the documented “lowest bot id” rule).
+- Example pattern:
+
+```text
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 NEAREST_BOT
+```
+
 ### 2.1 Target a bot
 
 - `SET_TARGET <BOT>`
 
-- `TARGET_CLOSEST` (alias: `TARGET_CLOSEST_BOT`)
-- `TARGET_NEAREST` (alias: `TARGET_CLOSEST_BOT`)
+- `TARGET_CLOSEST` (aliases: `TARGET_NEAREST`, `TARGET_CLOSEST_BOT`)
   - sets `targetBotId` to the **closest alive bot** (ties: lowest bot id)
 
-- `TARGET_LOWEST_HEALTH`
-- `TARGET_WEAKEST` (alias: `TARGET_LOWEST_HEALTH`)
+- `TARGET_LOWEST_HEALTH` (alias: `TARGET_WEAKEST`)
   - sets `targetBotId` to the alive bot with the lowest health (ties: lowest bot id)
 
 - `TARGET_NEXT`
@@ -220,6 +262,9 @@ Instructions:
   - If `<BOT_TARGET>` is a dynamic selector (`CLOSEST_BOT`/`NEAREST_BOT`/`LOWEST_HEALTH_BOT`/`WEAKEST_BOT`), it is re-resolved each tick.
   - If `<BOT_TARGET>` is `TARGET`, it follows your current `targetBotId`.
   - If `<BOT_TARGET>` is a specific bot id (`BOT1..BOT4`), it follows that bot until it dies.
+  - When to use which:
+    - use `SET_MOVE_TO_BOT TARGET` after a `TARGET_*` instruction when you want to commit to one chosen bot until you retarget.
+    - use `SET_MOVE_TO_BOT CLOSEST_BOT` when you always want to chase “whoever is closest right now” (deterministically re-evaluated each tick).
 - `SET_MOVE_TO_POWERUP <TYPE>`
 - `SET_MOVE_TO_TARGET`
 - `CLEAR_MOVE`
@@ -257,6 +302,9 @@ Notes:
     - `TARGET` (your current `targetBotId`; if invalid/dead, no-op)
     - `CLOSEST_BOT` / `NEAREST_BOT` (closest alive bot; ties: lowest bot id)
     - `LOWEST_HEALTH_BOT` / `WEAKEST_BOT` (lowest-health alive bot; ties: lowest bot id)
+  - When to use which:
+    - use `FIRE_BULLET TARGET` after a `TARGET_*` instruction when you want multiple future actions to keep referring to the same chosen bot id.
+    - use `FIRE_BULLET CLOSEST_BOT` / `WEAKEST_BOT` for a one-off shot where you don’t want to update the target register.
   - Bullets are slow projectiles; bullets can hit **any bot** in the sector they enter (not only the chosen target).
 
 - `SAW ON`
@@ -290,6 +338,7 @@ Semantics:
     - `SECTOR <SECTOR>` (sector center)
     - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
   - `SELF` / `NONE`
+- Inline selector targets (`CLOSEST_BOT`, `WEAKEST_BOT`, etc.) are resolved deterministically when `USE_SLOTn` executes; they do not modify the target register.
 - Modules may ignore targets that are not relevant.
 - If a module requires a different target kind, using the wrong target kind is a no-op.
 
@@ -303,6 +352,11 @@ To turn off toggles via slot:
 - `FIRE_SLOT1 <TARGET>` (alias of `USE_SLOT1 <TARGET>`)
 - `FIRE_SLOT2 <TARGET>` (alias of `USE_SLOT2 <TARGET>`)
 - `FIRE_SLOT3 <TARGET>` (alias of `USE_SLOT3 <TARGET>`)
+
+Rationale:
+- `USE_SLOTn` is the **canonical** future-proof primitive (“use whatever module is equipped here”).
+- `FIRE_SLOTn` is kept as a readability/legacy spelling for weapon-heavy scripts and older examples.
+- These are intended to be **compile-time aliases** (the parser can rewrite `FIRE_SLOTn` to `USE_SLOTn`). They are deterministic because they do not introduce new runtime behavior.
 
 Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
 - If slot contains **BULLET**: fires at `<BOT_TARGET>` (location targets are ignored in v1).

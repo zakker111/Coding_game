@@ -41,9 +41,10 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
   - `IN_ZONE(<ZONE>)`
 - Beginner-friendly shorthand aliases (readability only):
-  - `TARGET_CLOSEST` / `TARGET_NEAREST` (aliases of `TARGET_CLOSEST_BOT`)
+  - `TARGET_CLOSEST` (aliases: `TARGET_NEAREST`, `TARGET_CLOSEST_BOT`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
   - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
+  - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>` (aliases of `TARGET_POWERUP <TYPE>` / `MOVE_TO_POWERUP <TYPE>`)
 
 ### Loadout / modules
 - Each bot has **3 slot positions**: `SLOT1|SLOT2|SLOT3`.
@@ -170,10 +171,31 @@ Speed/weight (locked direction):
 
 ### 1) Formalize the ruleset + spec
 - Treat `BotInstructions.md` as the source of truth; tighten wording where ambiguous.
+- Create a single **canonical language reference** (docs-first):
+  - canonical instruction/predicate names + signatures
+  - a single alias table (all “sugar” names in one place)
+  - cross-links from other docs back to this reference (avoid duplicating alias lists)
+- Define an explicit **alias + deprecation strategy**:
+  - aliases are compile-time only (canonical internal opcodes)
+  - if an alias ever needs removal: deprecate first, remove on the next MAJOR version
+  - consistent doc notation for deprecated names
+- Formalize the **lexer/parser rules** (token list + grammar appendix):
+  - comments/blank lines, whitespace, casing rules
+  - label format + scope, jump resolution rules
+  - predicate syntax (parentheses, argument separators)
+  - numeric ranges and validation rules
 - Write a **Ruleset.md** (or expand existing docs) that locks:
   - tie-break rules
   - update order per tick (actions → drains → projectiles → damage → pickups)
   - definitions like adjacency and close range
+- Add more **beginner examples** in `examples/`:
+  - minimal “stand still + shoot closest” bot
+  - navigation goal example (set-and-forget movement while attacking)
+  - resource-aware bot (ammo/energy management; shield/saw toggles)
+- Add a lightweight **docs QA checklist** (and later CI) to prevent spec drift:
+  - grep checks for merge markers / template artifacts
+  - grep checks for known naming foot-guns (`NOOP` vs `NOP`, alias wording, etc.)
+  - a short “cross-doc consistency” checklist for PRs
 
 ### 2) Deterministic core simulation (shared between client + server)
 - Implement simulation state model:
@@ -185,6 +207,7 @@ Speed/weight (locked direction):
 
 ### 3) Bot VM / interpreter
 - Parser/assembler for instruction scripts:
+  - central tokenization rules + canonical opcode mapping (aliases resolved in one place)
   - labels → resolved jump targets
   - instruction validation
   - per-bot `pc` execution (1 line per tick)
