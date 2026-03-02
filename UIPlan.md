@@ -124,20 +124,31 @@ Deterministic placement (recommended):
 
 This guarantees each sector has space for 4× 32×32 bots without overlap.
 
-### 3.7 Walls (distinct sector boundaries)
-You requested distinct walls. Visually, treat each sector as a “room” with walls.
+### 3.7 Walls (distinct sector boundaries, and gameplay-relevant)
+You requested distinct walls and confirmed they are **part of gameplay**:
+- when a bot bumps into a wall it takes a small amount of damage
+- the bot visually “bounces” from the wall
+
+UI implications:
+- Walls must be very clear visually.
+- The UI should render **collision feedback**:
+  - a small hit flash on the bot
+  - a floating damage number (optional)
+  - a short bounce animation (tiny positional nudge) while keeping tick stepping clear
 
 Recommended v1 wall styling:
 - A thick **outer border** around the whole 3×3 arena (e.g., 6–10px).
 - Clear **inner walls** between sectors (e.g., 3–6px).
-- Use a consistent wall color and slight shading to make boundaries obvious.
+- Use consistent wall color and slight shading to make boundaries obvious.
 
 Implementation options:
 - **CSS borders** on sector cells + a thicker border on the arena container.
-- Or an SVG overlay that draws walls (more control for future doorways/hazards).
+- Or an **SVG overlay** that draws walls (more control for future doors/hazards).
 
-Future-proof note:
-- If later you want walls to affect gameplay (blocking movement/line-of-sight), the UI wall rendering should consume the same data-driven wall layout from the ruleset.
+Data-driven note (recommended):
+- Even if walls start as a simple fixed layout, the UI should consume a wall layout representation from the ruleset/replay so:
+  - the viewer matches server truth,
+  - future wall patterns (doors/obstacles) don’t require UI rewrites.
 
 ---
 

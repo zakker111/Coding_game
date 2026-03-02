@@ -62,10 +62,16 @@ This file is the **single source of truth** for near-term engineering tasks and 
 
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).
+- **Walls are gameplay** (new):
+  - when a bot bumps into a wall it takes a small amount of damage and “bounces”.
+  - decide whether this is implemented as:
+    - **sector-only collisions** (attempted illegal move => no move + bump damage; "bounce" is mostly visual), or
+    - **continuous positions/velocity** inside the arena (true bounce/reflect; implies a larger simulation model).
 - Movement semantics for `MOVE_TO_*`:
   - shortest-path rules + deterministic tie-breaks when multiple shortest paths exist.
 - Bullet pathing:
   - whether bullet locks a path at fire time vs re-targets dynamically.
+- Bullet/wall interaction (future): do bullets collide/bounce/stop on walls?
 
 ### Match rules
 - Match tick cap.
