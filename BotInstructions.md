@@ -14,6 +14,7 @@ This is a **single-line-per-tick** language:
 >
 > Where:
 > - `TARGET` refers to the bot’s current `targetBotId`.
+> - All numeric values are integers.
 > - No duplicate modules in slots in v1.
 
 ---
@@ -22,7 +23,8 @@ This is a **single-line-per-tick** language:
 
 - `LABEL <name>`
 - `GOTO <name>`
-- `IF <PREDICATE> GOTO <name>`
+- `IF <EXPR> GOTO <name>`
+  - `<EXPR>` is a **C-like boolean expression** (see §6).
 - `NOP`
 
 ---
@@ -126,96 +128,83 @@ Optional convenience:
 
 ---
 
-## 6) Predicates (for `IF ... GOTO ...`)
+## 6) Expressions (for `IF ... GOTO ...`)
 
-### 6.1 Enemy/bot proximity
+`IF` conditions use a small, deterministic, **C-like** expression language.
 
-- `BOT_ALIVE(<BOT>)`
-- `BOT_IN_SAME_SECTOR(<BOT>)`
-- `BOT_IN_ADJ_SECTOR(<BOT>)`
-- `DIST_TO_BOT(<BOT>) <op> <number>`  
-  (`<op>` is one of `== != < <= > >=`; distance is Manhattan distance over sectors)
+### 6.1 Syntax
 
-Vague/generic:
-- `ANY_BOT_IN_SAME_SECTOR()`
-- `ANY_BOT_IN_ADJ_SECTOR()`
+Operators:
+- comparisons: `== != < <= > >=`
+- boolean: `&& || !`
+- grouping: `(` `)`
 
-Nearest:
-- `NEAREST_BOT_IS(<BOT>)` (ties -> lowest bot id)
+Rules:
+- All numeric values are **integers**.
+- `&&` and `||` are **short-circuiting** and evaluated left-to-right.
+- All functions listed below are **pure** (no side effects).
 
-Close-range (named concept; exact radius can be tuned in ruleset):
-- `ANY_BOT_IN_CLOSE_RANGE()`
-- `TARGET_IN_CLOSE_RANGE()`
+### 6.2 Built-in values (identifiers)
 
-### 6.2 Resources (self)
+Self resources:
+- `HEALTH` (0..100)
+- `AMMO` (0..100)
+- `ENERGY` (0..100)
 
-- `AMMO <op> <number>`
-- `ENERGY <op> <number>`
-- `HEALTH <op> <number>`
+Target convenience:
+- `TARGET_HEALTH`
+  - If there is **no valid target bot**, this evaluates to `0`.
+  - Use `HAS_TARGET_BOT()` when you need to ensure the target exists.
 
-### 6.3 Resources (other bots)
+### 6.3 Built-in functions
 
-- `BOT_HEALTH(<BOT>) <op> <number>`
-- `BOT_AMMO(<BOT>) <op> <number>`
-- `BOT_ENERGY(<BOT>) <op> <number>`
+Bot / target state:
+- `HAS_TARGET_BOT()` → bool
+  - true iff `targetBotId` is set and the target bot is alive
+- `BOT_ALIVE(<BOT>)` → bool
 
-Vague/generic:
-- `ANY_BOT_HEALTH <op> <number>` (true if any alive enemy bot matches)
+Sector proximity:
+- `BOT_IN_SAME_SECTOR(<BOT>)` → bool
+- `BOT_IN_ADJ_SECTOR(<BOT>)` → bool
 
-Convenience for your current target:
-- `TARGET_HEALTH <op> <number>`
-  - uses the current `targetBotId`; false if there is no valid target bot
+Distances (Manhattan distance over sectors):
+- `DIST_TO_BOT(<BOT>)` → int
+- `DIST_TO_TARGET_BOT()` → int
+  - if no valid target bot exists, returns `999`
 
-### 6.4 Powerups (global knowledge)
+Powerups (global knowledge):
+- `POWERUP_EXISTS(<TYPE>)` → bool
+- `DIST_TO_CLOSEST_POWERUP(<TYPE>)` → int
+  - if no powerup of that type exists, returns `999`
 
-- `POWERUP_EXISTS(<TYPE>)`
-- `DIST_TO_CLOSEST_POWERUP(<TYPE>) <op> <number>`
+Powerups (local convenience):
+- `POWERUP_IN_SAME_SECTOR(<TYPE>)` → bool
+- `POWERUP_IN_ADJ_SECTOR(<TYPE>)` → bool
 
-Near-by checks (optional convenience):
-- `POWERUP_IN_SAME_SECTOR(<TYPE>)`
-- `POWERUP_IN_ADJ_SECTOR(<TYPE>)`
+Bullets/projectiles:
+- `BULLET_IN_SAME_SECTOR()` → bool
+- `BULLET_IN_ADJ_SECTOR()` → bool
 
-### 6.5 Bullets/projectiles
+Bumps (read last tick result):
+- `BUMPED_WALL()` → bool
+- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+- `BUMPED_BOT()` → bool
+- `BUMPED_BOT_IS(<BOT>)` → bool
 
-- `BULLET_IN_SAME_SECTOR()`
-- `BULLET_IN_ADJ_SECTOR()`
+### 6.4 Common patterns
 
-### 6.6 Target registers
+"Powerup close" should be expressed using distance:
+- close = **same or adjacent sector**
 
-Bot target:
-- `TARGET_IS_SET()`
-- `TARGET_ALIVE()`
-- `TARGET_IN_SAME_SECTOR()`
-- `TARGET_IN_ADJ_SECTOR()`
+```text
+IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
+```
 
-Powerup target:
-- `HAS_TARGET_POWERUP()`
-- `TARGET_POWERUP_IS(<TYPE>)`
+"Finish low-health bot" should be expressed using target + threshold:
 
-### 6.7 Collision / bump sensors
-
-Bots can react to bump/collision outcomes.
-
-These sensors refer to the bot’s **most recent bump event** (typically caused by its own movement attempt).
-
-Because the bot executes only one line per tick, bump information is most useful as a **"last tick" result**:
-- collisions are detected/resolved during tick `t`
-- bump flags are readable by the bot when it executes tick `t+1`
-
-The engine should reset bump state each tick after it is exposed to the bot and/or written into the replay.
-
-Walls:
-- `BUMPED_WALL()`
-- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)`
-
-Bots:
-- `BUMPED_BOT()`
-- `BUMPED_BOT_IS(<BOT>)`
-- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)`
-
-Notes / open rules (to finalize in the ruleset):
-- Define exactly when a “bump into another bot” occurs (attempted move into occupied sector vs collision inside a sector).
-- If multiple bumps could occur in one tick, define which one is recorded (recommended: only record the bump caused by the bot’s own movement instruction; otherwise pick a deterministic priority order).
+```text
+IF (HAS_TARGET_BOT() && TARGET_HEALTH < 10) GOTO FINISH
+```
 
 ---
 
@@ -225,7 +214,7 @@ Notes / open rules (to finalize in the ruleset):
 
 ```text
 LABEL LOOP
-IF HEALTH < 10 GOTO HEAL
+IF (HEALTH < 10 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
 GOTO LOOP
 
 LABEL HEAL
@@ -239,10 +228,29 @@ GOTO LOOP
 ```text
 LABEL LOOP
 TARGET_LOWEST_HEALTH
-IF TARGET_HEALTH < 10 GOTO FINISH
+IF (HAS_TARGET_BOT() && TARGET_HEALTH < 10) GOTO FINISH
 GOTO LOOP
 
 LABEL FINISH
 FIRE_SLOT1 TARGET
+GOTO LOOP
+```
+
+### Example C — If health powerup is close, take it; otherwise fight
+
+```text
+LABEL LOOP
+IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
+GOTO FIGHT
+
+LABEL GET_HP
+TARGET_POWERUP HEALTH
+MOVE_TO_TARGET
+GOTO LOOP
+
+LABEL FIGHT
+TARGET_CLOSEST
+FIRE_SLOT1 TARGET
+MOVE_TO_TARGET
 GOTO LOOP
 ```
