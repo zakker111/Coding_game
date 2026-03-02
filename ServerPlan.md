@@ -40,13 +40,17 @@ Implementation guidance (recommended stack):
 - **BotVersion** (immutable)
   - `id`, `bot_id`, `created_at`
   - `source_text` (the instruction script)
-  - `source_hash` (content hash; used in replays)
+  - `source_hash` (content hash of canonicalized source; used in replays)
+  - `compiled_ir_hash` (hash of canonical compiled opcode/IR form; used for stronger reproducibility)
+  - `dsl_version` (pinned bot language version)
+  - `ruleset_version` (pinned gameplay rules version)
   - `loadout` (3 slot positions; slots may be empty)
     - no duplicate modules among equipped slots (v1)
     - at most one weapon module equipped (v1: `BULLET` or `SAW`)
     - note: equipped slot count affects bot movement speed (see `Ruleset.md`)
-  - `ruleset_version`
   - `validation_status` + `validation_errors`
+
+Note: in replays and match execution, **match slots** are still `BOT1..BOT4`. Stable bot identity/versioning is captured separately (see `BotModelPlan.md`).
 
 ### 2.2 Daily runs + matches
 

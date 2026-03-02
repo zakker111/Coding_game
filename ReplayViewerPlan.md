@@ -36,17 +36,23 @@ It complements:
 
 ## 2) Screens (client)
 
-### 2.1 Match History (Battle Picker)
+### 2.1 Match History (Battle Picker) (post-v1)
 
-Entry points:
+v1 note:
+- The v1 Workshop only needs an **in-memory replay for the most recent run**.
+- A persistent replay library / match history UI is post-v1 (can be added without changing simulation rules).
+
+Entry points (post-v1):
 - after finishing a local match: **Save Replay** / **View Replay**
 - top nav: **Matches**
 
 List item fields (minimum):
 - match id
 - timestamp
-- mode: `1v1` / `1v1v1v1`
-- participant names + avatars
+- mode:
+  - v1 workshop preview uses `1v1v1v1` (4 bots)
+  - optional client-only debug mode (post-v1): `1v1`
+- participant display names + appearance (v1: color; future: image/GIF)
 - placement / winner
 - quick actions: **Open**, **Delete** (local-only)
 
@@ -103,12 +109,29 @@ A replay should support 2 independent requirements:
 - `tickCap`
 - `bots[]`:
   - `botId` (`BOT1..BOT4`)
+    - **Important:** this is the **match slot id** (deterministic engine identifier), not a user bot identity.
+    - Future-proofing: stable bot identity/version live in `botRef` fields below.
   - `displayName`
-  - `avatar` (color for v1)
+  - `appearance` (presentation-only; must not affect determinism)
+    - v1 required (placeholder): `{ kind: "COLOR", color: "#RRGGBB" }`
+    - future (images/gifs):
+      - `{ kind: "IMAGE", fallbackColor: "#RRGGBB", avatarRef: { assetId?, contentHash?, url? } }`
+      - `fallbackColor` is used when the image cannot be loaded.
+      - `avatarRef` is an immutable-ish reference the viewer can resolve via:
+        - server asset registry (`assetId`)
+        - content-addressed storage (`contentHash`)
+        - or a direct URL (`url`) when appropriate
+    - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
   - `loadout` (3 slot positions; each entry is a module id or `null`)
     - v1 validation: no duplicate modules among equipped slots
     - v1 validation: at most one weapon module equipped (`BULLET` or `SAW`)
   - `sourceText` (or `sourceHash` + URL)
+  - future (server / library):
+    - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`
+      - `botId` here is the stable identity (e.g. `alice/greedy`, `builtin/chaser-shooter`)
+      - `botVersion` is an immutable snapshot identifier (server assigned)
+
+(See `BotModelPlan.md` for the full identity/version model.)
 
 ### 3.2 Two storage strategies
 
@@ -141,6 +164,19 @@ Client-first recommendation:
 - start with **A** for local testing
 - move to **B** once replays get large / server storage matters
 
+### 3.3 Tick semantics (must be explicit)
+
+To keep rendering, scrubbing, and "what happened on tick t" consistent across clients:
+
+- Convention (recommended for v1):
+  - `state[t]` represents the **end-of-tick state** for tick `t`.
+  - `events[t]` are the ordered events that occurred **during tick `t`** to transform `state[t-1] → state[t]`.
+
+Notes:
+- Tick `0` is the initial state before any tick processing (so `state[0]` is "start of match").
+- Under this convention, viewers that render purely from `state[t]` will match "after resolution" visuals (moves applied, bullets advanced, hits applied, pickups applied, deaths resolved).
+- The per-tick event list remains the canonical explanation/debug log for how `state[t]` was reached.
+
 ---
 
 ## 4) Event types needed for correct visualization
@@ -158,7 +194,29 @@ Event ordering + compatibility:
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
   - `result`: `EXECUTED | NOP | ERROR`
-  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | MOVE_COOLDOWN | ...`
+  - `reason` (optional): a stable enum (see below)
+
+Trace conventions (recommended, to avoid implementation drift):
+- **Invalid/malformed instruction** (runtime policy in `Todo.md` / `BotInstructions.md`):
+  - treat as no-op for gameplay
+  - set `result = ERROR`
+  - set `reason = INVALID_INSTR`
+  - set `pcAfter = 1` (the post-tick state has `pc = 1`)
+- **Valid instruction that no-ops** due to cooldown/resources/invalid target/etc.:
+  - set `result = NOP`
+  - set `reason` accordingly
+  - `pcAfter` advances as normal (unless the instruction defines special control-flow)
+
+Canonical `reason` values (v1+; extend additively):
+- `INVALID_INSTR`
+- `NO_MODULE`
+- `COOLDOWN`
+- `MOVE_COOLDOWN`
+- `NO_AMMO`
+- `NO_ENERGY`
+- `INVALID_TARGET_KIND`
+- `INVALID_TARGET`
+- `INVALID_LOC`
 
 ### 4.2 Locations (`loc`)
 
@@ -172,7 +230,8 @@ Encode every location as:
 Optional future extension: continuous positions (`pos`)
 - Some future weapons (variable-speed projectiles, wavy/curved paths, beams) are easier to render with continuous coordinates.
 - When needed, encode positions as:
-  - `pos = { x, y }` in **arena world units** (see `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right.
+  - `pos = { x, y }` in **arena world units** (see `ArenaPlan.md` / `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right outer wall.
+  - Recommended bounds convention (v1): `x` and `y` are clamped to `0..192` (inclusive), with the outer wall rendered at `x=0`, `x=192`, `y=0`, `y=192`.
 - When both `loc`/`sector` and `pos` are present, the viewer should prefer `pos` for rendering.
 
 ### 4.3 Movement + bumps
@@ -209,6 +268,9 @@ Optional fields (not required in v1) support future weapons/features:
 
 - `BULLET_SPAWN`:
   - required: `bulletId`, `ownerBotId`, `sector`, `dir`
+  - viewer spawn position rule:
+    - if `pos` is present → render bullet spawn at `pos`
+    - else → render bullet spawn at the **owner bot’s current location center** (derived from `state[t]` / `state[t-1]`, per the chosen tick convention)
   - optional:
     - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
     - `burst` (burst grouping; omitted for non-burst shots):

@@ -10,7 +10,10 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Client + server from day 1**:
   - **Client**: bot editor + local test runs + replay viewer (UI details later)
   - **Server**: headless match runner for **daily simulations**
-- Bots have a user-facing **display name** (server-side entity field exists; UI should show name + match slot id).
+- Bots have user-facing presentation:
+  - **display name**
+  - **appearance** (v1: color token; future: avatar image/GIF)
+  - Presentation must **not** affect determinism or match results.
 
 ### Simulation model
 - **Tick-based** match loop.
@@ -36,6 +39,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
+  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are planned for vNext only.
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
@@ -148,12 +152,12 @@ Speed/weight (locked direction):
 - Elimination: bots that drop below a **points threshold** are excluded from **future days** until re-enabled.
 - Rejoin: re-enable uses a **rejoin allowance** (points floor) so bots can come back even if below threshold.
 - Weekly: highlight **top 10** and reset/start a new season.
-- Client-only: allow a **1v1 spawn/testing mode** (does not affect server scoring).
+- Optional (post-v1): allow a **1v1 spawn/testing mode** (does not affect server scoring).
 - Still to define:
   - points formula (placement-only vs placement + stats)
   - exact threshold value and exact rejoin allowance amount
   - number of rounds/matches per day caps
-  - what happens when fewer than 4 eligible bots remain (stop vs allow 2–3 player matches)
+  - what happens when fewer than 4 eligible bots remain (locked: **stop scheduling** and end the run; see `DailyCompetition.md`)
   - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing
@@ -233,10 +237,15 @@ Speed/weight (locked direction):
 ### 5) Replays + determinism tests
 - Define replay schema:
   - match seed
-  - bot versions/hashes + loadouts
+  - **match slots** (`BOT1..BOT4`) + per-slot participant metadata
+  - stable bot identity/version references (future): `botId`, `botVersion`, `sourceHash`, optional `compiledIrHash`
   - per-tick executed instruction (optional but very helpful)
   - per-tick events (damage, deaths, pickups, resource deltas)
 - Golden replay tests: same seed + same bots → same outcome.
+
+Bot identity/version planning note:
+- Build the v1 client (built-in bots + local drafts) so it already produces replays with stable hashes and pinned `{rulesetVersion, dslVersion}`.
+- See `BotModelPlan.md`.
 
 ### 6) Server daily runner
 - Headless match runner (CLI/service) that can:
@@ -249,11 +258,23 @@ Speed/weight (locked direction):
 - Store bot versions (immutable) + loadouts.
 - Validate scripts on submission (reject duplicates in slots; reject invalid instructions/labels).
 
-### 8) Client UI (later)
-- Landing + login.
-- Bot editor.
-- Local match runner for testing.
-- Replay viewer.
+### 8) Client UI (v1)
+- **Route `/`**: minimal landing with one primary action: **Start Game** → `/workshop`.
+- **Route `/workshop`**: the main “coding page”:
+  - bot code editor (with inline parse/validation errors)
+  - local simulation preview + replay controls
+  - always a **4-bot match**: `BOT1=Your Bot` + three built-in opponents
+  - read-only code viewer for the built-in opponents
+- **Built-in opponents (v1)**: ship 3 bundled scripts under `examples/`:
+  - `examples/bot2.md` (Chaser Shooter)
+  - `examples/bot3.md` (Corner Bunker)
+  - `examples/bot4.md` (Saw Rusher)
+- **Persistence/memory (v1)**:
+  - persist the user’s bot draft across refresh (guest/local)
+  - persist minimal run config: seed (optional), tick cap (optional), opponent selection (if configurable), UI layout
+  - suggested storage: `localStorage` for small settings + `IndexedDB` for drafts if we support multiple drafts/large text
+
+Defer (post-v1): auth/login, cloud saving, replay library, sharing links.
 
 ---
 

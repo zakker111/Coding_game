@@ -29,7 +29,7 @@ This is a **single-line-per-tick** language:
 >
 > Where:
 > - `BOT1..BOT4` are **match slot identifiers** (deterministic engine ids).
-> - Bots may also have a **display name** in UI/server contexts, but scripts still refer to match slots as `BOT1..BOT4`.
+> - Bots may also have **displayName** and **appearance/avatar** metadata in UI/server contexts (for labels, icons, gifs), but scripts still refer to match slots as `BOT1..BOT4`.
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
 > - Each bot has 3 slot positions (`SLOT1..SLOT3`); a slot may be **empty**.
@@ -55,6 +55,37 @@ Why aliases are safe / deterministic:
 A useful mental model:
 - `TARGET_*` instructions are **verbs**: they update the bot’s target register.
 - `*_BOT` tokens (`CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc.) are **nouns**: they are inline selectors passed to other instructions and resolved deterministically when that instruction executes.
+
+### 0.1 Source format (comments, blank lines, labels)
+
+The language is line-based for readability, but the engine uses a compiled form.
+
+Preprocessing rules (v1):
+- **Blank lines are ignored**.
+- **Comment lines are ignored**:
+  - any line whose first non-whitespace character is `;` is a comment.
+- `LABEL <name>` is a **compile-time directive**, not a runtime instruction:
+  - it does **not** consume a tick.
+  - it does **not** appear in the executable instruction list.
+  - labels are resolved to jump targets during compilation.
+
+Program counter (pc) model (v1):
+- `pc` is **1-indexed** into the compiled executable instruction list (after preprocessing).
+- For replay/UI debugging, the engine should retain a mapping: `pc -> originalSourceLine`.
+
+Optional (v1, non-semantic): UI metadata directives
+- Tools/UIs may read presentation-only metadata from comment lines of the form:
+  - `;@name <text>`
+  - `;@appearance <value>`
+- These lines are still **comments** and must be ignored by the compiler/VM for gameplay.
+- Suggested UI-side constraints (planning):
+  - `name`: 1–32 chars after trimming; no newlines
+  - `appearance`:
+    - v1: hex color `#RRGGBB`
+    - future: `asset:<id>` or `hash:<contentHash>` (resolved by server/UI)
+
+Rationale:
+- Lets a single `.md` / script file carry optional “persona” info (name + avatar) without changing deterministic runtime semantics.
 
 ## 1) Control flow
 
@@ -295,6 +326,11 @@ Notes:
 
 > If the required module is not equipped, the instruction does nothing.
 
+Future-proofing note (planning):
+- Conceptually, these module-type instructions (`FIRE_BULLET`, `SAW ON/OFF`, `SHIELD ON/OFF`) are **syntax sugar** over the stable slot primitives `USE_SLOTn` / `STOP_SLOTn`.
+- In v1 this is unambiguous because v1 forbids duplicate modules in a loadout.
+- If a future ruleset ever allows duplicates, module-type spellings that don’t specify a slot should become a **compile-time error** (or be removed in favor of explicit `USE_SLOTn`).
+
 - `FIRE_BULLET <BOT_TARGET>`
   - Ammo-based. If `ammo == 0`, does nothing.
   - `<BOT_TARGET>` can be:
@@ -302,9 +338,6 @@ Notes:
     - `TARGET` (your current `targetBotId`; if invalid/dead, no-op)
     - `CLOSEST_BOT` / `NEAREST_BOT` (closest alive bot; ties: lowest bot id)
     - `LOWEST_HEALTH_BOT` / `WEAKEST_BOT` (lowest-health alive bot; ties: lowest bot id)
-  - When to use which:
-    - use `FIRE_BULLET TARGET` after a `TARGET_*` instruction when you want multiple future actions to keep referring to the same chosen bot id.
-    - use `FIRE_BULLET CLOSEST_BOT` / `WEAKEST_BOT` for a one-off shot where you don’t want to update the target register.
   - Bullets are slow projectiles; bullets can hit **any bot** in the sector they enter (not only the chosen target).
 
 - `SAW ON`
@@ -340,12 +373,18 @@ Semantics:
   - `SELF` / `NONE`
 - Inline selector targets (`CLOSEST_BOT`, `WEAKEST_BOT`, etc.) are resolved deterministically when `USE_SLOTn` executes; they do not modify the target register.
 - Modules may ignore targets that are not relevant.
-- If a module requires a different target kind, using the wrong target kind is a no-op.
+- If a module requires a different target kind, using the wrong target kind is a deterministic no-op (no cost, no cooldown) and should emit a replay/debug reason such as `INVALID_TARGET_KIND`.
 
 To turn off toggles via slot:
 - `STOP_SLOT1`
 - `STOP_SLOT2`
 - `STOP_SLOT3`
+
+`STOP_SLOTn` stable contract (v1+):
+- “Request to stop/cancel whatever the module in this slot is currently doing.”
+- For toggle modules (SAW/SHIELD): turns the module off.
+- For passive or instant modules: no-op.
+- For future modules (beams, burst queues, deployables, helpers): the module defines what “stop” means, but the call must remain deterministic and should emit a replay/debug reason if it had no effect.
 
 ### 5.2 Compatibility aliases (v1)
 
