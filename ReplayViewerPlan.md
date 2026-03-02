@@ -147,6 +147,10 @@ Client-first recommendation:
 
 The UI should not infer combat; it should render what the replay says.
 
+Event ordering + compatibility:
+- The per-tick `events[]` list is ordered. When multiple events happen in the same tick (e.g., burst shots), the array order is the canonical sequence the viewer should use.
+- Unknown event types should be ignored (so older viewers can still open newer replays).
+
 ### 4.1 Bot execution trace
 
 - `BOT_EXEC`:
@@ -164,6 +168,12 @@ Encode every location as:
 - `loc = { sector: 1..9, zone: 0..4 }`
   - `zone=0` means sector center
   - `zone=1..4` means zone center
+
+Optional future extension: continuous positions (`pos`)
+- Some future weapons (variable-speed projectiles, wavy/curved paths, beams) are easier to render with continuous coordinates.
+- When needed, encode positions as:
+  - `pos = { x, y }` in **arena world units** (see `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right.
+- When both `loc`/`sector` and `pos` are present, the viewer should prefer `pos` for rendering.
 
 ### 4.3 Movement + bumps
 
@@ -188,12 +198,52 @@ Timing note:
 - `RESOURCE_DELTA`: `botId`, `ammoDelta`, `energyDelta`, `healthDelta`, `cause`
   - include `cause` values like: `PICKUP_HEALTH|PICKUP_AMMO|PICKUP_ENERGY|DAMAGE|DRAIN|...`
 
-### 4.6 Projectiles (bullets)
+### 4.6 Projectiles (bullets; forward-compatible)
 
-- `BULLET_SPAWN`: `bulletId`, `ownerBotId`, `sector`, `dir`
-- `BULLET_MOVE`: `bulletId`, `fromSector`, `toSector`
+v1 uses the `BULLET_*` events below.
+
+Optional fields (not required in v1) support future weapons/features:
+- burst fire sequences (group shots fired as a burst)
+- variable projectile speeds
+- non-linear trajectories (e.g., wavy)
+
+- `BULLET_SPAWN`:
+  - required: `bulletId`, `ownerBotId`, `sector`, `dir`
+  - optional:
+    - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
+    - `burst` (burst grouping; omitted for non-burst shots):
+      - `burstId` (string)
+      - `shotIndex` (0-based)
+      - `shotsInBurst` (int)
+    - `speedSectorsPerTick` (number; default is `1`)
+    - `trajectory` (viewer hint; if omitted, treat as linear):
+      - `kind`: `LINEAR | WAVY`
+      - `amplitudeUnits` (number; for `WAVY`)
+      - `periodSectors` (number; for `WAVY`)
+      - `phase` (number; for `WAVY`)
+    - `pos` (continuous spawn position; see §4.2)
+
+- `BULLET_MOVE`:
+  - required: `bulletId`, `fromSector`, `toSector`
+  - optional:
+    - `pathSectors` (array of sector ids in traversal order; includes `fromSector` and `toSector`)
+      - used when `speedSectorsPerTick > 1` so the viewer can render multi-sector motion in a single tick
+    - `fromPos`, `toPos` (continuous positions for rendering slow/fast/curved motion; see §4.2)
+
 - `BULLET_HIT`: `bulletId`, `victimBotId`, `damage`
 - `BULLET_DESPAWN`: `bulletId`, `reason` (`TTL|WALL|HIT`)
+
+### 4.6.1 Beams / lasers (future)
+
+Beams are hitscan or short-duration line attacks. They are rendered as a line for the tick(s) they are active.
+
+- `BEAM_FIRE`:
+  - `beamId`, `ownerBotId`
+  - `fromLoc` (or `pos`), `dir`, `rangeSectors`
+  - `durationTicks` (int; `0` or `1` for instantaneous)
+  - `ignoresShield` (optional boolean; when true, the viewer should explain that shield mitigation was bypassed)
+
+Damage caused by a beam should still be represented via `DAMAGE` events (see §4.9), ideally with a `sourceRef` pointing to the `beamId`.
 
 ### 4.7 Grenades
 
@@ -216,7 +266,19 @@ Timing note:
 ### 4.9 Damage + deaths
 
 - `DAMAGE`:
-  - `victimBotId`, `amount`, `source`, `sourceBotId?`, `kind`
+  - required: `victimBotId`, `amount`, `source`, `sourceBotId?`, `kind`
+  - optional (future):
+    - `sourceRef`: `{ type, id }` (lets the viewer link damage back to a specific entity)
+      - examples:
+        - `{ type: "BULLET", id: bulletId }`
+        - `{ type: "GRENADE", id: grenadeId }`
+        - `{ type: "MINE", id: mineId }`
+        - `{ type: "BEAM", id: beamId }`
+    - `mitigation` (how defenses interacted with the damage):
+      - `shieldAbsorbed` (number; if shields exist)
+      - `ignoredShield` (boolean; set true for lasers/beams that ignore shields)
+
+
 - `BOT_DIED`:
   - `victimBotId`, `creditedBotId?`
 

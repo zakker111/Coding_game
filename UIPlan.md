@@ -157,6 +157,10 @@ Note: the sector center anchor (`SECTOR s`, `zone=0`) is the center point of the
 - bots: 32×32 sprite + name + slot id (`BOT1..BOT4`) + small resource bars
 - powerups: icons at their anchor location
 - bullets/grenades/mines: simple sprites rendered above the grid
+- future (not v1):
+  - burst fire: multiple projectile spawns in a tick can be rendered as rapid successive muzzle flashes/trails (using ordered per-tick events)
+  - variable-speed / wavy projectiles: render using replay `speed`/`trajectory` hints (and optional continuous `pos`)
+  - beams/lasers: render as a line for the tick(s) they are active
 
 Walls:
 - only the **outer boundary** is a gameplay wall in v1

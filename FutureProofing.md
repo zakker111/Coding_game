@@ -42,14 +42,43 @@ New content is added primarily by:
 - implementing its deterministic behavior in the simulation engine
 - defining its resource usage (ammo/energy), cooldowns, and effects in data
 
+The bot language stays stable if module *variety* is expressed via a small set of **capability flags** + data parameters, rather than new instructions.
+
 Recommended module schema fields (high-level):
 - activation: `INSTANT | TOGGLE | PASSIVE`
 - costs (vector): `costAmmo`, `costEnergy`
 - cooldown: `cooldownOnUseTicks`
 - optional drains while active: `drainEnergyPerTick`
 
-Delivery / behavior kind (examples):
-- attacks: `PROJECTILE | HITSCAN | TIMED_EXPLOSIVE`
+#### Capability flags (stable surface)
+These are the “shape” of a module. New modules should primarily be expressible by combining these fields.
+
+- `delivery`: `PROJECTILE | HITSCAN | BEAM`
+  - `PROJECTILE`: entities with travel time (supports patterns like wavy/homing)
+  - `HITSCAN`: instantaneous line check
+  - `BEAM`: sustained effect while active (damage/drain per tick)
+
+- `targetKinds`: set of supported target kinds (see §4)
+  - `BOT`, `LOCATION`, `DIRECTION`, `NONE`
+
+- defensive interaction flags (examples):
+  - `ignoresShield`
+  - `piercesShield`
+  - `piercesArmor`
+  - `stopsOnFirstHit` (false implies pierce-through entities)
+
+- AoE / collateral flags (examples):
+  - `hasSplash`
+  - `splashRadiusSectors`
+  - `friendlyFire`
+
+- optional weapon “feel” flags (examples):
+  - `hasRecoil`
+  - `hasSpread`
+  - `isBurst`
+  - `isChargeUp`
+
+Behavior kind (examples, simulation-side):
 - deployables: `DEPLOYABLE` (mines, turrets, traps)
 - spawns: `SPAWN_HELPER`
 
@@ -82,24 +111,69 @@ This allows:
 - a beginner-friendly language
 - plus a stable low-level core
 
+### 3.3 Per-slot internal state (deterministic patterns)
+To support “new weapon behaviors” (burst MG, recoil/spread, beams with ramp-up, wavy projectiles) without new opcodes, each equipped module instance should own a small deterministic state blob.
+
+Pattern:
+- state is stored per bot *per slot* (not global)
+- state is reset when a module is swapped out
+- state is updated only by the simulation (bot code can’t write it directly)
+- state updates must be deterministic and tick-based
+
+Recommended common fields (apply to most modules):
+- `cooldownRemainingTicks`
+- `active` (for toggle/beam-like modules)
+- `charges` / `chargeTicks` (if using a charge-up model)
+
+Recommended weapon-feel fields (module-defined but standardized names):
+- `burstRemaining` (burst MG)
+- `burstWindupTicks` / `burstSpacingTicks`
+- `recoil` (accumulated recoil)
+- `spread` (current spread cone)
+- `lastUseTick`
+
+Determinism note:
+- if a module needs randomness (e.g., spread sampling), it should use a deterministic PRNG seeded from `(matchSeed, botId, slotIndex)` and advance it only when the action actually consumes a shot/tick.
+
 ---
 
 ## 4) Future-proof targeting: standardize targets
 
 To support many kinds of abilities, define a stable target model.
 
-Recommended target kinds (expandable):
-- bot slot: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`
-- arena locations:
-  - `SECTOR 1..9` (sector centers)
-  - `SECTOR 1..9 ZONE 1..4` (zone centers)
-  - (and later `POS x y` if continuous targeting is ever exposed)
-- self/none: `SELF`, `NONE`
+Standardize targets as a small tagged union. This is the key to adding new weapons (burst MG, rifles, beams, wavy projectiles) without adding new “targeting” opcodes.
 
-Rule:
-- `USE_SLOTn` may ignore targets that do not apply.
+Recommended target kinds (stable):
+- `BOT`: a bot entity
+  - tokens: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`, `SELF`
+- `LOCATION`: a board location
+  - tokens: `SECTOR 1..9`, `SECTOR 1..9 ZONE 1..4`
+  - (later, if ever needed: `POS x y`)
+- `DIRECTION`: an aim direction independent of a bot/location
+  - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT`
+  - future: can extend to diagonals if movement ever supports them
+- `NONE`: explicit “no target”
+  - token: `NONE`
+
+Rules:
+- each module declares `targetKinds` it supports (see §2.2) and the engine validates/normalizes the provided target
+- `USE_SLOTn` may ignore targets that do not apply, but should still be deterministic and should provide a replay/debug reason when a target is invalid
 
 This prevents having to add unique “target forms” per weapon.
+
+### 4.1 Future-proof module introspection (optional; avoid opcode explosion)
+Bots will want to know whether a slot is usable (cooldown/resources) and sometimes adapt to what a module *is* (beam vs projectile, pierces armor, etc.).
+
+To avoid adding one predicate per module/weapon feature, prefer a small generic introspection surface:
+- `SLOT_QUERY(<SLOT>, <KEY>)` → int (0 if unsupported)
+- `SLOT_HAS_CAP(<SLOT>, <CAP>)` → bool
+
+Where:
+- `<KEY>` is a small stable set of common state fields (`COOLDOWN_REMAINING`, `ACTIVE`, `CHARGES`, `BURST_REMAINING`, ...)
+- `<CAP>` maps directly to module capability flags (see §2.2), e.g. `DELIVERY_BEAM`, `PIERCES_ARMOR`, `IGNORES_SHIELD`
+
+Design constraint for future-proofing:
+- unknown `<KEY>`/`<CAP>` should be handled deterministically (either compile-time error by ruleset version, or “returns 0/false” and emits a replay/debug warning)
 
 ---
 
@@ -152,6 +226,8 @@ When adding a new module type:
 ## 8) Practical near-term recommendations
 
 - Introduce `USE_SLOTn` as the canonical extensibility instruction.
+- Standardize `<TARGET>` kinds early (`BOT`, `LOCATION`, `DIRECTION`, `NONE`) so new module targeting stays additive.
 - Keep existing `FIRE_SLOTn` as an alias/sugar for compatibility and readability.
+- Add a small generic introspection surface (`SLOT_QUERY`, `SLOT_HAS_CAP`) rather than many bespoke opcodes.
 - Prefer new module work to be implemented via module behavior + data, not new opcodes.
 - When new opcodes are unavoidable, treat them as sugar that compiles down to a stable internal IR.

@@ -11,7 +11,7 @@ This is a **single-line-per-tick** language:
 > Notation:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
 > - `<TYPE>`: `HEALTH|AMMO|ENERGY`
-> - `<BOT_TARGET>`: `BOT1|BOT2|BOT3|BOT4|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
+> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..4`
@@ -19,6 +19,7 @@ This is a **single-line-per-tick** language:
 >   - `SECTOR <SECTOR>` (sector center)
 >   - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
 > - `<TARGET>`: `<BOT_TARGET>|<LOC>|SELF|NONE`
+>   - note: an aim-direction target form (`DIR ...`) is planned for vNext (beams/cones), but is **not** part of the stable v1 language; see `BotLanguageDesign.md`.
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 > - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >

@@ -49,7 +49,7 @@ Non-goals (until explicitly requested):
   - Keep modules focused; avoid “god modules”.
   - Extract helpers when logic is reused in 2+ places.
   - **Keep files small**: if a source file grows beyond ~**600 lines**, refactor by splitting into smaller modules (new files are encouraged when it improves clarity).
-  - Keep the directory structure orderly: group by domain (simulation / bots / sandbox / UI / data) and name files by responsibility.
+  - Keep the directory structure orderly: group by domain (Simulation, Bot API, Sandbox, Data, UI, Server) and name files by responsibility.
 
 - **Be explicit, deterministic, and data-driven.**
   - Never use `Math.random()` in simulation/gameplay; always use a seeded RNG.
@@ -68,17 +68,17 @@ Non-goals (until explicitly requested):
 
 The repo is currently minimal. As code is introduced, keep a clean separation by **domain**:
 
-- **Simulation engine & rules**
+- **Simulation**
   - Tick loop, state transitions, RNG wiring, collision/damage rules.
-- **Bot interfaces and adapters**
+- **Bot API**
   - Bot API types, loaders, examples, validation.
-- **Untrusted execution (sandbox)**
+- **Sandbox**
   - Isolation boundary, CPU/memory limits, timeouts.
-- **Content / balance data**
+- **Data**
   - Arena presets, item definitions, rule knobs, balance numbers.
-- **Visualization / UI**
+- **UI**
   - Renderer, debug overlays, replay viewer.
-- **Optional authoritative runner**
+- **Server**
   - Match orchestration for tournaments/ladders, persistence.
 
 Rule of thumb:

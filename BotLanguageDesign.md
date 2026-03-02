@@ -65,8 +65,9 @@ This is now specified in `BotInstructions.md` (§3.1).
 A module definition includes:
 - costs: `costAmmo`, `costEnergy` (vector)
 - cooldown: `cooldownOnUseTicks`
-- delivery: `PROJECTILE | HITSCAN | TIMED_EXPLOSIVE | DEPLOYABLE | SPAWN_HELPER`
-- target requirements (bot/sector/self/none)
+- delivery: `PROJECTILE | HITSCAN | BEAM` (plus simulation-side behaviors like deployables/spawns)
+- capability flags (examples): `ignoresShield`, `piercesArmor`, `hasSplash`, `isBurst`, `hasSpread`
+- supported `targetKinds`: `BOT | LOCATION | DIRECTION | NONE`
 - damage/effect numbers
 
 This keeps the language stable while gameplay grows.
@@ -81,19 +82,25 @@ To support teleport, mines, grenades, and other “non-bot” targeting, we need
 
 ### 3.1 Recommended vNext target union
 
-Define a generic `<TARGET>` that can represent multiple target kinds:
+Standardize `<TARGET>` as a small tagged union so new modules don’t require new “targeting instructions”.
 
-- **Bot targets**:
+Target kinds (stable):
+
+- **BOT**:
   - `BOT1|BOT2|BOT3|BOT4`
   - `TARGET` (current target bot register)
   - `CLOSEST_BOT`
+  - `SELF`
 
-- **Location targets**:
+- **LOCATION**:
   - `SECTOR <N>` (1..9, sector center)
   - `SECTOR <N> ZONE <Z>` (`Z` = 1..4, zone center)
 
-- **Self/none**:
-  - `SELF`
+- **DIRECTION** (aim independent of a bot/location; useful for directional beams, cones, “fire forward”, etc.):
+  - `DIR UP|DOWN|LEFT|RIGHT` (recommended to match movement directions)
+  - future: can extend to diagonals if movement ever supports them
+
+- **NONE**:
   - `NONE`
 
 Then:
@@ -109,23 +116,44 @@ Then:
 
 ---
 
-## 4) Add **module introspection** predicates (to avoid wasted ticks)
+## 4) Add **module introspection** (to avoid wasted ticks) without adding many opcodes
 
 If bots can’t check cooldown/resources, they will waste many ticks spamming actions.
 That’s less fun and harder to debug.
 
+Instead of adding one predicate per module mechanic, expose a tiny, extensible query surface.
+
 Recommended *expression* functions:
 
-- `HAS_MODULE(<SLOT>)` → bool
-- `COOLDOWN_REMAINING(<SLOT>)` → int
-- `SLOT_READY(<SLOT>)` → bool
-  - shorthand for `COOLDOWN_REMAINING(slot) == 0` and enough resources
-- `SLOT_ACTIVE(<SLOT>)` → bool
-  - for toggle modules
+- `SLOT_QUERY(<SLOT>, <KEY>)` → int
+  - returns `0` if the key is unsupported by the current ruleset/module
+  - common keys: `COOLDOWN_REMAINING`, `ACTIVE`, `CHARGES`, `BURST_REMAINING`
+
+- `SLOT_HAS_CAP(<SLOT>, <CAP>)` → bool
+  - capability flags are module-defined but standardized (examples):
+    - `DELIVERY_PROJECTILE`, `DELIVERY_HITSCAN`, `DELIVERY_BEAM`
+    - `IGNORES_SHIELD`, `PIERCES_ARMOR`, `HAS_SPLASH`, `IS_BURST`, `HAS_SPREAD`
+
+Optional convenience aliases (compile down to the above; purely sugar):
+- `HAS_MODULE(<SLOT>)` → `SLOT_HAS_CAP(slot, HAS_MODULE)` or a dedicated common key
+- `COOLDOWN_REMAINING(<SLOT>)` → `SLOT_QUERY(slot, COOLDOWN_REMAINING)`
+- `SLOT_READY(<SLOT>)` → `SLOT_QUERY(slot, READY)` (or `COOLDOWN_REMAINING == 0` plus resources)
+- `SLOT_ACTIVE(<SLOT>)` → `SLOT_QUERY(slot, ACTIVE) > 0`
 
 Notes:
 - These functions do not give bots control over mechanics; they only reveal state.
 - The engine remains authoritative.
+- Decide early whether unknown `<KEY>/<CAP>` is a compile-time error (stricter, typo-safe) or a runtime `0/false` (more extensible).
+
+### 4.1 Per-slot internal module state (simulation-side pattern)
+New weapon behaviors should be representable as *module instance state* rather than new language features.
+
+Examples (all simulation-side; bots can only *read* via `SLOT_QUERY` if you choose to expose the key):
+- burst MG: `burstRemaining`, `burstSpacingTicks`
+- recoil/spread weapons: `recoil`, `spread`
+- beams: `active`, `rampTicks` / `heat`
+
+The language surface stays the same: bots still just `USE_SLOTn <TARGET>`.
 
 ---
 
@@ -174,16 +202,17 @@ Three compatible models:
 ### 7.1 Laser / beam weapon
 
 Mechanics (module-defined):
-- delivery: `HITSCAN`
+- delivery: `BEAM` (or `HITSCAN` for a single-tick “pulse laser”)
 - cost: energy only, or hybrid
-- cooldown: medium
-- targeting: either
-  - bot target (auto-resolve line), or
-  - directional (needs facing)
+- cooldown: medium (or toggle drain if sustained)
+- targeting:
+  - bot target (`BOT` kind), or
+  - direction target (`DIRECTION` kind via `DIR ...`), optionally coupled with facing
+- shield interaction (future): may set `ignoresShield` so beams can pass through active shields
 
 Language interaction:
-- `USE_SLOTn TARGET` or `USE_SLOTn BOT2`
-- optional predicates: `SLOT_READY(SLOTn)`
+- `USE_SLOTn TARGET` / `USE_SLOTn BOT2` / `USE_SLOTn DIR RIGHT`
+- optional predicates: `SLOT_QUERY(SLOTn, READY)`
 
 ### 7.2 Sniper rifle
 
@@ -198,8 +227,9 @@ Language interaction:
 ### 7.3 Grenade launcher
 
 Mechanics:
-- `TIMED_EXPLOSIVE`
-- fuse + AoE radius=1 sector with falloff (per `CombatPlan.md`)
+- delivery: `PROJECTILE`
+- projectile effect: explodes on impact or after `fuseTicks`
+- AoE radius=1 sector with falloff (per `CombatPlan.md`)
 
 Language interaction:
 - `USE_SLOTn BOTx` or `USE_SLOTn SECTOR 5`
@@ -224,6 +254,29 @@ Mechanics:
 Language interaction:
 - `USE_SLOTn SECTOR <N>`
 
+### 7.6 Burst MG / rifle (burst + recoil/spread)
+
+Mechanics:
+- delivery: `HITSCAN` (or `PROJECTILE` if bullets have travel time)
+- `isBurst`: fires multiple shots after one `USE_SLOTn` while `burstRemaining > 0`
+- `hasRecoil` / `hasSpread`: accuracy is a function of the module’s internal `recoil/spread` state
+
+Language interaction:
+- still just `USE_SLOTn TARGET` (or `BOTx`)
+- bots can optionally adapt via introspection:
+  - `SLOT_QUERY(SLOTn, BURST_REMAINING)`
+  - `SLOT_QUERY(SLOTn, COOLDOWN_REMAINING)`
+
+### 7.7 Wavy projectile weapon (trajectory variety without new language)
+
+Mechanics:
+- delivery: `PROJECTILE`
+- trajectory parameters are module-defined: `LINEAR | WAVY | ARC | HOMING | ...`
+  - “wavy” is just a projectile param (e.g., amplitude/period), not a new instruction
+
+Language interaction:
+- `USE_SLOTn TARGET` or `USE_SLOTn SECTOR <N>` depending on the module’s `targetKinds`
+
 ---
 
 ## 8) Replay + debugging requirements that the language should enable
@@ -242,8 +295,8 @@ This directly supports the “what went wrong?” browser experience.
 
 When you’re ready to evolve the spec, the next safe edits are:
 
-1) Generalize `USE_SLOTn` to accept `<TARGET>` (adds `SECTOR <N>`, `SELF`, `NONE`).
-2) Add introspection predicates (`COOLDOWN_REMAINING`, `SLOT_READY`, etc.).
+1) Generalize `USE_SLOTn` to accept `<TARGET>` (adds `SECTOR <N>`, `SELF`, `NONE`, and `DIR <...>`).
+2) Add generic introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) and keep any named predicates as sugar.
 3) Optionally add facing model (B or C) if you want directional weapons.
 4) Optionally add registers if you want deeper programming strategies.
 
@@ -253,17 +306,22 @@ When you’re ready to evolve the spec, the next safe edits are:
 
 1) Target grammar for `USE_SLOTn`:
 - **A)** keep only `<BOT_TARGET>` (bots only)
-- **B)** expand to `<TARGET>` union (bots + `SECTOR n` + `SELF/NONE`) (recommended)
+- **B)** expand to `<TARGET>` union (bots + `SECTOR n` + `SELF/NONE` + `DIR ...`) (recommended)
 
-2) Cooldown/resource introspection:
+2) Slot/module introspection:
 - **A)** no introspection (bots may waste ticks)
-- **B)** add `COOLDOWN_REMAINING` / `SLOT_READY` (recommended)
+- **B)** add a few named predicates only (`COOLDOWN_REMAINING`, `SLOT_READY`, `SLOT_ACTIVE`)
+- **C)** add generic `SLOT_QUERY` + `SLOT_HAS_CAP` and treat named predicates as sugar (recommended)
 
-3) Facing model:
+3) Unknown introspection keys/caps behavior:
+- **A)** compile-time error (typo-safe; less extensible)
+- **B)** runtime `0/false` (more extensible; must be good in replay/debug)
+
+4) Facing model:
 - **A)** no facing
 - **B)** derived facing from last successful move
 - **C)** explicit `FACE <DIR>` instruction
 
-4) Bot-local registers:
+5) Bot-local registers:
 - **A)** none (timers only)
 - **B)** add `R1..R4` with minimal ops
