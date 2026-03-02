@@ -55,21 +55,60 @@ It builds on:
 ## 3) Arena rendering plan
 
 ### 3.1 Visual style
-- Bots are represented as **same-size GIF sprites**.
+- Bots are represented as **32×32 GIF sprites**.
+- Users can change bot sprites; the client must still render them within a consistent footprint.
 - Animation is purely visual; the simulation remains headless and deterministic.
 
-### 3.2 Arena model on screen
+### 3.2 Sprite sizing policy (user-customizable bots)
+To keep the arena readable and avoid layout breakage:
+
+- **Render size is fixed**: the UI always displays bots at **32×32 CSS pixels**.
+- User uploads can be any size, but they should be **normalized** (server-side or client-side) into a 32×32 rendered form:
+  - scale-to-fit into 32×32 while preserving aspect ratio
+  - optionally center-crop if you want uniform composition
+- Recommended constraints (so uploads don’t become an abuse vector):
+  - max file size limit
+  - max pixel dimensions limit
+  - content-type allowlist (e.g., `image/gif`, optionally `image/png`)
+
+This keeps the arena “spacy but not too spacy”: the arena spacing is controlled by sector sizing, not by user sprite dimensions.
+
+### 3.3 Arena sizing ("big but fits most screens")
+The logical arena is 3×3 sectors, but the *visual* arena should scale with viewport:
+
+- The arena viewport should keep a square aspect ratio (`1:1`).
+- Let `arenaSidePx = min(availableWidth, availableHeight)`.
+- Sector size becomes `sectorPx = arenaSidePx / 3`.
+- Apply a clamp so it’s readable across common screens, e.g.:
+  - `sectorPx = clamp(sectorPx, 120px, 240px)`
+
+With 32×32 bots, this yields a good density:
+- bots are clearly visible
+- there is room for bullets/powerups/status icons
+- sector borders remain readable
+
+### 3.4 Arena model on screen
 - 9 sectors arranged as:
   - `1 2 3`
   - `4 5 6`
   - `7 8 9`
 - Corner spawns (locked for daily matches): sectors `1, 3, 7, 9`.
 
-### 3.3 Entity overlays
+### 3.5 Entity overlays
 - **Bots**: sprite + name + small resource bars (health/ammo/energy).
 - **Bullets**: simple dot/line sprite traveling sector-to-sector per tick.
 - **Powerups**: icons for HEALTH/AMMO/ENERGY.
 - **Status indicators**: saw/shield on states (small icons).
+
+### 3.6 Multi-entity layout inside a sector (avoid overlapping)
+Because bullets can hit any bot in a sector, multiple bots may occupy the same sector. The UI should avoid sprite overlap.
+
+Deterministic placement suggestion:
+- Predefine up to 4 anchor points inside each sector cell:
+  - top-left, top-right, bottom-left, bottom-right (with padding)
+- Assign bots to anchors deterministically (e.g., by bot id order).
+- Place powerup icon at center or a reserved corner.
+- Render bullets on an overlay layer above sector background.
 
 ---
 
@@ -162,11 +201,17 @@ This ensures:
 
 ## 8) Open UI decisions (need your preference)
 
-1) Rendering tech:
-   - Canvas 2D vs SVG vs WebGL (PixiJS/Three)
+1) Arena rendering approach:
+   - **A) DOM/CSS** (recommended for v1): CSS grid for sectors + absolutely positioned `<img>` sprites
+   - **B) Canvas 2D** (fine if you want a single draw surface)
+   - **C) WebGL (PixiJS/Three)** (overkill for v1 unless you want lots of effects)
+
 2) Bot sprites:
-   - Are GIFs user-uploaded per bot, or fixed assets?
+   - You confirmed bots are **32×32** and users can change them.
+   - Open: do you want to store only the normalized 32×32 output, or store original + normalized variants?
+
 3) Visibility rules:
-   - Does UI show full state (all bots/bullets/powerups) always, or match bot sensing rules?
-4) Reverse stepping:
-   - do you need step-back immediately (requires checkpoints/full snapshots)?
+   - Does the viewer always show **full match state** (recommended for debugging), or obey bot sensing limits?
+
+4) Replay navigation:
+   - do you need step-back immediately (requires checkpoints/full snapshots), or step-forward + scrub only?
