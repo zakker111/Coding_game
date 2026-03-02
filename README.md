@@ -19,13 +19,15 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 1. `Ruleset.md` — core gameplay rules (stats, speed model, damage/kill credit, powerups)
 2. `BotInstructions.md` — the bot language
 3. `ArenaPlan.md` — arena topology + anchors + movement model
-4. `ReplayViewerPlan.md` — replay schema + viewer UX
-5. `ServerSimulationPlan.md` / `ServerPlan.md` — deterministic server runner + storage/API
+4. `UIPlan.md` + `ArenaVisualPlan.md` — client workshop UX and exact arena rendering spec
+5. `ReplayViewerPlan.md` — replay schema + viewer UX
+6. `BotModelPlan.md` — bot identity/version planning (built-ins → user-submitted bots)
+7. `ServerSimulationPlan.md` / `ServerPlan.md` — deterministic server runner + storage/API
 
 Supporting docs:
 - `examples/bot1.md` — sample beginner-friendly combat bots (BULLET/SAW + SHIELD)
 - `CombatPlan.md` — weapons/projectiles planning
-- `UIPlan.md` — client UI layout + rendering requirements
+- `FutureProofing.md` / `BotLanguageDesign.md` — extensibility direction (modules, targeting, future DSL)
 - `DailyCompetition.md` — daily/season competition format
 - `ServerTechStack.md` — recommended backend stack
 - `Todo.md`, `Bugs.md`, `Versions.md` — tracking and versioning

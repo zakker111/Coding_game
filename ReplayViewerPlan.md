@@ -105,12 +105,20 @@ A replay should support 2 independent requirements:
 - `tickCap`
 - `bots[]`:
   - `botId` (`BOT1..BOT4`)
+    - **Important:** this is the **match slot id** (deterministic engine identifier), not a user bot identity.
+    - Future-proofing: stable bot identity/version live in `botRef` fields below.
   - `displayName`
   - `avatar` (color for v1)
   - `loadout` (3 slot positions; each entry is a module id or `null`)
     - v1 validation: no duplicate modules among equipped slots
     - v1 validation: at most one weapon module equipped (`BULLET` or `SAW`)
   - `sourceText` (or `sourceHash` + URL)
+  - future (server / library):
+    - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`
+      - `botId` here is the stable identity (e.g. `alice/greedy`, `builtin/chaser-shooter`)
+      - `botVersion` is an immutable snapshot identifier (server assigned)
+
+(See `BotModelPlan.md` for the full identity/version model.)
 
 ### 3.2 Two storage strategies
 
@@ -173,7 +181,29 @@ Event ordering + compatibility:
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
   - `result`: `EXECUTED | NOP | ERROR`
-  - `reason` (optional): `COOLDOWN | NO_AMMO | NO_ENERGY | NO_MODULE | INVALID_TARGET | INVALID_LOC | MOVE_COOLDOWN | ...`
+  - `reason` (optional): a stable enum (see below)
+
+Trace conventions (recommended, to avoid implementation drift):
+- **Invalid/malformed instruction** (runtime policy in `Todo.md` / `BotInstructions.md`):
+  - treat as no-op for gameplay
+  - set `result = ERROR`
+  - set `reason = INVALID_INSTR`
+  - set `pcAfter = 1` (the post-tick state has `pc = 1`)
+- **Valid instruction that no-ops** due to cooldown/resources/invalid target/etc.:
+  - set `result = NOP`
+  - set `reason` accordingly
+  - `pcAfter` advances as normal (unless the instruction defines special control-flow)
+
+Canonical `reason` values (v1+; extend additively):
+- `INVALID_INSTR`
+- `NO_MODULE`
+- `COOLDOWN`
+- `MOVE_COOLDOWN`
+- `NO_AMMO`
+- `NO_ENERGY`
+- `INVALID_TARGET_KIND`
+- `INVALID_TARGET`
+- `INVALID_LOC`
 
 ### 4.2 Locations (`loc`)
 

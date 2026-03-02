@@ -76,9 +76,12 @@ This keeps the language stable while gameplay grows.
 
 ## 3) Unify module activation around `USE_SLOTn`
 
-We already have `USE_SLOTn <BOT_TARGET>` in v1 planning.
+In **v1** (see `BotInstructions.md`), slot activation is already:
+- `USE_SLOTn <TARGET>` where `<TARGET>` includes bot targets + location targets + `SELF|NONE`
 
-To support teleport, mines, grenades, and other “non-bot” targeting, we need a **future-proof target grammar**.
+The main vNext extension is adding an **aim-direction target** form (`DIR ...`) for beams/cones.
+
+To support teleport, mines, grenades, and other “non-bot” targeting (plus `DIR` aiming), we need a **future-proof target grammar** that stays small and deterministic.
 
 ### 3.1 Recommended vNext target union
 
@@ -295,7 +298,9 @@ This directly supports the “what went wrong?” browser experience.
 
 When you’re ready to evolve the spec, the next safe edits are:
 
-1) Generalize `USE_SLOTn` to accept `<TARGET>` (adds `SECTOR <N>`, `SELF`, `NONE`, and `DIR <...>`).
+1) Add **direction targets** for aiming:
+   - allow `USE_SLOTn DIR UP|DOWN|LEFT|RIGHT`
+   - keep existing v1 `<TARGET>` (bots + locations + `SELF|NONE`) unchanged
 2) Add generic introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) and keep any named predicates as sugar.
 3) Optionally add facing model (B or C) if you want directional weapons.
 4) Optionally add registers if you want deeper programming strategies.
@@ -304,9 +309,9 @@ When you’re ready to evolve the spec, the next safe edits are:
 
 ## 10) Decisions to lock (pick one per row)
 
-1) Target grammar for `USE_SLOTn`:
-- **A)** keep only `<BOT_TARGET>` (bots only)
-- **B)** expand to `<TARGET>` union (bots + `SECTOR n` + `SELF/NONE` + `DIR ...`) (recommended)
+1) Direction aiming targets:
+- **A)** keep v1 `<TARGET>` (bots + locations + `SELF/NONE`; **no** `DIR ...`)
+- **B)** add `DIR UP|DOWN|LEFT|RIGHT` as a new `<TARGET>` kind for vNext (recommended)
 
 2) Slot/module introspection:
 - **A)** no introspection (bots may waste ticks)

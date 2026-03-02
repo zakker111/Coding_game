@@ -8,8 +8,18 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+### Definitions (planning)
+- `rulesetVersion`: the version of **gameplay rules + deterministic simulation semantics** (SemVer).
+- `dslVersion`: the version of the **bot language spec** (`BotInstructions.md`) (SemVer).
+  - Open decision: DSL may either be versioned separately (`dslVersion`) or treated as part of `rulesetVersion` (see `BotModelPlan.md`).
+
+Naming convention note:
+- Docs/replay/client JSON examples tend to use `camelCase` (e.g. `rulesetVersion`).
+- Server DB fields tend to use `snake_case` (e.g. `ruleset_version`).
+
 ### Added
 - Project documentation scaffolding: `Prompt.md`, `Versions.md`, `Bugs.md`, `Todo.md`.
+- Bot identity/version planning: `BotModelPlan.md` (future-proof built-ins → user-submitted bots).
 - New rules documentation for v1 bot speed model (movement cooldown affected by equipped slot count).
 - Beginner-friendly zone convenience in the bot language:
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`

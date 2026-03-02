@@ -55,6 +55,7 @@ Rule:
 - If not enough resources, the attempt is a deterministic no-op:
   - no cost
   - no cooldown applied
+  - replay/debug should record a reason (e.g., `NO_AMMO` / `NO_ENERGY`)
 
 Toggle modules:
 - may also define a per-tick drain (e.g., `drainEnergyPerTick` while active).
@@ -65,9 +66,23 @@ A module may define:
 - `cooldownOnUseTicks` (applies after a successful `USE_SLOTn`)
 
 Rule:
-- if `cooldownRemaining > 0`, `USE_SLOTn` is a no-op.
+- if `cooldownRemaining > 0`, `USE_SLOTn` is a no-op:
+  - no cost
+  - no cooldown change
+  - replay/debug should record `COOLDOWN`
 - when a use succeeds, set `cooldownRemaining = cooldownOnUseTicks`.
 - at the end of each simulation tick, decrement down to `0`.
+
+### 2.3.1 Invalid target kinds / invalid targets (stable rule)
+
+Modules declare which target kinds they accept (see `FutureProofing.md` §4).
+
+Rule (recommended, v1+):
+- If the provided `<TARGET>` is not one of the module’s accepted target kinds, the attempt is a deterministic no-op:
+  - no cost
+  - no cooldown
+  - replay/debug should record `INVALID_TARGET_KIND`
+- If the target kind is correct but the specific target is invalid (e.g., targeted bot is dead/missing), the attempt is also a deterministic no-op and should record `INVALID_TARGET`.
 
 ### 2.4 Weapon parameters (data-driven; future)
 
@@ -96,7 +111,11 @@ This defines the default `BULLET` module.
 
 ### 3.1 Fire semantics
 
-When a bot successfully executes `USE_SLOTn <BOT_TARGET>` for a slot containing `BULLET`:
+When a bot successfully executes `USE_SLOTn <TARGET>` for a slot containing `BULLET`:
+- v1 accepted target kind: **BOT** targets only (`BOT1..BOT4`, `TARGET`, `CLOSEST_BOT/NEAREST_BOT`, `LOWEST_HEALTH_BOT/WEAKEST_BOT`)
+- if `<TARGET>` is not a bot-kind target (e.g., a `SECTOR ...` location target), the attempt is a deterministic no-op (see §2.3.1)
+
+On a successful fire:
 - pay `costAmmo` (and `costEnergy` if configured for future hybrid bullets)
 - apply cooldown
 - spawn a **bullet projectile entity**
@@ -168,7 +187,7 @@ Recommended properties:
 - higher resource cost (ammo and/or energy)
 
 Hit semantics (draft):
-- on successful `USE_SLOTn <BOT_TARGET>`:
+- on successful `USE_SLOTn <TARGET>` (sniper accepts BOT-kind targets):
   - immediately apply damage to the resolved target bot (if valid/alive)
   - emit a damage event:
     - `kind = BULLET` (or `SNIPER` if you want separate stats later)
@@ -178,7 +197,7 @@ Hit semantics (draft):
 Goal: rapid-fire projectile output with increasing spread while a bot “keeps firing”, but still driven by the same `USE_SLOTn` instruction.
 
 Recommended semantics (draft):
-- a successful `USE_SLOTn <BOT_TARGET>` starts (or refreshes) a burst state for that slot.
+- a successful `USE_SLOTn <TARGET>` (SMG accepts BOT-kind targets) starts (or refreshes) a burst state for that slot.
 - while the burst state is active, the slot may spawn additional bullets on future ticks **without additional bot instructions**.
 
 Recommended module properties:

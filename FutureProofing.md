@@ -133,7 +133,9 @@ Recommended weapon-feel fields (module-defined but standardized names):
 - `lastUseTick`
 
 Determinism note:
-- if a module needs randomness (e.g., spread sampling), it should use a deterministic PRNG seeded from `(matchSeed, botId, slotIndex)` and advance it only when the action actually consumes a shot/tick.
+- if a module needs randomness (e.g., spread sampling), the RNG scheme must be deterministic and treated as part of the ruleset.
+- `CombatPlan.md` recommends **stateless per-event hashing** (often easiest for replay stability).
+- A per-slot PRNG stream seeded from `(matchSeed, botId, slotIndex)` is also possible, but only if the consumption/advance rules are strictly specified.
 
 ---
 
@@ -151,6 +153,7 @@ Recommended target kinds (stable):
   - (later, if ever needed: `POS x y`)
 - `DIRECTION`: an aim direction independent of a bot/location
   - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT`
+  - **vNext only:** `DIR ...` targets are not part of the stable v1 language (see `BotInstructions.md` notation).
   - future: can extend to diagonals if movement ever supports them
 - `NONE`: explicit “no target”
   - token: `NONE`
@@ -173,7 +176,10 @@ Where:
 - `<CAP>` maps directly to module capability flags (see §2.2), e.g. `DELIVERY_BEAM`, `PIERCES_ARMOR`, `IGNORES_SHIELD`
 
 Design constraint for future-proofing:
-- unknown `<KEY>`/`<CAP>` should be handled deterministically (either compile-time error by ruleset version, or “returns 0/false” and emits a replay/debug warning)
+- unknown `<KEY>`/`<CAP>` must be handled deterministically.
+- The project must pick one policy **per ruleset/DSL version**:
+  - compile-time error (typo-safe, stricter)
+  - runtime `0/false` (more extensible) + replay/debug warning
 
 ---
 

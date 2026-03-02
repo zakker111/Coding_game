@@ -114,10 +114,18 @@ Mobile/narrow:
   - `BOT3` = Built-in opponent B
   - `BOT4` = Built-in opponent C
 
-Built-in opponents are bundled with the client as static examples (see `examples/`):
-- `bot2.md` (Chaser Shooter)
-- `bot3.md` (Corner Bunker)
-- `bot4.md` (Saw Rusher)
+Built-in opponents are bundled with the client as static examples (see `examples/`).
+
+Future-proofing note:
+- Even in v1 client-only mode, treat opponents as "real bots" with stable identities.
+- Built-ins should be namespaced under `builtin/*` and carry pinned `{rulesetVersion, dslVersion, sourceHash}` so we can later swap the source from local bundle → server registry without changing the Workshop UX.
+
+v1 built-in examples:
+- `bot2.md` (Chaser Shooter) → `builtin/chaser-shooter`
+- `bot3.md` (Corner Bunker) → `builtin/corner-bunker`
+- `bot4.md` (Saw Rusher) → `builtin/saw-rusher`
+
+(Identity/version planning: see `BotModelPlan.md`.)
 
 #### Primary actions
 - **Run / Preview** (primary)

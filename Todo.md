@@ -36,6 +36,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
+  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are planned for vNext only.
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
@@ -233,10 +234,15 @@ Speed/weight (locked direction):
 ### 5) Replays + determinism tests
 - Define replay schema:
   - match seed
-  - bot versions/hashes + loadouts
+  - **match slots** (`BOT1..BOT4`) + per-slot participant metadata
+  - stable bot identity/version references (future): `botId`, `botVersion`, `sourceHash`, optional `compiledIrHash`
   - per-tick executed instruction (optional but very helpful)
   - per-tick events (damage, deaths, pickups, resource deltas)
 - Golden replay tests: same seed + same bots → same outcome.
+
+Bot identity/version planning note:
+- Build the v1 client (built-in bots + local drafts) so it already produces replays with stable hashes and pinned `{rulesetVersion, dslVersion}`.
+- See `BotModelPlan.md`.
 
 ### 6) Server daily runner
 - Headless match runner (CLI/service) that can:
