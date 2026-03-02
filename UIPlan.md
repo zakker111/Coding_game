@@ -13,6 +13,7 @@ It builds on:
 - `ArenaPlan.md` (sectors/zones/anchors)
 - `Ruleset.md` (timing, powerups, damage)
 - `ReplayViewerPlan.md` (replay UX + schema)
+- `ArenaVisualPlan.md` (arena rendering visuals)
 - `Todo.md` (locked decisions)
 
 ---
@@ -58,22 +59,52 @@ Goal: minimal friction to start.
 v1 UI (locked):
 - a single primary button: **Start Game** → goes to `/workshop`
 
-(Optionally add a single line of copy under the button, but no extra CTAs in v1.)
+Layout (v1):
+- full-height page (`min-height: 100vh`)
+- centered content block ("card"):
+  - `max-width: 720px`
+  - comfortable padding (e.g. 24px)
+- minimal text only (optional): title + one sentence
+
+Interaction (v1):
+- the **Start Game** button should be focused by default
+- pressing **Enter** should trigger Start Game
+
+(No bots or arena preview on the landing page in v1; all gameplay is on `/workshop`.)
 
 ### 2.2 Workshop (`/workshop`) — Editor + Arena + Opponents
 
 The workshop is the entire v1 experience.
 
-#### Layout (simple 2-column)
-- **Left pane**: your bot
-  - Bot code editor (multiline, line numbers)
-  - Inline validation/errors (syntax errors, invalid instructions, etc.)
-  - Minimal instruction reference link (optional)
+#### Initial state (v1)
+- Load **Your Bot** source:
+  - if `ws:myBotSourceText` exists → load it
+  - else → load a built-in **starter template** (valid script that runs without edits)
+- Built-in opponents default to:
+  - `BOT2 = bot2` (Chaser Shooter)
+  - `BOT3 = bot3` (Corner Bunker)
+  - `BOT4 = bot4` (Saw Rusher)
+- Preview run behavior:
+  - recommended: auto-run **one** match on first workshop visit (so the arena is not static)
+  - after that, only run when the user clicks **Run / Preview**
 
-- **Right pane**: match preview
-  - Arena viewport
-  - Playback controls (play/pause, step +1, restart, speed)
-  - Bot list + inspector (select BOT1..BOT4 → show stats + code with pc highlight)
+#### Layout (minimum viable)
+
+Desktop/laptop:
+- **Two-column** layout: Editor (left) + Preview/Inspector (right)
+- Right side uses **tabs** by default: Inspector | Opponents | Code
+
+Mobile/narrow:
+- Arena stays visible; secondary panels become drawers/bottom-sheets.
+
+#### Editor (left)
+- Bot code editor (multiline, line numbers)
+- Inline validation/errors (syntax errors, invalid instructions, etc.)
+
+#### Preview (right)
+- Arena viewport
+- Playback controls (play/pause, step +1, restart, speed)
+- Bot list + inspector (select BOT1..BOT4 → show stats + code with pc highlight)
 
 #### Bots in the preview match (v1 default)
 - The preview match is always **4 bots** (`BOT1..BOT4`).
@@ -92,9 +123,9 @@ Built-in opponents are bundled with the client as static examples (see `examples
 - **Run / Preview** (primary)
   - compiles/validates your bot
   - runs a local match (live) and records a replay
-  - the preview run should stop when the simulation ends (e.g. last bot alive) or when it reaches a tick cap (default cap is a UI setting until match rules are fully locked)
+  - stops when the simulation ends (e.g. last bot alive) or when it reaches a tick cap (default cap is a UI setting until match rules are fully locked)
 - **Reset match** (secondary)
-  - resets the current local run to tick 0 and replays
+  - resets the current local run to tick 0
 
 #### Opponent configuration (v1)
 - v1 can keep opponents fixed (the same 3 bots every time).
@@ -129,15 +160,11 @@ MVP localStorage keys (concrete, v1-friendly):
 Keep three layers of state:
 
 1) **Persistent workshop state** (survives refresh)
-- bot drafts: `{name, avatar, sourceText, lastEditedAt}`
+- bot draft: `{sourceText, lastEditedAt}`
 - match defaults: `{tickCap, seedMode, lastOpponents}`
 
-Storage:
-- localStorage for small drafts/settings
-- IndexedDB if you want to store multiple bots / large text reliably
-
 2) **Ephemeral live run state**
-- run status: `idle | ready | running | finished | error`
+- run status: `idle | running | finished | error`
 - current tick (newest tick produced)
 - live replay buffer (events / snapshots being recorded)
 
@@ -154,6 +181,8 @@ Single-source-of-truth rule:
 ---
 
 ## 5) Arena rendering (sectors + zones)
+
+Detailed visual/UX spec (grid rendering, scaling, entity visuals, overlays): see `ArenaVisualPlan.md`.
 
 ### 5.1 World model + scaling
 
@@ -174,17 +203,11 @@ Render scaling:
 - draw **zone boundaries** as **thinner green** lines
 - optionally label sector ids 1..9
 
-Note: the sector center anchor (`SECTOR s`, `zone=0`) is the center point of the sector (intersection of the four zones).
-
 ### 5.3 Entity rendering
 
-- bots: 32×32 sprite + name + slot id (`BOT1..BOT4`) + small resource bars
+- bots: square sprite (visual footprint smaller than collision box; see `ArenaVisualPlan.md`) + slot id (`BOT1..BOT4`) + resource bars
 - powerups: icons at their anchor location
 - bullets/grenades/mines: simple sprites rendered above the grid
-- future (not v1):
-  - burst fire: multiple projectile spawns in a tick can be rendered as rapid successive muzzle flashes/trails (using ordered per-tick events)
-  - variable-speed / wavy projectiles: render using replay `speed`/`trajectory` hints (and optional continuous `pos`)
-  - beams/lasers: render as a line for the tick(s) they are active
 
 Walls:
 - only the **outer boundary** is a gameplay wall in v1
@@ -192,7 +215,7 @@ Walls:
 
 ---
 
-## 6) Inspector panel (right)
+## 6) Inspector panel
 
 - bot list with display names + slot ids
 - code viewer with current `pc` highlight

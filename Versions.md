@@ -21,6 +21,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>`
   - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`)
   - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)
+- New arena visual spec: `ArenaVisualPlan.md` (workshop arena preview rendering + scaling + overlays).
 - New sample scripts:
   - `examples/bot1.md` (combat bot variants)
   - `examples/bot2.md` (Chaser Shooter)

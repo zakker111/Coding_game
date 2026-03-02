@@ -45,7 +45,9 @@ Entry points:
 List item fields (minimum):
 - match id
 - timestamp
-- mode: `1v1` / `1v1v1v1`
+- mode:
+  - v1 workshop preview uses `1v1v1v1` (4 bots)
+  - optional client-only debug mode (post-v1): `1v1`
 - participant names + avatars
 - placement / winner
 - quick actions: **Open**, **Delete** (local-only)
@@ -141,6 +143,19 @@ Client-first recommendation:
 - start with **A** for local testing
 - move to **B** once replays get large / server storage matters
 
+### 3.3 Tick semantics (must be explicit)
+
+To keep rendering, scrubbing, and "what happened on tick t" consistent across clients:
+
+- Convention (recommended for v1):
+  - `state[t]` represents the **end-of-tick state** for tick `t`.
+  - `events[t]` are the ordered events that occurred **during tick `t`** to transform `state[t-1] → state[t]`.
+
+Notes:
+- Tick `0` is the initial state before any tick processing (so `state[0]` is "start of match").
+- Under this convention, viewers that render purely from `state[t]` will match "after resolution" visuals (moves applied, bullets advanced, hits applied, pickups applied, deaths resolved).
+- The per-tick event list remains the canonical explanation/debug log for how `state[t]` was reached.
+
 ---
 
 ## 4) Event types needed for correct visualization
@@ -172,7 +187,8 @@ Encode every location as:
 Optional future extension: continuous positions (`pos`)
 - Some future weapons (variable-speed projectiles, wavy/curved paths, beams) are easier to render with continuous coordinates.
 - When needed, encode positions as:
-  - `pos = { x, y }` in **arena world units** (see `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right.
+  - `pos = { x, y }` in **arena world units** (see `ArenaPlan.md` / `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right outer wall.
+  - Recommended bounds convention (v1): `x` and `y` are clamped to `0..192` (inclusive), with the outer wall rendered at `x=0`, `x=192`, `y=0`, `y=192`.
 - When both `loc`/`sector` and `pos` are present, the viewer should prefer `pos` for rendering.
 
 ### 4.3 Movement + bumps
@@ -209,6 +225,9 @@ Optional fields (not required in v1) support future weapons/features:
 
 - `BULLET_SPAWN`:
   - required: `bulletId`, `ownerBotId`, `sector`, `dir`
+  - viewer spawn position rule:
+    - if `pos` is present → render bullet spawn at `pos`
+    - else → render bullet spawn at the **owner bot’s current location center** (derived from `state[t]` / `state[t-1]`, per the chosen tick convention)
   - optional:
     - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
     - `burst` (burst grouping; omitted for non-burst shots):
