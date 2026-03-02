@@ -10,7 +10,10 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Client + server from day 1**:
   - **Client**: bot editor + local test runs + replay viewer (UI details later)
   - **Server**: headless match runner for **daily simulations**
-- Bots have a user-facing **display name** (server-side entity field exists; UI should show name + match slot id).
+- Bots have user-facing presentation:
+  - **display name**
+  - **appearance** (v1: color token; future: avatar image/GIF)
+  - Presentation must **not** affect determinism or match results.
 
 ### Simulation model
 - **Tick-based** match loop.
@@ -149,12 +152,12 @@ Speed/weight (locked direction):
 - Elimination: bots that drop below a **points threshold** are excluded from **future days** until re-enabled.
 - Rejoin: re-enable uses a **rejoin allowance** (points floor) so bots can come back even if below threshold.
 - Weekly: highlight **top 10** and reset/start a new season.
-- Client-only: allow a **1v1 spawn/testing mode** (does not affect server scoring).
+- Optional (post-v1): allow a **1v1 spawn/testing mode** (does not affect server scoring).
 - Still to define:
   - points formula (placement-only vs placement + stats)
   - exact threshold value and exact rejoin allowance amount
   - number of rounds/matches per day caps
-  - what happens when fewer than 4 eligible bots remain (stop vs allow 2–3 player matches)
+  - what happens when fewer than 4 eligible bots remain (locked: **stop scheduling** and end the run; see `DailyCompetition.md`)
   - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing

@@ -36,9 +36,13 @@ It complements:
 
 ## 2) Screens (client)
 
-### 2.1 Match History (Battle Picker)
+### 2.1 Match History (Battle Picker) (post-v1)
 
-Entry points:
+v1 note:
+- The v1 Workshop only needs an **in-memory replay for the most recent run**.
+- A persistent replay library / match history UI is post-v1 (can be added without changing simulation rules).
+
+Entry points (post-v1):
 - after finishing a local match: **Save Replay** / **View Replay**
 - top nav: **Matches**
 
@@ -48,7 +52,7 @@ List item fields (minimum):
 - mode:
   - v1 workshop preview uses `1v1v1v1` (4 bots)
   - optional client-only debug mode (post-v1): `1v1`
-- participant names + avatars
+- participant display names + appearance (v1: color; future: image/GIF)
 - placement / winner
 - quick actions: **Open**, **Delete** (local-only)
 
@@ -108,7 +112,16 @@ A replay should support 2 independent requirements:
     - **Important:** this is the **match slot id** (deterministic engine identifier), not a user bot identity.
     - Future-proofing: stable bot identity/version live in `botRef` fields below.
   - `displayName`
-  - `avatar` (color for v1)
+  - `appearance` (presentation-only; must not affect determinism)
+    - v1 required (placeholder): `{ kind: "COLOR", color: "#RRGGBB" }`
+    - future (images/gifs):
+      - `{ kind: "IMAGE", fallbackColor: "#RRGGBB", avatarRef: { assetId?, contentHash?, url? } }`
+      - `fallbackColor` is used when the image cannot be loaded.
+      - `avatarRef` is an immutable-ish reference the viewer can resolve via:
+        - server asset registry (`assetId`)
+        - content-addressed storage (`contentHash`)
+        - or a direct URL (`url`) when appropriate
+    - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
   - `loadout` (3 slot positions; each entry is a module id or `null`)
     - v1 validation: no duplicate modules among equipped slots
     - v1 validation: at most one weapon module equipped (`BULLET` or `SAW`)

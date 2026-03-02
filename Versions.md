@@ -42,9 +42,17 @@ Naming convention note:
 - Loadout rules: slots may be empty; at most one weapon equipped (v1: `BULLET` or `SAW`).
 - Gameplay timing locked in docs: `ticksPerSecond = 1` and powerup spawn interval is 10–20 seconds.
 - UI plan updated: v1 is **Landing (`/`) → Workshop (`/workshop`)**; the workshop includes the editor, live local preview, replay controls, and 3 built-in opponent bots with viewable code.
+- Arena visuals updated: v1 bots are rendered as **circle tokens** (placeholder) sized to avoid overlap between sector-center and zone-center anchors.
+- Bot appearance planning added: bots have presentation-only **`appearance`** metadata (v1 color; future image/GIF), snapshotted into the replay header.
+- Replay schema updated: replay header `bots[]` includes `appearance` (presentation-only; must not affect determinism) with a future-proof reference shape for assets.
 - Docs authoring rule: keep a stable core language and add “sugar” only as explicit aliases.
 - `BotInstructions.md` clarified **why aliases exist**, why they’re deterministic, and when to use the **target register** vs **inline selectors**.
 - `BotInstructions.md` clarified source preprocessing for v1: `;` comments + blank lines ignored; `LABEL` is compile-time only; `pc` is indexed into the compiled executable instruction list (with an optional `pc -> sourceLine` mapping for UI).
+- `BotInstructions.md` added an **optional, non-semantic UI metadata convention** via comments:
+  - `;@name ...`
+  - `;@appearance ...` (v1: `#RRGGBB`; future: asset/hash refs)
+- Daily competition docs clarified the deterministic end-of-run rule:
+  - if fewer than 4 eligible bots remain, **stop scheduling** and end the run.
 - Planning trackers updated (`Todo.md`): added v1 client UI plan tasks and new built-in opponents.
 
 ### Fixed

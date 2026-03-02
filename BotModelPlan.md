@@ -30,6 +30,23 @@ We will eventually have real user-created bots. Those need a stable identity:
 
 In v1 client-only mode, built-in bots should already use **stable botIds** (namespaced under `builtin/…`) so we don’t have to migrate later.
 
+### 1.3 Bot appearance (avatars / pictures / gifs)
+Avatar/appearance is **presentation-only** (it must not affect determinism or match results), but it still needs a stable home in the model.
+
+**Plan (future-proof, v1-simple):**
+- Store avatar metadata on **Bot** (identity-level), not on BotVersion.
+  - Rationale: the avatar is part of the bot’s “persona” and should persist across code iterations.
+  - BotVersion stays focused on reproducibility: source + hashes + pinned ruleset/DSL + loadout.
+- Allow (optional, post-v1) overrides in BotVersion only if we later want “skins per version”. If we add this, it should be explicit (e.g. `appearanceOverride` / `skinRef`) and not required.
+
+**Bot (identity) fields (planning-level):**
+- `displayName`
+- `appearance` (aka avatar), e.g.
+  - v1: `{ kind: "COLOR", color: "#RRGGBB" }`
+  - future: `{ kind: "IMAGE", fallbackColor: "#RRGGBB", avatarRef: { assetId?, contentHash?, url? } }`
+
+**Replay rule:** because replays must be viewable offline and long after assets move, each replay must include a small per-slot **appearance snapshot** in its header (at least a fallback color; optionally an immutable reference like `contentHash`). See `ReplayViewerPlan.md`.
+
 ---
 
 ## 2) Bot versions (immutable snapshots)
@@ -79,6 +96,7 @@ A replay should always include:
 - per-slot participant info:
   - `slotId`: `BOT1..BOT4`
   - `displayName`
+  - `appearance` (presentation snapshot; see §1.3)
   - `loadout`
   - `sourceHash` (and optionally `compiledIrHash`)
   - **future fields:** `botId`, `botVersion` (or a server `botVersionId`)
@@ -97,6 +115,7 @@ Even without a server, we should structure the workshop’s opponents as if they
 - Each built-in bot ships with:
   - `botId` like `builtin/chaser-shooter`
   - `displayName`
+  - `appearance` (v1: `{ kind: "COLOR", color: "#RRGGBB" }`; future: image/GIF refs)
   - `sourceText`
   - `loadout`
   - `rulesetVersion` + `dslVersion`

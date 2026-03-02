@@ -17,14 +17,14 @@ It is aligned with:
   - `4 5 6`
   - `7 8 9`
 
-- Matches run with up to **4 bots**.
+- Standard match format is **4 bots** (`BOT1..BOT4`).
 - Default spawn positions for 4-bot matches (locked): arena corners
   - `BOT1 → SECTOR 1 ZONE 1` (top-left)
   - `BOT2 → SECTOR 3 ZONE 2` (top-right)
   - `BOT3 → SECTOR 7 ZONE 3` (bottom-left)
   - `BOT4 → SECTOR 9 ZONE 4` (bottom-right)
 
-Client-only testing note:
+Client-only testing note (optional, post-v1):
 - The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `SECTOR 1 ZONE 1` and `SECTOR 9 ZONE 4`).
 - This is a UI/testing feature; server daily matches remain 4-bot.
 
@@ -69,7 +69,7 @@ We treat a "location" used by bot scripts and powerups as one of these determini
 - **Zone center** (`SECTOR s ZONE z`):
   - `zoneCenter = zoneOrigin + (16, 16)`
 
-This maps cleanly to a **32×32 bot collision box** (a bot in a zone occupies exactly that zone in world units).
+This aligns with a notional **32×32 bot collision box** (matching zone size), but v1 collision/occupancy is **anchor-based** (see §3).
 
 ### 1.4 Powerup spawn anchors
 

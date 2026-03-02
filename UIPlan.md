@@ -20,24 +20,37 @@ It builds on:
 
 ## 1) App flow + routes (client-first)
 
-### 1.1 v1 routes (minimal)
+### 1.1 v1 user journey (Landing → Workshop)
 
 1) **Landing** (`/`)
-   - one button: **Start Game** → `/workshop`
-   - no auth gating in v1
+   - One primary CTA: **Start Game** → `/workshop`.
+   - v1 has **no auth gating**.
 
-2) **Workshop** (`/workshop`)
-   - the main “coding page”
-   - contains:
-     - code editor for **your bot**
-     - an **arena preview** (live local simulation + replay controls)
-     - **three built-in opponent bots** (read-only code view)
+2) **Workshop** (`/workshop`) — the entire v1 loop
+   In v1, the Workshop must support these user actions end-to-end:
+   - **Edit your bot** (BOT1)
+     - multiline code editor with inline validation errors
+     - local persistence across refresh
+   - **Run a local match (4 bots)**
+     - BOT1 = your editable bot
+     - BOT2–BOT4 = built-in opponents (read-only)
+   - **Replay what happened**
+     - play/pause, step +1, restart to tick 0, jump to end, speed
+     - the viewer renders from replay state + playhead tick
+   - **Inspect bots**
+     - bot list/inspector shows: appearance token, stats at playhead tick, and code view
+     - BOT2–BOT4 code is read-only
 
-Optional (post-v1, can be added later without changing the v1 funnel):
-- **Replay Library** (`/matches`)
-- **Replay viewer deep-link** (`/replay/:replayId`)
+### 1.2 v1 routes (minimal)
 
-### 1.2 URL state (refresh/debug-friendly)
+- `/` (Landing)
+- `/workshop` (Workshop)
+
+Post-v1 routes (planned; not required for the first shippable v1 funnel):
+- Replay library (`/matches`)
+- Replay deep-link viewer (`/replay/:replayId`)
+
+### 1.3 URL state (refresh/debug-friendly)
 
 Recommended query params on workshop/replay pages:
 - `tick` (current playhead)
@@ -64,7 +77,13 @@ Layout (v1):
 - centered content block ("card"):
   - `max-width: 720px`
   - comfortable padding (e.g. 24px)
-- minimal text only (optional): title + one sentence
+- minimal text (keep it short, but set expectations clearly):
+  - title
+  - one sentence: “Code a bot. Run a 4‑bot match locally. Replay it tick‑by‑tick.”
+  - optional 3 bullets:
+    - Code your bot (BOT1)
+    - Battle 3 built-in opponents
+    - Replay and debug deterministically (seeded)
 
 Interaction (v1):
 - the **Start Game** button should be focused by default
@@ -87,6 +106,10 @@ The workshop is the entire v1 experience.
 - Preview run behavior:
   - recommended: auto-run **one** match on first workshop visit (so the arena is not static)
   - after that, only run when the user clicks **Run / Preview**
+- First-run “What you can do here” hint (v1-friendly, no auth required):
+  1) Edit **Your Bot (BOT1)** on the left
+  2) Click **Run / Preview** to simulate a 4-bot match locally
+  3) Use replay controls to step tick-by-tick and debug deterministically (seeded)
 
 #### Layout (minimum viable)
 
@@ -103,8 +126,10 @@ Mobile/narrow:
 
 #### Preview (right)
 - Arena viewport
-- Playback controls (play/pause, step +1, restart, speed)
-- Bot list + inspector (select BOT1..BOT4 → show stats + code with pc highlight)
+- Playback controls (play/pause, step +1, restart, jump to end, speed)
+- Bot list + inspector (select BOT1..BOT4 → show appearance token + stats + code with pc highlight)
+  - v1: appearance is a colored circle (placeholder)
+  - future: allow images/GIFs clipped into the same circle (see `ReplayViewerPlan.md` `bots[].appearance`)
 
 #### Bots in the preview match (v1 default)
 - The preview match is always **4 bots** (`BOT1..BOT4`).
@@ -213,7 +238,12 @@ Render scaling:
 
 ### 5.3 Entity rendering
 
-- bots: square sprite (visual footprint smaller than collision box; see `ArenaVisualPlan.md`) + slot id (`BOT1..BOT4`) + resource bars
+- bots:
+  - v1 (locked): render each bot as a **circle token** (solid fill) + slot id (`BOT1..BOT4`) + resource bars
+    - color comes from the replay header `bots[].appearance` (see `ReplayViewerPlan.md`)
+    - fallback when missing: deterministic per-slot palette (e.g. BOT1 blue, BOT2 red, BOT3 green, BOT4 yellow)
+  - later (images/gifs): if `bots[].appearance.kind = "IMAGE"` and the avatar resolves, draw the image **clipped to the same circle**, otherwise keep the v1 circle fallback
+    - always keep a readable overlay (slot id or initials) for debugging
 - powerups: icons at their anchor location
 - bullets/grenades/mines: simple sprites rendered above the grid
 
@@ -248,8 +278,12 @@ Default playback:
 
 ---
 
-## 8) Replay saving/loading (client)
+## 8) Replay saving/loading (client) (post-v1)
 
+v1 note:
+- The v1 Workshop only needs an **in-memory replay for the most recent run** (enables playback + inspection).
+
+When added post-v1:
 - On match end: show **Save Replay** dialog (name + save/discard)
 - Store replays in **IndexedDB** (recommended)
 - Provide:

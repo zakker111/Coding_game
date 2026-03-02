@@ -29,7 +29,7 @@ This is a **single-line-per-tick** language:
 >
 > Where:
 > - `BOT1..BOT4` are **match slot identifiers** (deterministic engine ids).
-> - Bots may also have a **display name** in UI/server contexts, but scripts still refer to match slots as `BOT1..BOT4`.
+> - Bots may also have **displayName** and **appearance/avatar** metadata in UI/server contexts (for labels, icons, gifs), but scripts still refer to match slots as `BOT1..BOT4`.
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
 > - Each bot has 3 slot positions (`SLOT1..SLOT3`); a slot may be **empty**.
@@ -72,6 +72,20 @@ Preprocessing rules (v1):
 Program counter (pc) model (v1):
 - `pc` is **1-indexed** into the compiled executable instruction list (after preprocessing).
 - For replay/UI debugging, the engine should retain a mapping: `pc -> originalSourceLine`.
+
+Optional (v1, non-semantic): UI metadata directives
+- Tools/UIs may read presentation-only metadata from comment lines of the form:
+  - `;@name <text>`
+  - `;@appearance <value>`
+- These lines are still **comments** and must be ignored by the compiler/VM for gameplay.
+- Suggested UI-side constraints (planning):
+  - `name`: 1–32 chars after trimming; no newlines
+  - `appearance`:
+    - v1: hex color `#RRGGBB`
+    - future: `asset:<id>` or `hash:<contentHash>` (resolved by server/UI)
+
+Rationale:
+- Lets a single `.md` / script file carry optional “persona” info (name + avatar) without changing deterministic runtime semantics.
 
 ## 1) Control flow
 

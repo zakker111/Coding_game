@@ -73,7 +73,7 @@ This prevents mid-run edits from affecting the run.
   - `BOT4 → SECTOR 9 ZONE 4` (bottom-right)
   - (unless you later introduce randomized assignment by seed)
 
-> Note: If a match has fewer than 4 eligible bots (late in a run), you’ll need a deterministic rule: either stop scheduling or allow 2–3 player matches.
+> Deterministic stop rule (v1): If fewer than 4 eligible bots remain late in a daily run, **stop scheduling** and end the run (no 2–3 player matches in ranked daily runs).
 
 ### 4.2 Scheduling model (multi-round grouping)
 
@@ -184,6 +184,6 @@ Still open:
 2) How many matches should each eligible bot play per day (cap)?
    - unlimited until eliminated vs `max_matches_per_bot_per_day`.
 3) Weekly reset:
-   - what happens to points at reset? (set to 0 vs set to default baseline)
-4) If fewer than 4 eligible bots remain late in a daily run:
-   - stop scheduling, or allow 2–3 player matches?
+   - what happens to points at reset? (set to 0 vs set to a default baseline?)
+
+(No longer open / locked above: if fewer than 4 eligible bots remain, stop scheduling and end the run.)

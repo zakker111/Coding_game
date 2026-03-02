@@ -68,19 +68,32 @@ Let `worldToPx(x) = round(x * S)` and same for `y`.
   - `px = worldToPx(wx)`
   - `py = worldToPx(wy)`
 
-Bots have a **32×32 world-unit collision box** in the rules.
+Bots have a notional **32×32 world-unit collision box** in the rules (matching zone size), but v1 collision/occupancy is **anchor-based** (see `ArenaPlan.md`).
 
-**Important for visuals (v1):** bots can occupy both zone centers *and* sector centers (`zone=0`). If we rendered a full 32×32 sprite centered on these anchors, bots at `SECTOR s` (center) would frequently overlap visually with bots at `SECTOR s ZONE z` (zone centers).
+### Bot visual sizing (v1 placeholder: circle tokens)
 
-Therefore, the **visual sprite footprint is smaller than the collision box**:
-- `botVisualSizeWorld = 20` (square)
-- `botVisualHalfWorld = 10`
+In v1, bots are rendered as **filled circles**, centered on their anchor location.
 
-Pixel placement:
-- `botTopLeftPx = (px - botVisualHalfWorld*S, py - botVisualHalfWorld*S)`
-- `botSizePx = botVisualSizeWorld*S`
+Why not 32×32 world units?
+- Bots can occupy both zone centers *and* sector centers (`zone=0`).
+- Inside a sector, the distance from the sector center `(32,32)` to any zone center `(16,16)` / `(48,16)` / `(16,48)` / `(48,48)` is:
+  - `dWorld = sqrt(16^2 + 16^2) = 16*sqrt(2) ≈ 22.63`
+- To avoid visual overlap for “sector-center bot vs zone-center bot” in the same sector, we choose a smaller token.
 
-The collision/occupancy rules remain anchor-based (no two bots on the same anchor), regardless of visual footprint.
+**Chosen size (v1):**
+- `botDiameterWorld = 16`
+- `botRadiusWorld = 8`
+
+Pixel sizing at render scale `S`:
+- `botDiameterPx = botDiameterWorld * S = 16*S`
+  - at default `S=2` → **32px diameter**
+- `botRadiusPx = 8*S`
+
+Placement:
+- `botCenterPx = (round(wx*S), round(wy*S))`
+- draw the circle at `botCenterPx` with radius `botRadiusPx`
+
+This is purely visual; gameplay remains anchor-based.
 
 ### 2.5 HiDPI / devicePixelRatio (recommended)
 
@@ -187,20 +200,25 @@ When hovering the arena:
 
 ## 5) Bot visuals (v1)
 
-### 5.1 Bot body
+### 5.1 Bot body (v1 placeholder: circle tokens)
 
-Bots are visually represented as a square sprite whose **visual footprint is smaller than the collision box** (see §2.4).
+Bots are rendered as a **circle token** sized by §2.4 (`botDiameterWorld = 16`, `botRadiusWorld = 8`).
 
-- Collision (rules): 32×32 world units
-- Visual (rendering): `botVisualSizeWorld = 20` → `botVisualSizePx = 20*S`
+At default scale `S=2`, this is a **32×32 px** circle.
 
-v1 sprite options:
-- **Simple shape (fast)**: rounded square with an outline, plus a direction notch.
-- **Pixel sprite (nicer)**: 32×32 bitmap authored at 32×32 and then drawn scaled into `botVisualSizePx`.
+- Visual size is defined in §2.4:
+  - `botDiameterWorld = 16`
+  - `botRadiusWorld = 8`
 
-Either way:
-- each bot has a stable **slot color** (BOT1..BOT4)
-- draw a 1–2px dark outline so bots are visible over the grid
+Style + source of truth:
+- Each bot’s fill color comes from the replay header `bots[].appearance` (see `ReplayViewerPlan.md`).
+  - v1 required placeholder: `{ kind: "COLOR", color: "#RRGGBB" }`.
+  - If missing, fall back to a deterministic per-slot palette (e.g., BOT1 blue, BOT2 red, BOT3 green, BOT4 yellow).
+- Draw a 1–2px dark outline so tokens remain readable over the grid.
+- Always render the slot id label (`BOT1..BOT4`) above the token (see §5.3).
+
+Future (post-v1):
+- If `appearance.kind = "IMAGE"` and the avatar resolves, draw the image **clipped to the same circle**; otherwise keep the v1 circle fallback.
 
 ### 5.2 Facing / direction indicator
 
