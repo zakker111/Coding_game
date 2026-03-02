@@ -103,9 +103,11 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing
-- Finalize what bots can sense about:
-  - powerups (global vs near-only)
-  - bullets (near-only vs predictive)
+- Locked: bots have **global knowledge of powerup locations** (supporting `POWERUP_EXISTS` and `DIST_TO_CLOSEST_POWERUP`).
+- Locked: bots can query **other bots' resources** (supporting `BOT_HEALTH(BOTn)`, etc.).
+- Still to define:
+  - bullet sensing (near-only vs predictive)
+  - whether any opponent info should be hidden later for fairness (if desired)
 
 ---
 

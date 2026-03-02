@@ -25,15 +25,15 @@ Client-only testing note:
 - The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `1` and `9`).
 - This is a UI/testing feature; server daily matches remain 4-bot.
 
-### 1.1 Current sizing assumption (v1)
+### 1.1 Client-side render sizing (v1)
 
-You stated: "arena size for now is clamped **128×128** but might need to be bigger in future".
+You stated: "arena size for now is clamped **128×128** but might need to be bigger in future" and clarified it is **client-side**.
 
-To keep the existing **9-sector** design consistent, the most natural interpretation is:
-- **sector cell size** = `128×128` world units
-- therefore **total arena size** = `3*128 × 3*128` = **384×384** world units
+Recommended interpretation:
+- **128×128 is the render size per sector cell** (not gameplay/world units).
+- total arena render size is therefore ~ **384×384** at default scale (3×3).
 
-If instead you meant the **entire** arena is 128×128, we should revisit sector sizing and bot density.
+The simulation remains sector-based; this is a UI sizing rule.
 
 ---
 
@@ -51,9 +51,12 @@ This requires specifying what a “wall” means in the movement model.
 
 At minimum, walls include:
 - an **outer boundary** around the 3×3 arena
-- **sector boundaries** (inner walls) between adjacent sectors
 
-Open: whether sector boundaries are always open for movement (like rooms connected by doors), or fully blocked.
+Sector boundaries (the lines between the 9 sectors) are **visual boundaries** in v1, not blocking walls.
+- This matches your statement that there are **no doors** (we are not modeling door openings between sectors).
+- Bots can still move between sectors normally.
+
+Future: you can introduce internal blocking walls later, but then you’ll need a data-driven wall layout and likely a door/opening mechanic.
 
 ---
 
@@ -140,10 +143,10 @@ Your recent requirement (“each bot has a 32×32 collision box” + wall bumps 
   - still to define: do they disappear immediately, or remain as a stuck entity for 1+ ticks?
 - Doors:
   - **Locked:** there are **no doors**.
-  - implication: if you ever add internal walls, they would be solid barriers unless you later introduce a door mechanic.
-- Are internal sector boundaries gameplay-walls?
-  - still open: **outer boundary only** vs **internal boundaries too**.
-  - given “no doors”, internal boundary walls would heavily constrain movement.
+- Sector boundaries:
+  - **Locked (v1):** sector boundaries are **not blocking walls**; only the outer boundary is a wall.
+  - implication: bump damage only occurs when trying to move outside the 3×3 arena.
+  - implication: bullets stop at the outer boundary (and any future internal walls, if added).
 
 
 

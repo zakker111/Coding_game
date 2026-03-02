@@ -73,23 +73,23 @@ To keep the arena readable and avoid layout breakage:
 
 This keeps the arena “spacy but not too spacy”: the arena spacing is controlled by sector sizing, not by user sprite dimensions.
 
-### 3.3 Arena sizing (v1 fixed world size, responsive view)
+### 3.3 Arena sizing (client-side; sector render size clamp)
 
-You stated a current size target:
-- arena/sector sizing is clamped to **128×128** (with the possibility to increase later).
+You clarified: the **128×128 clamp is client-side**.
 
-To keep UI and simulation aligned, treat **128×128 as the sector cell world size** (see `ArenaPlan.md`), meaning the full arena world is **384×384**.
+Recommended interpretation (consistent with 32×32 sprites and “fit 4 bots per sector”):
+- Treat **128×128 as the default render size per sector cell**.
+- Total arena render size is therefore about **384×384** at default scale (3×3).
 
-UI sizing approach:
-- Keep a **fixed logical/world size** (384×384).
-- Scale the rendered arena to fit the user’s screen:
-  - `renderScale = min(availableWidth, availableHeight) / 384`
-- This gives a large arena on big screens and still fits on smaller screens.
+Responsive sizing approach:
+- Compute `sectorRenderPx` from available space, but clamp it:
+  - `sectorRenderPx = clamp(floor(min(availableWidth, availableHeight) / 3), 128, 256)`
+- Total arena size is `3 * sectorRenderPx`.
 
-Sector cells can be rendered at:
-- `sectorRenderPx = 128 * renderScale`
-
-This guarantees each sector has consistent internal spacing for up to **4× 32×32** bots.
+This keeps the arena:
+- large enough to show 4 bots per sector,
+- small enough to fit common screens,
+- adjustable in the future by changing clamp bounds.
 
 ### 3.4 Arena model on screen
 - 9 sectors arranged as:
