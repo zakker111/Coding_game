@@ -91,7 +91,9 @@ Bots know where powerups are (global knowledge).
   - alias of `TARGET_POWERUP <TYPE>` in v1 (kept for readability)
 
 Notes:
-- If no powerup of that type exists, the powerup target remains set but `MOVE_TO_TARGET` / `MOVE_TO_POWERUP` will no-op until one exists.
+- If no powerup of that type exists, the target is treated as **invalid**:
+  - `MOVE_TO_TARGET` / `MOVE_TO_POWERUP` will no-op
+  - at the end of the tick, `targetPowerupType` is automatically **cleared** (so "target is false" next tick)
 - If both a bot target and powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
 
 ### 2.3 Clearing targets
@@ -164,7 +166,10 @@ Resolution rules (recommended):
 
 Goal completion:
 - `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches that sector.
-- `SET_MOVE_TO_POWERUP`: clears when the bot picks up the targeted powerup, or if no such powerup exists.
+- `SET_MOVE_TO_POWERUP`:
+  - each tick, the goal re-resolves to the **closest currently-existing** powerup of that type
+  - clears when the bot picks up a powerup of that type
+  - clears if no such powerup exists (the goal becomes invalid)
 - `SET_MOVE_TO_BOT` / `SET_MOVE_TO_TARGET`: clears when the resolved target bot is dead/missing.
 
 Notes:
@@ -290,6 +295,8 @@ Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool
 - `DIST_TO_CLOSEST_POWERUP(<TYPE>)` → int
   - if no powerup of that type exists, returns `999`
+- `HAS_TARGET_POWERUP()` → bool
+  - true iff `targetPowerupType` is set and at least one powerup of that type currently exists
 
 Powerups (local convenience):
 - `POWERUP_IN_SAME_SECTOR(<TYPE>)` → bool
