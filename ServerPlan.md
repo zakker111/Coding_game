@@ -4,7 +4,10 @@ This document describes the **server-side responsibilities, data flow, and inter
 
 It is intentionally **implementation-agnostic** (no required framework/DB yet). It assumes the gameplay rules captured in:
 - `Todo.md`
+- `Ruleset.md`
 - `BotInstructions.md`
+- `CombatPlan.md`
+- `ServerSimulationPlan.md`
 
 ---
 
