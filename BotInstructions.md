@@ -1,42 +1,4 @@
-### 6.6 Target registers
-
-Bot target:
-- `HAS_TARGET_BOT()`
-- `TARGET_ALIVE()`
-- `TARGET_IN_SAME_SECTOR()`
-- `TARGET_IN_ADJ_SECTOR()`
-
-Powerup target:
-- `HAS_TARGET_POWERUP()`
-- `TARGET_POWERUP_TYPE_IS(<TYPE>)`
-
-### 6.7 Collision / bump sensors
-
-Bots can react to bump/collision outcomes (for example: "if I bumped a wall on the left, turn shield on").</old_code><new_code>### 6.7 Collision / bump sensors
-
-Bots can react to bump/collision outcomes (for example: "if I bumped a wall on the left, turn shield on").
-
-These sensors refer to the bot’s **most recent bump event** (typically caused by its own movement attempt).
-
-Because the bot executes only one line per tick, bump information is most useful as a **"last tick" result**:
-- collisions are detected/resolved during tick `t`
-- bump flags are readable by the bot when it executes tick `t+1`
-
-The engine should reset bump state each tick after it is exposed to the bot and/or written into the replay.
-
-Walls:
-- `BUMPED_WALL()`
-- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)`
-
-Bots:
-- `BUMPED_BOT()`
-- `BUMPED_BOT_IS(<BOT>)`
-- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)`
-
-Notes / open rules (to finalize in the ruleset):
-- Define exactly when a “bump into another bot” occurs (attempted move into occupied sector vs collision inside a sector).
-- If multiple bumps could occur in one tick, define which one is recorded (recommended: only record the bump caused by the bot’s own movement instruction; otherwise pick a deterministic priority order).
-</old_code><new_code># Bot Instruction List (v1)
+# Bot Instruction List (v1)
 
 This is a **single-line-per-tick** language:
 - Each bot executes **exactly 1 instruction per tick** at its current `pc` (program counter).
@@ -75,7 +37,8 @@ The bot maintains:
 
 - `SET_TARGET <BOT>`
 - `TARGET_CLOSEST` (alias: `TARGET_CLOSEST_BOT`)
-- `TARGET_LOWEST_HEALTH` (sets `targetBotId` to the alive bot with lowest health; ties -> lowest bot id)
+- `TARGET_LOWEST_HEALTH`
+  - sets `targetBotId` to the alive bot with the lowest health (ties: lowest bot id)
 - `TARGET_NEXT`
 - `TARGET_NEXT_IF_DEAD`
 
@@ -84,74 +47,16 @@ The bot maintains:
 Bots know where powerups are (global knowledge).
 
 - `TARGET_POWERUP <TYPE>`
-  - Sets `targetPowerupType = <TYPE>`
-- `TARGET_CLOSEST_POWERUP <TYPE>` (optional alias)
-  - Same outcome as `TARGET_POWERUP` in v1 (kept for readability).
-
-Notes:
-- If no powerup of that type exists, the powerup target remains set but `MOVE_TO_TARGET` will no-op until one exists.
-- If both a bot target and powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
-
-# Bot Instruction List (v1 draft)
-
-This is a **single-line-per-tick** language:
-- Each bot executes **exactly 1 instruction per tick** at its current `pc` (program counter).
-- If an instruction is invalid or malformed at runtime, it is treated as `NOP`, and `pc` resets to `1` next tick (per-bot; does not crash the match).
-
-> Notation:
-> - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
-> - `<TYPE>`: `HEALTH|AMMO|ENERGY`
-> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET`
-> - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
-> - `<SECTOR>`: `1..9`
-> - `<SLOT>`: `SLOT1|SLOT2|SLOT3` (used only in `FIRE_TARGET` form)
->
-> Where:
-> - `TARGET` refers to the bot’s current `targetBotId`.
-> - No duplicate modules in slots in v1.
-
----
-
-## 1) Control flow
-
-- `LABEL <name>`
-- `GOTO <name>`
-- `IF <PREDICATE> GOTO <name>`
-- `NOP`
-
----
-
-## 2) Target selection (updates bot target registers)
-
-Bots can write generic scripts by selecting a target first, then using `MOVE_TO_TARGET` and/or `FIRE_TARGET`.
-
-The bot maintains:
-- `targetBotId` (optional)
-- `targetPowerupType` (optional)
-
-### 2.1 Target a bot
-- `SET_TARGET <BOT>`
-- `TARGET_CLOSEST` (alias: `TARGET_CLOSEST_BOT`)
-- `TARGET_LOWEST_HEALTH`
-  - Sets `targetBotId` to the alive bot with the lowest health.
-  - Ties: lowest bot id.
-- `TARGET_NEXT`
-- `TARGET_NEXT_IF_DEAD`
-
-### 2.2 Target a powerup
-Bots know where powerups are (global knowledge). Targeting powerups enables scripts like:
-"if health < 10 then target health powerup and move to it".
-
-- `TARGET_POWERUP <TYPE>`
   - sets `targetPowerupType = <TYPE>`
 - `TARGET_CLOSEST_POWERUP <TYPE>`
-  - chooses the closest powerup of that type (deterministic ties) and sets `targetPowerupType`
+  - alias of `TARGET_POWERUP <TYPE>` in v1 (kept for readability)
 
 Notes:
-- If the requested powerup type does not exist on the map, targeting is a no-op.
-- If both a bot target and powerup target are set, `MOVE_TO_TARGET` uses bot target first unless you explicitly clear it.
+- If no powerup of that type exists, the powerup target remains set but `MOVE_TO_TARGET` / `MOVE_TO_POWERUP` will no-op until one exists.
+- If both a bot target and powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
 
-### 2.3 Clearing targets (optional but recommended)
+### 2.3 Clearing targets
+
 - `CLEAR_TARGET_BOT`
 - `CLEAR_TARGET_POWERUP`
 - `CLEAR_TARGET` (clears both)
@@ -194,7 +99,7 @@ Target-driven movement:
 
 ---
 
-## 5) Module actions (future-proof slot-addressed)
+## 5) Module actions (slot-addressed)
 
 These are optional but intended to be supported.
 
@@ -259,7 +164,7 @@ Vague/generic:
 
 Convenience for your current target:
 - `TARGET_HEALTH <op> <number>`
-  - Uses the current `targetBotId`; false if there is no valid target bot.
+  - uses the current `targetBotId`; false if there is no valid target bot
 
 ### 6.4 Powerups (global knowledge)
 
@@ -311,3 +216,33 @@ Bots:
 Notes / open rules (to finalize in the ruleset):
 - Define exactly when a “bump into another bot” occurs (attempted move into occupied sector vs collision inside a sector).
 - If multiple bumps could occur in one tick, define which one is recorded (recommended: only record the bump caused by the bot’s own movement instruction; otherwise pick a deterministic priority order).
+
+---
+
+## 7) Example scripts
+
+### Example A — If low health, go to health powerup
+
+```text
+LABEL LOOP
+IF HEALTH < 10 GOTO HEAL
+GOTO LOOP
+
+LABEL HEAL
+TARGET_POWERUP HEALTH
+MOVE_TO_TARGET
+GOTO LOOP
+```
+
+### Example B — If any bot is low health, target and shoot it
+
+```text
+LABEL LOOP
+TARGET_LOWEST_HEALTH
+IF TARGET_HEALTH < 10 GOTO FINISH
+GOTO LOOP
+
+LABEL FINISH
+FIRE_SLOT1 TARGET
+GOTO LOOP
+```
