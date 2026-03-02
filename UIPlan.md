@@ -73,29 +73,23 @@ To keep the arena readable and avoid layout breakage:
 
 This keeps the arena “spacy but not too spacy”: the arena spacing is controlled by sector sizing, not by user sprite dimensions.
 
-### 3.3 Arena sizing ("big but fits most screens", and fits 4 bots per sector)
-The logical arena is 3×3 sectors, but the *visual* arena should scale with viewport.
+### 3.3 Arena sizing (v1 fixed world size, responsive view)
 
-Requirements you added:
-- Each sector must have enough room to display **up to 4 bots** (32×32 each) without overlap.
-- The arena should have **distinct walls** (clear boundaries between sectors and around the whole map).
+You stated a current size target:
+- arena/sector sizing is clamped to **128×128** (with the possibility to increase later).
 
-Sizing strategy:
-- The arena viewport should keep a square aspect ratio (`1:1`).
-- Let `arenaSidePx = min(availableWidth, availableHeight)`.
-- Sector size becomes `sectorPx = arenaSidePx / 3`.
-- Apply a clamp so it’s readable across common screens, e.g.:
-  - `sectorPx = clamp(sectorPx, 140px, 280px)`
+To keep UI and simulation aligned, treat **128×128 as the sector cell world size** (see `ArenaPlan.md`), meaning the full arena world is **384×384**.
 
-Rationale for the minimum:
-- A 2×2 layout of bots inside a sector needs roughly:
-  - `2*32px` for sprites + padding/gaps + room for small status bars
-  - giving a practical minimum around 120–140px.
+UI sizing approach:
+- Keep a **fixed logical/world size** (384×384).
+- Scale the rendered arena to fit the user’s screen:
+  - `renderScale = min(availableWidth, availableHeight) / 384`
+- This gives a large arena on big screens and still fits on smaller screens.
 
-With `sectorPx >= 140px`:
-- 4 bots can be placed at fixed anchors with padding,
-- there is space for powerup icons,
-- walls/borders remain readable.
+Sector cells can be rendered at:
+- `sectorRenderPx = 128 * renderScale`
+
+This guarantees each sector has consistent internal spacing for up to **4× 32×32** bots.
 
 ### 3.4 Arena model on screen
 - 9 sectors arranged as:
@@ -225,6 +219,9 @@ This ensures:
 
 ### 6.2 Local test mode
 - Client can run a local match using the same engine (same ruleset) and immediately show replay.
+- Client-only convenience: allow a **1v1 spawn mode** for testing.
+  - Example: spawn two selected bots in opposite corners (e.g., sectors 1 and 9).
+  - This does not change server daily matches (which remain 4-bot).
 
 ---
 

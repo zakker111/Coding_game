@@ -45,6 +45,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 ### Projectiles (bullets)
 - Bullets are **slow-moving projectiles** updated each tick (not instant hits).
 - Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
+- **Bullets stop at walls** (locked).
 
 ### Fault tolerance / corrupted bot code
 - Bot code must never crash the match.
@@ -93,6 +94,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Elimination: bots that drop below a **points threshold** are excluded from **future days** until re-enabled.
 - Rejoin: re-enable uses a **rejoin allowance** (points floor) so bots can come back even if below threshold.
 - Weekly: highlight **top 10** and reset/start a new season.
+- Client-only: allow a **1v1 spawn/testing mode** (does not affect server scoring).
 - Still to define:
   - points formula (placement-only vs placement + stats)
   - exact threshold value and exact rejoin allowance amount

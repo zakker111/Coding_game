@@ -21,6 +21,20 @@ It is aligned with:
 - Default spawn positions for 4-bot matches (locked): corners
   - `BOT1 → 1`, `BOT2 → 3`, `BOT3 → 7`, `BOT4 → 9`
 
+Client-only testing note:
+- The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `1` and `9`).
+- This is a UI/testing feature; server daily matches remain 4-bot.
+
+### 1.1 Current sizing assumption (v1)
+
+You stated: "arena size for now is clamped **128×128** but might need to be bigger in future".
+
+To keep the existing **9-sector** design consistent, the most natural interpretation is:
+- **sector cell size** = `128×128` world units
+- therefore **total arena size** = `3*128 × 3*128` = **384×384** world units
+
+If instead you meant the **entire** arena is 128×128, we should revisit sector sizing and bot density.
+
 ---
 
 ## 2) Walls (gameplay)
@@ -122,9 +136,14 @@ Your recent requirement (“each bot has a 32×32 collision box” + wall bumps 
 ## 6) Open parameters (regardless of option)
 
 - `wall_bump_damage` (small integer)
-- Do bullets collide with walls? (stop/bounce/pass-through)
-- Are internal sector boundaries always passable, or do some walls block passage?
-- If internal walls can block passage, how are “doors” represented?
+- **Bullets vs walls (locked):** bullets **stop at walls**.
+  - still to define: do they disappear immediately, or remain as a stuck entity for 1+ ticks?
+- Doors:
+  - **Locked:** there are **no doors**.
+  - implication: if you ever add internal walls, they would be solid barriers unless you later introduce a door mechanic.
+- Are internal sector boundaries gameplay-walls?
+  - still open: **outer boundary only** vs **internal boundaries too**.
+  - given “no doors”, internal boundary walls would heavily constrain movement.
 
 
 
