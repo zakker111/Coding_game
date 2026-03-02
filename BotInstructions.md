@@ -13,6 +13,7 @@ This is a **single-line-per-tick** language:
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..9` (alias of sectors in v1)
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
+> - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >
 > Where:
 > - `BOT1..BOT4` are **match slot identifiers** (deterministic engine ids).
@@ -31,18 +32,33 @@ This is a **single-line-per-tick** language:
   - `<EXPR>` is a **C-like boolean expression** (see §6).
 - `IF <EXPR> DO <INSTR>`
   - Convenience form: evaluate `<EXPR>`; if true, execute `<INSTR>`; otherwise do nothing.
-  - `<INSTR>` must be a **single non-control instruction** (movement / module action / target selection).
+  - `<INSTR>` must be a **single non-control instruction** (movement / module action / target selection / timing).
+- `NOP`
 
-Timing:
+### 1.1 Timing
+
+#### Blocking delay
 - `WAIT <TICKS>`
-  - Pauses execution for `<TICKS>` ticks.
+  - **Blocking** delay: pauses execution for `<TICKS>` ticks.
   - While waiting, the bot does not execute other instructions (equivalent to repeated `NOP`).
   - Deterministic semantics (recommended):
     - on first execution, store `waitRemaining = <TICKS>` and do **not** advance `pc`
     - each subsequent tick, decrement `waitRemaining`
     - when `waitRemaining == 0`, advance `pc` to the next line and continue next tick
 
-- `NOP`
+#### Non-blocking timers (bot-local)
+Non-blocking timers are **per-bot state**, updated deterministically once per simulation tick.
+- They are not wall-clock time.
+- They do not affect match scheduling; they only affect bot logic.
+
+Update semantics (recommended):
+- `SET_TIMER T1 5` sets remaining ticks to `5`.
+- At the **end of each simulation tick**, timers decrement by 1 until they reach `0`.
+- Setting a timer again overwrites its remaining time.
+
+Instructions:
+- `SET_TIMER <TIMER> <TICKS>`
+- `CLEAR_TIMER <TIMER>`
 
 ---
 
@@ -253,6 +269,14 @@ Bump semantics:
   - mover sees the direction it moved
   - the other bot sees the opposite direction
 
+Timers (bot-local, non-blocking):
+- `TIMER_REMAINING(<TIMER>)` → int
+  - returns remaining ticks (0 means done)
+- `TIMER_ACTIVE(<TIMER>)` → bool
+  - true iff remaining ticks > 0
+- `TIMER_DONE(<TIMER>)` → bool
+  - true iff remaining ticks == 0
+
 ### 6.4 Common patterns
 
 "Powerup close" should be expressed using distance:
@@ -302,7 +326,25 @@ IF (DIST_TO_CLOSEST_BOT() <= 1) DO MOVE_TO_CLOSEST_BOT
 GOTO LOOP
 ```
 
-### Example D — If bumped another bot, turn SAW on for 5 ticks
+### Example D — If bumped another bot, turn SAW on for 5 ticks (non-blocking timer)
+
+```text
+LABEL LOOP
+
+; when we bump a bot, start a 5-tick saw window
+IF (BUMPED_BOT()) DO SAW ON
+IF (BUMPED_BOT()) DO SET_TIMER T1 5
+
+; keep doing other logic here (move, shoot, etc.)
+MOVE_TO_CLOSEST_BOT
+
+; when timer expires, turn saw off
+IF (TIMER_DONE(T1)) DO SAW OFF
+
+GOTO LOOP
+```
+
+### Example E — If bumped another bot, turn SAW on for 5 ticks (blocking WAIT)
 
 ```text
 LABEL LOOP
@@ -316,7 +358,7 @@ SAW OFF
 GOTO LOOP
 ```
 
-### Example E — If too close to a wall, move away
+### Example F — If too close to a wall, move away
 
 ```text
 LABEL LOOP
