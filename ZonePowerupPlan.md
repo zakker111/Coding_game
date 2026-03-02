@@ -73,9 +73,12 @@ From `Ruleset.md`:
 ### 4.1 Spawn schedule
 
 - A **global** `spawnRemainingTicks` controls overall spawn rate.
-- Spawn interval parameters must satisfy:
-  - `powerupSpawnIntervalMaxTicks <= ticksPerSecond * 60`
-  - so the system spawns **at least 1 powerup per simulated minute** (if a spawn anchor is free).
+- Timing decisions (v1):
+  - `ticksPerSecond = 1` (so `1 tick = 1 second`)
+  - after each spawn attempt, reset the timer by sampling an integer uniformly from **[10, 20] ticks** (so **10–20 seconds**)
+  - equivalently: `powerupSpawnIntervalMinTicks = 10`, `powerupSpawnIntervalMaxTicks = 20`
+- General constraint (still applies if timing becomes configurable later):
+  - `powerupSpawnIntervalMaxTicks <= ticksPerSecond * 60` (≥ 1 spawn/min)
 
 On spawn:
 - pick an empty anchor among the 45 anchors (seeded RNG)

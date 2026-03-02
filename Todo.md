@@ -109,9 +109,12 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - `SECTOR 1..9 ZONE 1..4`
   - total spawn locations = **45**
 - Locked direction: use a **global spawn timer** (not per-location respawns) so you can enforce a predictable overall spawn rate.
-- Still to define (ruleset parameters; see `Ruleset.md`):
-  - `ticksPerSecond` (defines “1 minute” in ticks)
-  - spawn interval range (`minTicks`, `maxTicks`) with `maxTicks <= ticksPerSecond * 60` (≥ 1 spawn/min)
+- Locked timing (ruleset parameters; see `Ruleset.md`):
+  - `ticksPerSecond = 1` (so `1 tick = 1 second`)
+  - spawn interval: sample uniformly from **[10, 20] ticks** (so **10–20 seconds**)
+    - `powerupSpawnIntervalMinTicks = 10`
+    - `powerupSpawnIntervalMaxTicks = 20`
+- Still to define (other ruleset parameters; see `Ruleset.md`):
   - optional `powerupMaxActive`
   - per-type distribution (weights)
   - fixed per-type deltas (`powerupHealthDelta`, `powerupAmmoDelta`, `powerupEnergyDelta`)

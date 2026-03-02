@@ -154,22 +154,33 @@ Powerups can spawn at the location anchors from `ArenaPlan.md`:
 - sector centers: `SECTOR 1..9`
 - zone centers: `SECTOR 1..9 ZONE 1..4`
 
+Zone numbering (per `ArenaPlan.md` / `UIPlan.md`):
+- `ZONE 1` = top-left
+- `ZONE 2` = top-right
+- `ZONE 3` = bottom-left
+- `ZONE 4` = bottom-right
+
+In replays/events, encode anchors as `loc = { sector, zone }` (see `ReplayViewerPlan.md`):
+- `SECTOR s` → `{ sector: s, zone: 0 }`
+- `SECTOR s ZONE z` → `{ sector: s, zone: z }`
+
 Total spawn locations: `9 + 9*4 = 45`.
 
 At most one powerup can exist at a given spawn location at a time.
 
-### 7.2 Spawn schedule (random but deterministic; ≥ 1 per minute)
+### 7.2 Spawn schedule (random but deterministic; 10–20 seconds)
 
 Powerup spawning is driven by a **single global spawn timer** so the overall spawn rate is controllable.
 
 Ruleset parameters (must be stored with `rulesetVersion`):
-- `ticksPerSecond` (integer)
-  - defines how many simulation ticks represent 1 second of “sim time”
-- `powerupSpawnIntervalMinTicks`
-- `powerupSpawnIntervalMaxTicks`
+- `ticksPerSecond` (integer; v1 fixed to `1`)
+  - `1 tick = 1 second` of simulated time
+- `powerupSpawnIntervalMinTicks` (v1: `10`)
+- `powerupSpawnIntervalMaxTicks` (v1: `20`)
   - must satisfy:
     - `powerupSpawnIntervalMaxTicks <= ticksPerSecond * 60`
     - this guarantees **at least one spawn per simulated minute** (as long as there is an empty spawn anchor)
+  - with v1 values, the spawn interval is **10–20 seconds** (10–20 ticks)
 - `powerupMaxActive` (optional cap; prevents arena clutter)
 - `powerupTypeWeights` (optional; if not provided, use uniform)
 
@@ -177,7 +188,7 @@ State:
 - `spawnRemainingTicks` (integer >= 0)
 
 Deterministic update:
-- At match start, initialize `spawnRemainingTicks` by sampling from `[min,max]` using the match RNG.
+- At match start, initialize `spawnRemainingTicks` by sampling an integer uniformly from `[min,max]` using the match RNG.
 - At the end of each tick:
   1) decrement `spawnRemainingTicks` down to `0`
   2) if `spawnRemainingTicks == 0`, attempt to spawn **one** powerup:
@@ -192,7 +203,7 @@ Deterministic update:
        - else pick one empty anchor using seeded RNG (index into the ordered list)
      - choose powerup `type` (see §7.3)
      - create the powerup at that anchor and emit `POWERUP_SPAWN`
-     - reset `spawnRemainingTicks` by sampling `[min,max]` again
+     - reset `spawnRemainingTicks` by sampling an integer uniformly from `[min,max]` again
 
 ### 7.3 Choosing the spawned powerup type
 
@@ -205,7 +216,8 @@ Recommended v1 policy:
 ### 7.4 Pickup semantics (collision)
 
 Pickup phase (see tick ordering in `ServerSimulationPlan.md`):
-- If a bot’s location anchor equals a powerup’s location anchor, the bot **collides** with the powerup and automatically picks it up.
+- If an **alive** bot’s location anchor equals a powerup’s location anchor, the bot **collides** with the powerup and automatically picks it up.
+  - Bots that reached `health <= 0` earlier in the tick do not pick up powerups later in the tick.
 - Apply a **fixed amount** per powerup type (this principle should hold for any future powerup too):
   - `HEALTH`: `health = min(100, health + powerupHealthDelta)`
   - `AMMO`: `ammo = min(100, ammo + powerupAmmoDelta)`

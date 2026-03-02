@@ -58,9 +58,10 @@ Core regions (align with `UIPlan.md`):
 - bottom timeline (ticks)
 - optional event log
 
-Playback controls:
+Playback controls (v1 minimum):
 - play/pause
 - step +1
+- step -1 (only if the replay storage strategy supports reverse seeking)
 - scrub to tick
 - speed presets
 
@@ -68,6 +69,22 @@ Inspection:
 - clicking a bot focuses it in the right panel
 - highlight executed line (`pc`) at the current tick
 - show per-tick result (executed/no-op/error) + reason
+
+### 2.3 Viewer state model + deep-linking (recommended)
+
+Treat the viewer as a pure function of:
+- `(replayData, playheadTick, selectedBotId)`
+
+Recommended URL params (so refresh/share works):
+- `tick` (playhead)
+- `bot` (selected bot)
+- `speed` (playback)
+- `follow` (for live runs)
+
+Live simulation mode (local runner):
+- support **Follow Live** (auto-advance playhead to newest tick)
+- if the user scrubs back, disable Follow Live automatically
+- provide **Jump to Live** button
 
 ---
 
@@ -98,6 +115,7 @@ A replay should support 2 independent requirements:
 
 Pros:
 - simplest UI seeking
+- reverse stepping is trivial (step -1 just loads tick-1)
 
 Cons:
 - large payloads
@@ -114,10 +132,11 @@ Pros:
 
 Cons:
 - UI needs reconstruction logic
+- reverse stepping requires checkpoints (otherwise you must replay events from the start)
 
 Client-first recommendation:
 - start with **A** for local testing
-- move to **B** once server storage becomes important
+- move to **B** once replays get large / server storage matters
 
 ---
 
@@ -150,6 +169,9 @@ Encode every location as:
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
 ### 4.4 Powerups
+
+Timing note:
+- `POWERUP_SPAWN` happens during end-of-tick maintenance (after pickups). A powerup spawned on tick `t` is first eligible to be picked up on tick `t+1`.
 
 - `POWERUP_SPAWN`:
   - `powerupId`, `type`, `loc`
@@ -195,8 +217,6 @@ Encode every location as:
 - `BOT_DIED`:
   - `victimBotId`, `creditedBotId?`
 
----
-
 ## 5) Client data sources (now vs later)
 
 ### 5.1 Now (client-only)
@@ -205,6 +225,14 @@ Encode every location as:
 - store replays in:
   - IndexedDB (recommended)
   - or localStorage for tiny payloads
+
+Recommended local persistence UX:
+- when a match finishes, show a **Save Replay** dialog:
+  - default name like: `Local Match — YYYY-MM-DD HH:mm`
+  - actions: Save / Discard / Export JSON
+- maintain a lightweight replay index for listing:
+  - `{ replayId, createdAt, mode, participants, winner, tickCount, rulesetVersion }`
+- allow **Import replay** (JSON file) to insert into local library
 
 ### 5.2 Later (server)
 
@@ -235,10 +263,11 @@ These endpoints are enough to power the browser replay UX:
 
 - Rendering should be driven by replay state/events, not by re-running logic in the UI.
 - Use the same coordinate system as `UIPlan.md` / `ArenaPlan.md` (sector + zone grid).
-- Provide an "event log" panel that can be filtered by:
+- Provide an event log panel that can be filtered by:
   - bot
   - tick range
   - event types (moves, bumps, damage, pickups, spawns)
+- Deep-link viewer state in URLs (recommended): `tick`, `bot`, `speed`, `follow`.
 
 ---
 

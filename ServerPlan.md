@@ -151,8 +151,13 @@ Powerups spawn randomly, but must be deterministic:
   - `SECTOR 1..9 ZONE 1..4` (zone centers)
 - spawning is driven by a **single global spawn timer** (see `Ruleset.md`) so the overall spawn rate is controllable
 
-Still to define (ruleset parameters):
-- `ticksPerSecond` and spawn interval range (with ≥ 1 spawn/min)
+Ruleset timing (locked):
+- `ticksPerSecond = 1` (so `1 tick = 1 second`)
+- powerup spawn interval is sampled uniformly from **[10, 20] ticks** (so **10–20 seconds**)
+  - `powerupSpawnIntervalMinTicks = 10`
+  - `powerupSpawnIntervalMaxTicks = 20`
+
+Still to define (other ruleset parameters):
 - optional max active powerups
 - per-type distribution (weights)
 - fixed per-type pickup deltas

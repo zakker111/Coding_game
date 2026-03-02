@@ -139,14 +139,17 @@ Recommended tick phases:
    - mine detonation (AoE)
 
 6) **Pickups**
-   - powerup pickup: bot occupies same location anchor as a powerup
+   - powerup pickup: an **alive** bot occupies the same location anchor as a powerup
+   - deterministic ordering: process bots in `BOT1..BOT4` order (see `Ruleset.md`)
 
 7) **Deaths + win checks**
-   - apply `BOT_DIED` and remove dead bots from the arena
+   - bots become **dead immediately** when `health <= 0` during earlier phases (per `Ruleset.md`) and should be skipped by subsequent phase logic in the same tick
+   - in this phase, emit `BOT_DIED` and remove dead bots from the arena (so the replay/stat updates happen at a stable point)
 
 8) **End-of-tick maintenance**
    - decrement cooldowns and bot-local timers
-   - update the global powerup spawn timer and spawn (see `Ruleset.md`)
+   - decrement the global powerup spawn timer; if it reaches `0`, attempt to spawn one powerup and reset the timer (see `Ruleset.md`)
+   - because spawn happens after pickups, newly spawned powerups cannot be picked up until the next tick
 
 ---
 
