@@ -11,7 +11,8 @@ This is a **single-line-per-tick** language:
 > Notation:
 > - `<BOT>`: `BOT1|BOT2|BOT3|BOT4`
 > - `<TYPE>`: `HEALTH|AMMO|ENERGY`
-> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET`
+> - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET` (subset of `<TARGET>`)
+> - `<TARGET>`: `<BOT_TARGET>|SECTOR <SECTOR>|SELF|NONE`
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..9` (alias of sectors in v1)
@@ -103,6 +104,10 @@ Notes:
 
 ## 3) Movement
 
+### 3.0 One-step movement (immediate)
+
+These instructions attempt **exactly one** sector step during the movement phase of the current tick.
+
 - `MOVE <DIR>`
 - `MOVE_TO_SECTOR <SECTOR>`
 - `MOVE_TO_ZONE <ZONE>` (alias of `MOVE_TO_SECTOR` in v1)
@@ -118,7 +123,7 @@ Powerups:
   - Deterministic ties: smallest sector id.
 - `MOVE_TO_CLOSEST_POWERUP <TYPE>` (alias of `MOVE_TO_POWERUP <TYPE>`)
 
-Enemy convenience (single-instruction):
+Enemy convenience:
 - `MOVE_TO_CLOSEST_BOT`
   - Moves one step toward the closest **alive** bot.
   - Ties: lowest bot id.
@@ -136,6 +141,35 @@ Target-driven movement:
   - If `targetBotId` is set and alive: behaves like `MOVE_TO_BOT <targetBotId>`
   - Else if `targetPowerupType` is set and such a powerup exists: behaves like `MOVE_TO_POWERUP <targetPowerupType>`
   - Else: no-op
+
+### 3.1 Persistent navigation goals (move while doing other actions)
+
+These instructions set a **movement goal** in bot state. When a goal is set, the bot will attempt to move **1 step per tick** toward that goal **even on ticks where its instruction is something else** (shooting, targeting, timers, etc.).
+
+This is the mechanism that enables: “move to sector 1 until I say otherwise, and keep shooting while moving”.
+
+Instructions:
+- `SET_MOVE_TO_SECTOR <SECTOR>`
+- `SET_MOVE_TO_BOT <BOT_TARGET>`
+- `SET_MOVE_TO_POWERUP <TYPE>`
+- `SET_MOVE_TO_TARGET`
+- `CLEAR_MOVE`
+
+Resolution rules (recommended):
+- Each tick, the engine determines one `moveRequest` per bot:
+  - if the bot executed an **immediate movement** instruction this tick (§3.0), use that movement.
+  - else if the bot has a **movement goal** active, derive a movement step from the goal.
+  - else: no movement.
+- Movement goals are evaluated deterministically (same path tie-break rules as `MOVE_TO_*`).
+
+Goal completion:
+- `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches that sector.
+- `SET_MOVE_TO_POWERUP`: clears when the bot picks up the targeted powerup, or if no such powerup exists.
+- `SET_MOVE_TO_BOT` / `SET_MOVE_TO_TARGET`: clears when the resolved target bot is dead/missing.
+
+Notes:
+- `CLEAR_MOVE` stops automatic movement.
+- Bump events (`BUMPED_WALL*`, `BUMPED_BOT*`) apply regardless of whether movement came from an immediate move or a movement goal.
 
 ---
 
@@ -166,13 +200,18 @@ Slot-addressed actions are the **future-proof** layer for adding new modules wit
 
 ### 5.1 Generic slot use (recommended)
 
-- `USE_SLOT1 <BOT_TARGET>`
-- `USE_SLOT2 <BOT_TARGET>`
-- `USE_SLOT3 <BOT_TARGET>`
+- `USE_SLOT1 <TARGET>`
+- `USE_SLOT2 <TARGET>`
+- `USE_SLOT3 <TARGET>`
 
 Semantics:
 - Triggers the **primary action** of whatever module is equipped in that slot.
+- Target is passed to the module:
+  - bot targets: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`
+  - location targets: `SECTOR <SECTOR>`
+  - `SELF` / `NONE`
 - Modules may ignore targets that are not relevant.
+- If a module requires a different target kind, using the wrong target kind is a no-op.
 
 To turn off toggles via slot:
 - `STOP_SLOT1`
@@ -181,12 +220,12 @@ To turn off toggles via slot:
 
 ### 5.2 Compatibility aliases (v1)
 
-- `FIRE_SLOT1 <BOT_TARGET>` (alias of `USE_SLOT1 <BOT_TARGET>`)
-- `FIRE_SLOT2 <BOT_TARGET>` (alias of `USE_SLOT2 <BOT_TARGET>`)
-- `FIRE_SLOT3 <BOT_TARGET>` (alias of `USE_SLOT3 <BOT_TARGET>`)
+- `FIRE_SLOT1 <TARGET>` (alias of `USE_SLOT1 <TARGET>`)
+- `FIRE_SLOT2 <TARGET>` (alias of `USE_SLOT2 <TARGET>`)
+- `FIRE_SLOT3 <TARGET>` (alias of `USE_SLOT3 <TARGET>`)
 
 Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
-- If slot contains **BULLET**: fires at `<BOT_TARGET>`.
+- If slot contains **BULLET**: fires at `<BOT_TARGET>` (location targets are ignored in v1).
 - If slot contains **SAW**: same as `SAW ON` (target ignored).
 - If slot contains **SHIELD**: same as `SHIELD ON` (target ignored).
 - If slot contains **ARMOR**: no-op (passive).
@@ -292,6 +331,19 @@ Timers (bot-local, non-blocking):
 - `TIMER_DONE(<TIMER>)` → bool
   - true iff remaining ticks == 0
 
+Slot/module state:
+- `HAS_MODULE(<SLOT>)` → bool
+  - true iff that slot has a module equipped
+- `COOLDOWN_REMAINING(<SLOT>)` → int
+  - remaining ticks of cooldown (`0` means ready)
+- `SLOT_READY(<SLOT>)` → bool
+  - true iff:
+    - the slot has a module
+    - cooldown is `0`
+    - the bot has enough ammo/energy to pay the module’s activation cost (vector)
+- `SLOT_ACTIVE(<SLOT>)` → bool
+  - true iff the module in that slot is currently active (toggle modules)
+
 ### 6.4 Common patterns
 
 "Powerup close" should be expressed using distance:
@@ -381,5 +433,24 @@ IF (DIST_TO_WALL(LEFT) == 0) DO MOVE RIGHT
 IF (DIST_TO_WALL(RIGHT) == 0) DO MOVE LEFT
 IF (DIST_TO_WALL(UP) == 0) DO MOVE DOWN
 IF (DIST_TO_WALL(DOWN) == 0) DO MOVE UP
+GOTO LOOP
+```
+
+### Example G — Set a move goal once, keep shooting while moving
+
+This demonstrates the “move to a sector until told otherwise” style.
+
+```text
+; start navigating to sector 1
+SET_MOVE_TO_SECTOR 1
+
+LABEL LOOP
+
+; keep firing when ready, even while auto-moving
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 CLOSEST_BOT
+
+; if we bumped a bot last tick, turn saw on
+IF (BUMPED_BOT()) DO SAW ON
+
 GOTO LOOP
 ```

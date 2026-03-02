@@ -26,6 +26,11 @@ This file is the **single source of truth** for near-term engineering tasks and 
 ### Bot language
 - JS-like **line-based instruction language** (see `BotInstructions.md`).
 - Scripts compile/validate to a safe internal form (no `eval`).
+- Slot targeting supports a generalized `<TARGET>` union:
+  - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`)
+  - location targets (`SECTOR n`)
+  - `SELF` / `NONE`
+- Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 
 ### Loadout / modules
 - Each bot has **3 slots**.

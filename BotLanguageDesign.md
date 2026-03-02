@@ -54,6 +54,14 @@ A fun bot language usually has:
 
 Module definitions should live in a separate evolving document (or data schema), e.g. `Modules.md` later.
 
+### 2.3 Persistent movement goals (quality-of-life)
+
+If you want bots to **navigate while still attacking** (less repetitive scripts), keep one-step movement instructions, but also support a **movement goal** state:
+- a single instruction sets a goal (sector/bot/powerup)
+- the engine attempts 1 step per tick toward that goal until cleared/complete
+
+This is now specified in `BotInstructions.md` (§3.1).
+
 A module definition includes:
 - costs: `costAmmo`, `costEnergy` (vector)
 - cooldown: `cooldownOnUseTicks`
