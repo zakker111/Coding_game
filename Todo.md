@@ -73,12 +73,20 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - How ties are handled.
 
 ### Powerup spawning
-- Locked: powerups spawn **randomly**.
+- Locked: powerups spawn **randomly (seeded)**.
 - Still to define:
   - spawn frequency / cooldown
   - per-type distribution (health vs ammo vs energy)
   - max concurrent powerups
   - deterministic spawn algorithm details (seeded RNG stream)
+
+### Daily competition format
+- Locked direction: **everyone entered fights everyone** (round-robin style).
+- Still to define:
+  - match grouping (1v1 only vs 3–4 bots per match)
+  - daily points formula (win/loss only vs win/loss + performance stats)
+  - tie-break rules
+  - scaling strategy if bot count becomes large
 
 ### Observability / bot sensing
 - Finalize what bots can sense about:
