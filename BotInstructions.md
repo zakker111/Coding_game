@@ -10,18 +10,26 @@ This is a **single-line-per-tick** language:
 > - `<BOT_TARGET>`: `<BOT>|CLOSEST_BOT|TARGET`
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
+> - `<ZONE>`: `1..9` (alias of sectors in v1)
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 >
 > Where:
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
-> - No duplicate modules i</old_code><new_code>## 1) Control flow
+> - No duplicate modules in slots in v1.
 
-- `LABE <<name>`
-- `GOT <<name>`
-- `I <<EXPR> GOT <<name>`
-   `<<EXPR>` is a **C-like boolean expression** (see §6).
-- `I <`EXPR
+---
+
+## 1) Control flow
+
+- `LABEL <name>`
+- `GOTO <name>`
+- `IF <EXPR> GOTO <name>`
+  - `<EXPR>` is a **C-like boolean expression** (see §6).
+- `IF <EXPR> DO <INSTR>`
+  - Convenience form: evaluate `<EXPR>`; if true, execute `<INSTR>`; otherwise do nothing.
+  - `<INSTR>` must be a **single non-control instruction** (movement / module action / target selection).
+- `NOP`
 
 ---
 
@@ -65,25 +73,31 @@ Notes:
 
 - `MOVE <DIR>`
 - `MOVE_TO_SECTOR <SECTOR>`
+- `MOVE_TO_ZONE <ZONE>` (alias of `MOVE_TO_SECTOR` in v1)
+
+Bot chasing:
 - `MOVE_TO_BOT <BOT>`
   - Moves one step toward that bot.
+  - If the bot is dead, this is a no-op.
 
+Powerups:
 - `MOVE_TO_POWERUP <TYPE>`
   - Moves one step toward the **closest** powerup of that type.
-  - Deterministic ties: smallest sector id, then (if needed) stable spawn order.
+  - Deterministic ties: smallest sector id.
+- `MOVE_TO_CLOSEST_POWERUP <TYPE>` (alias of `MOVE_TO_POWERUP <TYPE>`)
 
-Convenience (single-instruction “closest” behaviors):
+Enemy convenience (single-instruction):
 - `MOVE_TO_CLOSEST_BOT`
   - Moves one step toward the closest **alive** bot.
   - Ties: lowest bot id.
-
 - `MOVE_TO_LOWEST_HEALTH_BOT`
   - Moves one step toward the alive bot with the lowest health.
   - Ties: lowest bot id.
 
 Walls / arena edge (v1 = outer boundary only):
-- `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT`
+- `MOVE_TO_ARENA_EDGE <DIR>`
   - Moves one step toward the outer boundary in that direction.
+- `MOVE_TO_WALL <DIR>` (alias of `MOVE_TO_ARENA_EDGE <DIR>`)
 
 Target-driven movement:
 - `MOVE_TO_TARGET`
@@ -141,7 +155,7 @@ Optional convenience:
 
 ---
 
-## 6) Expressions (for `IF ... GOTO ...`)
+## 6) Expressions (for `IF ...`)
 
 `IF` conditions use a small, deterministic, **C-like** expression language.
 
@@ -185,7 +199,9 @@ Distances (Manhattan distance over sectors):
 - `DIST_TO_TARGET_BOT()` → int
   - if no valid target bot exists, returns `999`
 - `DIST_TO_CLOSEST_BOT()` → int
-  - distance to the closest alive bot (ties: lowest bot id)
+  - distance to the closest alive bot (ties: lowest bot id); returns `999` if none
+- `DIST_TO_SECTOR(<SECTOR>)` → int
+- `DIST_TO_ZONE(<ZONE>)` → int (alias of `DIST_TO_SECTOR` in v1)
 
 Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool
@@ -204,6 +220,7 @@ Arena edges / walls (outer boundary in v1):
 - `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)` → int
   - returns how many sector-steps to the outer wall in that direction
   - `0` means you are currently at the edge
+- `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` → int (alias of `DIST_TO_ARENA_EDGE`)
 
 Bumps (read last tick result):
 - `BUMPED_WALL()` → bool
@@ -218,12 +235,6 @@ Bumps (read last tick result):
 
 ```text
 IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
-```
-
-"Finish low-health bot" should be expressed using target + threshold:
-
-```text
-IF (HAS_TARGET_BOT() && TARGET_HEALTH < 10) GOTO FINISH
 ```
 
 ---
@@ -243,69 +254,29 @@ MOVE_TO_TARGET
 GOTO LOOP
 ```
 
-### Example B — If any bot is low health, target and shoot it
+### Example B — One-line form: if health powerup is close, move to it
 
 ```text
 LABEL LOOP
-TARGET_LOWEST_HEALTH
-IF (HAS_TARGET_BOT() && TARGET_HEALTH < 10) GOTO FINISH
-GOTO LOOP
-
-LABEL FINISH
-FIRE_SLOT1 TARGET
+IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) DO MOVE_TO_POWERUP HEALTH
 GOTO LOOP
 ```
 
-### Example C — If health powerup is close, take it; otherwise fight
+### Example C — If enemy is close, chase it
 
 ```text
 LABEL LOOP
-IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
-GOTO FIGHT
-
-LABEL GET_HP
-MOVE_TO_POWERUP HEALTH
-GOTO LOOP
-
-LABEL FIGHT
-TARGET_CLOSEST
-FIRE_SLOT1 TARGET
-MOVE_TO_TARGET
+IF (DIST_TO_CLOSEST_BOT() <= 1) DO MOVE_TO_CLOSEST_BOT
 GOTO LOOP
 ```
 
-### Example D — If enemy is close, chase it
+### Example D — If too close to a wall, move away
 
 ```text
 LABEL LOOP
-IF (DIST_TO_CLOSEST_BOT() <= 1) GOTO CHASE
-GOTO LOOP
-
-LABEL CHASE
-MOVE_TO_CLOSEST_BOT
-GOTO LOOP
-```
-
-### Example E — If too close to a wall, move away
-
-```text
-LABEL LOOP
-IF (DIST_TO_ARENA_EDGE(LEFT) == 0) GOTO MOVE_RIGHT
-IF (DIST_TO_ARENA_EDGE(RIGHT) == 0) GOTO MOVE_LEFT
-IF (DIST_TO_ARENA_EDGE(UP) == 0) GOTO MOVE_DOWN
-IF (DIST_TO_ARENA_EDGE(DOWN) == 0) GOTO MOVE_UP
-GOTO LOOP
-
-LABEL MOVE_RIGHT
-MOVE RIGHT
-GOTO LOOP
-LABEL MOVE_LEFT
-MOVE LEFT
-GOTO LOOP
-LABEL MOVE_DOWN
-MOVE DOWN
-GOTO LOOP
-LABEL MOVE_UP
-MOVE UP
+IF (DIST_TO_WALL(LEFT) == 0) DO MOVE RIGHT
+IF (DIST_TO_WALL(RIGHT) == 0) DO MOVE LEFT
+IF (DIST_TO_WALL(UP) == 0) DO MOVE DOWN
+IF (DIST_TO_WALL(DOWN) == 0) DO MOVE UP
 GOTO LOOP
 ```
