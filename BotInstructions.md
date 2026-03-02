@@ -15,6 +15,8 @@ This is a **single-line-per-tick** language:
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 >
 > Where:
+> - `BOT1..BOT4` are **match slot identifiers** (deterministic engine ids).
+> - Bots may also have a **display name** in UI/server contexts, but scripts still refer to match slots as `BOT1..BOT4`.
 > - `TARGET` refers to the bot’s current `targetBotId`.
 > - All numeric values are integers.
 > - No duplicate modules in slots in v1.

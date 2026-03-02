@@ -10,6 +10,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Client + server from day 1**:
   - **Client**: bot editor + local test runs + replay viewer (UI details later)
   - **Server**: headless match runner for **daily simulations**
+- Bots have a user-facing **display name** (server-side entity field exists; UI should show name + match slot id).
 
 ### Simulation model
 - **Tick-based** match loop.
