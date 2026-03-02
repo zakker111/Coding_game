@@ -1,5 +1,8 @@
 # Bot Instruction List (v1)
 
+> This file specifies the **stable v1 bot language**.
+> For future-proof planning (lasers/snipers/teleport/grenades/mines/helpers) without bloating the opcode list, see `BotLanguageDesign.md`.
+
 This is a **single-line-per-tick** language:
 - Each bot executes **exactly 1 instruction per tick** at its current `pc` (program counter).
 - If an instruction is invalid or malformed at runtime, it is treated as `NOP`, and `pc` resets to `1` next tick (per-bot; does not crash the match).
