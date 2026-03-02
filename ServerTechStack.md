@@ -29,6 +29,8 @@ It complements:
 
 ## 2) Recommended default stack (good v1 fit)
 
+This is the best long-term fit, but for **early testing** (e.g., ~10 bots, ~10 matches/day) you can run a simpler configuration; see §2.8.
+
 ### 2.1 Language/runtime
 
 **TypeScript + Node.js (LTS)**
@@ -89,6 +91,26 @@ Small-v1 shortcut:
   - `worker` service (can scale horizontally)
   - `postgres`
   - `redis`
+
+### 2.8 Minimal testing setup (recommended for your current scale)
+
+Given your expected initial scale (~10 bots, ~10 matches/day), you can start with fewer moving parts and still be aligned with the long-term architecture.
+
+Minimal setup:
+- Runtime: **Node.js + TypeScript**
+- Deployment: **single server / docker-compose**
+- DB: **PostgreSQL**
+- Queue: **DB-backed queue table** (polling) instead of Redis
+- Replays: store compressed replay blobs in **Postgres** (acceptable at small scale)
+- Scheduler: **manual trigger** or **OS cron** calling a CLI/HTTP endpoint
+
+Why this is a good v0:
+- simplest infra (Postgres is the only stateful dependency)
+- easy local dev + easy deploy
+- you can later swap:
+  - DB queue -> Redis/BullMQ
+  - replay blobs in DB -> object storage
+  - single worker -> multiple workers
 
 ---
 
