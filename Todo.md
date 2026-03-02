@@ -52,7 +52,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
 ### Resources
 - `health`, `ammo`, `energy` are integers in **0..100**.
 - **No passive regeneration** (especially: **energy does not regenerate**).
-- **Powerups** exist for `HEALTH|AMMO|ENERGY` and refill up to 100 (no overflow).
+- **Powerups** exist for `HEALTH|AMMO|ENERGY`.
+  - On pickup they apply a **fixed per-type delta** (same amount every time), capped at 100.
+  - The exact deltas are ruleset parameters (see `Ruleset.md`).
 - Resource failure behavior (locked): bots may attempt actions, but if out of ammo/energy the action **does nothing**.
 
 ### Projectiles / explosives
@@ -106,11 +108,13 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - `SECTOR 1..9`
   - `SECTOR 1..9 ZONE 1..4`
   - total spawn locations = **45**
-- Still to define:
-  - respawn timer range (`minTicks`, `maxTicks`) per location
-  - per-type distribution (health vs ammo vs energy)
-  - whether powerups are full refills (`=100`) or partial refills (+N, capped at 100)
-  - deterministic spawn algorithm details (seeded RNG stream + stable per-location processing order)
+- Locked direction: use a **global spawn timer** (not per-location respawns) so you can enforce a predictable overall spawn rate.
+- Still to define (ruleset parameters; see `Ruleset.md`):
+  - `ticksPerSecond` (defines “1 minute” in ticks)
+  - spawn interval range (`minTicks`, `maxTicks`) with `maxTicks <= ticksPerSecond * 60` (≥ 1 spawn/min)
+  - optional `powerupMaxActive`
+  - per-type distribution (weights)
+  - fixed per-type deltas (`powerupHealthDelta`, `powerupAmmoDelta`, `powerupEnergyDelta`)
 
 ### Daily competition format
 - Locked direction: **daily competition with 4-player matches** and **season points**.

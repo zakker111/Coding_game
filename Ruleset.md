@@ -158,48 +158,69 @@ Total spawn locations: `9 + 9*4 = 45`.
 
 At most one powerup can exist at a given spawn location at a time.
 
-### 7.2 Respawn timers (random but deterministic)
+### 7.2 Spawn schedule (random but deterministic; ≥ 1 per minute)
 
-Each spawn location maintains its own respawn timer:
-- `respawnRemainingTicks` (integer, >= 0)
+Powerup spawning is driven by a **single global spawn timer** so the overall spawn rate is controllable.
 
-Rules:
-- At match start, each location is initialized with `respawnRemainingTicks` sampled from a seeded RNG.
-- At the end of each tick, if there is **no** powerup currently occupying the location, decrement `respawnRemainingTicks` down to `0`.
-- When `respawnRemainingTicks == 0` and the location is empty:
-  - spawn exactly one powerup at that location
-  - then immediately reset `respawnRemainingTicks` by sampling again from the seeded RNG
+Ruleset parameters (must be stored with `rulesetVersion`):
+- `ticksPerSecond` (integer)
+  - defines how many simulation ticks represent 1 second of “sim time”
+- `powerupSpawnIntervalMinTicks`
+- `powerupSpawnIntervalMaxTicks`
+  - must satisfy:
+    - `powerupSpawnIntervalMaxTicks <= ticksPerSecond * 60`
+    - this guarantees **at least one spawn per simulated minute** (as long as there is an empty spawn anchor)
+- `powerupMaxActive` (optional cap; prevents arena clutter)
+- `powerupTypeWeights` (optional; if not provided, use uniform)
 
-Parameters (to decide later, but must be stored in ruleset version):
-- `powerupRespawnMinTicks`
-- `powerupRespawnMaxTicks`
+State:
+- `spawnRemainingTicks` (integer >= 0)
 
-Deterministic requirement:
-- Locations must be processed in a stable order when ticking timers/spawning:
-  - sector id ascending
-  - sector center first
-  - then zones 1..4
+Deterministic update:
+- At match start, initialize `spawnRemainingTicks` by sampling from `[min,max]` using the match RNG.
+- At the end of each tick:
+  1) decrement `spawnRemainingTicks` down to `0`
+  2) if `spawnRemainingTicks == 0`, attempt to spawn **one** powerup:
+     - if `powerupMaxActive` is set and active powerups already equal the cap: do not spawn; set `spawnRemainingTicks = 1` (retry next tick)
+     - else choose a spawn location:
+       - compute the set of **empty** spawn anchors (45 anchors; see §7.1)
+         - enumerate anchors in a stable order:
+           - sector id ascending
+           - sector center first (`zone=0`)
+           - then zones 1..4
+       - if none are empty: set `spawnRemainingTicks = 1` (retry next tick)
+       - else pick one empty anchor using seeded RNG (index into the ordered list)
+     - choose powerup `type` (see §7.3)
+     - create the powerup at that anchor and emit `POWERUP_SPAWN`
+     - reset `spawnRemainingTicks` by sampling `[min,max]` again
 
 ### 7.3 Choosing the spawned powerup type
 
 When a spawn occurs, choose the type using the seeded RNG.
 
-Options (pick one and lock in the ruleset):
-- A) uniform among `HEALTH|AMMO|ENERGY`
-- B) weighted distribution (example: less `HEALTH`, more `AMMO/ENERGY`)
+Recommended v1 policy:
+- weighted distribution via `powerupTypeWeights`
+- if weights not provided, default to uniform among `HEALTH|AMMO|ENERGY`
 
-If you choose weights, the weights must be part of `rulesetVersion`.
-
-### 7.4 Pickup semantics
+### 7.4 Pickup semantics (collision)
 
 Pickup phase (see tick ordering in `ServerSimulationPlan.md`):
-- If a bot occupies the same location anchor as a powerup, it automatically picks it up.
-- Apply refill (locked; no overflow):
-  - `HEALTH` sets `health = 100`
-  - `AMMO` sets `ammo = 100`
-  - `ENERGY` sets `energy = 100`
+- If a bot’s location anchor equals a powerup’s location anchor, the bot **collides** with the powerup and automatically picks it up.
+- Apply a **fixed amount** per powerup type (this principle should hold for any future powerup too):
+  - `HEALTH`: `health = min(100, health + powerupHealthDelta)`
+  - `AMMO`: `ammo = min(100, ammo + powerupAmmoDelta)`
+  - `ENERGY`: `energy = min(100, energy + powerupEnergyDelta)`
 - Remove the powerup entity from the arena.
+
+Ruleset parameters:
+- `powerupHealthDelta` (int)
+- `powerupAmmoDelta` (int)
+- `powerupEnergyDelta` (int)
 
 Deterministic ordering:
 - If multiple pickups would occur in the same tick (different bots at different powerups), process bots in `BOT1..BOT4` order.
+
+Future (physics migration):
+- if/when the simulation moves to continuous positions, “collision” becomes 32×32 AABB overlap.
+- the pickup semantics above remain the same; only collision detection changes.
 

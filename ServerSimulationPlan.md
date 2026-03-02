@@ -146,7 +146,7 @@ Recommended tick phases:
 
 8) **End-of-tick maintenance**
    - decrement cooldowns and bot-local timers
-   - powerup respawn timers tick/spawn (see `Ruleset.md`)
+   - update the global powerup spawn timer and spawn (see `Ruleset.md`)
 
 ---
 

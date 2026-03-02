@@ -128,6 +128,9 @@ These instructions attempt **exactly one** movement step (one **location-anchor*
     3) lowest destination zone id
 
 - `MOVE_TO_SECTOR <SECTOR>`
+  - Moves one step toward the **center** of the sector.
+- `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
+  - Moves one step toward the **center** of the specified zone within that sector.
   - Moves one step toward `SECTOR <SECTOR>` (the destination sector center).
 
 - `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`

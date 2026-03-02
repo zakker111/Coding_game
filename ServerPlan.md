@@ -149,11 +149,13 @@ Powerups spawn randomly, but must be deterministic:
 - spawn locations are fixed deterministic anchors (see `ArenaPlan.md`):
   - `SECTOR 1..9` (sector centers)
   - `SECTOR 1..9 ZONE 1..4` (zone centers)
-- each location has an independent respawn timer (see `Ruleset.md`)
+- spawning is driven by a **single global spawn timer** (see `Ruleset.md`) so the overall spawn rate is controllable
 
-Still to define:
-- respawn timer range
-- per-type distribution
+Still to define (ruleset parameters):
+- `ticksPerSecond` and spawn interval range (with ≥ 1 spawn/min)
+- optional max active powerups
+- per-type distribution (weights)
+- fixed per-type pickup deltas
 
 ### 5.3 Match scheduling for the daily run
 

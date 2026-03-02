@@ -177,14 +177,20 @@ If you want clamping, clamp `sectorRenderPx` or `arenaRenderPx` directly (exampl
   - `1 2 3`
   - `4 5 6`
   - `7 8 9`
-- Each sector contains **4 zones**:
+- Each sector contains **4 zones** arranged as:
   - `1 2`
   - `3 4`
-- Corner spawns (4-bot matches):
-  - `BOT1 → SECTOR 1 ZONE 1`
-  - `BOT2 → SECTOR 3 ZONE 2`
-  - `BOT3 → SECTOR 7 ZONE 3`
-  - `BOT4 → SECTOR 9 ZONE 4`
+
+Corner spawns (4-bot matches):
+- `BOT1 → SECTOR 1 ZONE 1`
+- `BOT2 → SECTOR 3 ZONE 2`
+- `BOT3 → SECTOR 7 ZONE 3`
+- `BOT4 → SECTOR 9 ZONE 4`
+
+Grid rendering requirement (clarity):
+- draw **sector boundaries** as **thicker green lines**
+- draw **zone boundaries** as **thinner green lines** inside each sector
+- optionally label sectors `1..9` (small, unobtrusive)
 
 ### 4.5 Entity overlays
 
