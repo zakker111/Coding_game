@@ -73,19 +73,29 @@ To keep the arena readable and avoid layout breakage:
 
 This keeps the arena “spacy but not too spacy”: the arena spacing is controlled by sector sizing, not by user sprite dimensions.
 
-### 3.3 Arena sizing ("big but fits most screens")
-The logical arena is 3×3 sectors, but the *visual* arena should scale with viewport:
+### 3.3 Arena sizing ("big but fits most screens", and fits 4 bots per sector)
+The logical arena is 3×3 sectors, but the *visual* arena should scale with viewport.
 
+Requirements you added:
+- Each sector must have enough room to display **up to 4 bots** (32×32 each) without overlap.
+- The arena should have **distinct walls** (clear boundaries between sectors and around the whole map).
+
+Sizing strategy:
 - The arena viewport should keep a square aspect ratio (`1:1`).
 - Let `arenaSidePx = min(availableWidth, availableHeight)`.
 - Sector size becomes `sectorPx = arenaSidePx / 3`.
 - Apply a clamp so it’s readable across common screens, e.g.:
-  - `sectorPx = clamp(sectorPx, 120px, 240px)`
+  - `sectorPx = clamp(sectorPx, 140px, 280px)`
 
-With 32×32 bots, this yields a good density:
-- bots are clearly visible
-- there is room for bullets/powerups/status icons
-- sector borders remain readable
+Rationale for the minimum:
+- A 2×2 layout of bots inside a sector needs roughly:
+  - `2*32px` for sprites + padding/gaps + room for small status bars
+  - giving a practical minimum around 120–140px.
+
+With `sectorPx >= 140px`:
+- 4 bots can be placed at fixed anchors with padding,
+- there is space for powerup icons,
+- walls/borders remain readable.
 
 ### 3.4 Arena model on screen
 - 9 sectors arranged as:
@@ -101,14 +111,33 @@ With 32×32 bots, this yields a good density:
 - **Status indicators**: saw/shield on states (small icons).
 
 ### 3.6 Multi-entity layout inside a sector (avoid overlapping)
-Because bullets can hit any bot in a sector, multiple bots may occupy the same sector. The UI should avoid sprite overlap.
+Because bullets can hit any bot in a sector, multiple bots may occupy the same sector. The UI must avoid sprite overlap.
 
-Deterministic placement suggestion:
-- Predefine up to 4 anchor points inside each sector cell:
-  - top-left, top-right, bottom-left, bottom-right (with padding)
-- Assign bots to anchors deterministically (e.g., by bot id order).
-- Place powerup icon at center or a reserved corner.
+Deterministic placement (recommended):
+- Predefine **4 anchors** inside each sector cell:
+  - top-left, top-right, bottom-left, bottom-right
+- Add padding so sprites don’t collide visually with the walls:
+  - e.g. 10–16px padding from sector edges
+- Assign bots to anchors deterministically (by bot id order).
+- Place powerup icon at the center, or reserve a fixed mini-slot for it.
 - Render bullets on an overlay layer above sector background.
+
+This guarantees each sector has space for 4× 32×32 bots without overlap.
+
+### 3.7 Walls (distinct sector boundaries)
+You requested distinct walls. Visually, treat each sector as a “room” with walls.
+
+Recommended v1 wall styling:
+- A thick **outer border** around the whole 3×3 arena (e.g., 6–10px).
+- Clear **inner walls** between sectors (e.g., 3–6px).
+- Use a consistent wall color and slight shading to make boundaries obvious.
+
+Implementation options:
+- **CSS borders** on sector cells + a thicker border on the arena container.
+- Or an SVG overlay that draws walls (more control for future doorways/hazards).
+
+Future-proof note:
+- If later you want walls to affect gameplay (blocking movement/line-of-sight), the UI wall rendering should consume the same data-driven wall layout from the ruleset.
 
 ---
 
