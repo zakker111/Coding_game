@@ -15,7 +15,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Changed
 - Loadout rules: slots may be empty; at most one weapon equipped (v1: `BULLET` or `SAW`).
 - Gameplay timing locked in docs: `ticksPerSecond = 1` and powerup spawn interval is 10–20 seconds.
-- UI plan clarified: Landing page is a single **Start Game** button for v1 (auth planned later).
+- UI plan clarified/expanded (arena grid rendering + replay viewer layout).
 
 ### Fixed
 - Documentation formatting/copy issues across planning docs.

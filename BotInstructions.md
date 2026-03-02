@@ -101,6 +101,10 @@ Invalidation rule (important for "someone else took it"):
   - `MOVE_TO_TARGET` / `MOVE_TO_POWERUP <TYPE>` no-op
   - and at end of tick, `targetPowerupType` is automatically **cleared** (so "target is false" next tick)
 
+Note on targets vs goals:
+- `targetPowerupType` is a **type preference** and is only auto-cleared when that type no longer exists.
+- `SET_MOVE_TO_POWERUP <TYPE>` is a **navigation goal** and clears when you pick up a powerup of that type.
+
 Priority rule:
 - If both a bot target and a powerup target are set, `MOVE_TO_TARGET` uses the bot target first unless you clear it.
 
@@ -126,18 +130,22 @@ Speed note (important):
 - Movement attempts can be blocked by the bot’s **movement cooldown** (see `Ruleset.md` §1.2).
 - If `moveCooldownRemaining > 0`, any movement request for that tick results in **no movement**.
 
+Anchor/direction semantics:
+- The anchor graph and adjacency rules are defined in `ArenaPlan.md` (v1 = discrete anchors).
+- `MOVE <DIR>` selects among adjacent anchors whose destination is in that direction (`UP`: smaller `y`, `DOWN`: larger `y`, `LEFT`: smaller `x`, `RIGHT`: larger `x`), then applies deterministic tie-breakers.
+
 - `MOVE <DIR>`
   - Moves to a neighboring location anchor in direction `<DIR>` if one exists.
-  - If multiple neighboring anchors match the direction, ties are resolved deterministically:
+  - Tie-breaks (deterministic):
     1) lowest destination sector id
     2) sector center before zones
     3) lowest destination zone id
 
 - `MOVE_TO_SECTOR <SECTOR>`
-  - Moves one step toward `SECTOR <SECTOR>` (the destination **sector center**).
+  - Moves one step toward `SECTOR <SECTOR>` (the destination **sector center**), along a shortest path.
 
 - `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
-  - Moves one step toward `SECTOR <SECTOR> ZONE <ZONE>` (the destination **zone center**).
+  - Moves one step toward `SECTOR <SECTOR> ZONE <ZONE>` (the destination **zone center**), along a shortest path.
 
 Bot chasing:
 - `MOVE_TO_BOT <BOT>`
@@ -147,7 +155,6 @@ Bot chasing:
 Powerups:
 - `MOVE_TO_POWERUP <TYPE>`
   - Moves one step toward the **closest currently-existing** powerup of that type.
-  - Powerups may exist at **sector centers** or **zone centers**.
   - Tie-breaks (deterministic):
     1) shortest distance (anchor steps)
     2) lowest sector id

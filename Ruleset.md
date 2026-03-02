@@ -17,6 +17,13 @@ Bots have a small set of core stats.
 
 Locked v1 ranges:
 - `health` is an integer in **0..100** (max health = 100)
+- `ammo` is an integer in **0..100**
+- `energy` is an integer in **0..100**
+
+Initial values (v1 recommended defaults; may become ruleset parameters later):
+- `health = 100`
+- `ammo = 100`
+- `energy = 100`
 
 New (locked direction): bots also have:
 - `botBaseArmor` (integer or small fixed-point; exact reduction math is defined elsewhere)
@@ -25,6 +32,8 @@ New (locked direction): bots also have:
 
 Loadout constraints (v1 validation rules):
 - bots have 3 slot positions; slots may be empty
+- allowed v1 module types: `BULLET | SAW | SHIELD | ARMOR`
+- no duplicate modules among equipped slots (duplicates are by **module type**)
 - at most one **weapon** module equipped (v1 weapons: `BULLET | SAW`)
 
 > Note: we keep the exact armor reduction formula intentionally simple in v1 and tune it later.
@@ -48,8 +57,15 @@ Runtime state per bot:
 
 Rules:
 - a movement attempt (from an immediate move instruction or an auto-move goal) **only succeeds** when `moveCooldownRemaining == 0`.
-- if a move succeeds, set `moveCooldownRemaining = moveCooldownOnMoveTicks`.
+- if a move succeeds, set:
+  - `moveCooldownRemaining = moveCooldownOnMoveTicks + 1`
+  - (this ensures that a cooldown of `1` blocks movement for the *next* tick)
 - at end-of-tick maintenance, decrement `moveCooldownRemaining` down to `0`.
+
+Example timeline (with `moveCooldownOnMoveTicks = 1`):
+- tick 10: move succeeds ⇒ set remaining to 2 ⇒ end-of-tick decrement ⇒ remaining = 1
+- tick 11: remaining > 0 ⇒ move blocked ⇒ end-of-tick decrement ⇒ remaining = 0
+- tick 12: remaining == 0 ⇒ move allowed again
 
 Effect (intended gameplay):
 - empty slots ⇒ smaller `equippedSlotCount` ⇒ **faster movement**
@@ -128,6 +144,9 @@ Walls are gameplay:
 - wall damage **can cause death**
 - if wall damage causes death, kill credit still goes to `lastDamageByBotId` (if present)
 
+Ruleset parameters:
+- `wallBumpDamage` (int; v1 TBD)
+
 ---
 
 ## 4) Bot-to-bot collisions (bump events)
@@ -165,6 +184,10 @@ Recommendation (v1):
 - within each phase:
   - process bots in `BOT1..BOT4` order
   - process entities in stable creation order (e.g., bullet id ascending)
+
+Determinism-critical tie-break (bullets):
+- when a bullet enters a sector that contains multiple alive bots, it hits **exactly one** victim:
+  - victim = lowest bot id in that sector (`BOT1` before `BOT2` ...)
 
 Kill credit in multi-hit ticks:
 - because `lastDamageByBotId` is updated as damage is applied, the credited killer is whichever bot delivered the **final BOT-sourced damage event** that occurred before death (in the deterministic order above).
@@ -223,6 +246,8 @@ Ruleset parameters (must be stored with `rulesetVersion`):
 - Movement speed parameters (see §1.2):
   - `baseMoveCooldownOnMoveTicks` (v1 recommended: `0`)
   - `perEquippedSlotMoveCooldownPenaltyTicks` (v1 recommended: `1`)
+- Wall bump damage:
+  - `wallBumpDamage` (int; v1 TBD)
 - `powerupSpawnIntervalMinTicks` (v1: `10`)
 - `powerupSpawnIntervalMaxTicks` (v1: `20`)
   - must satisfy:
@@ -259,6 +284,10 @@ When a spawn occurs, choose the type using the seeded RNG.
 
 Recommended v1 policy:
 - weighted distribution via `powerupTypeWeights`
+  - schema: `{ HEALTH: number, AMMO: number, ENERGY: number }`
+  - weights must be non-negative; at least one weight must be > 0
+  - if a key is missing, treat it as 0
+  - normalize weights internally to a probability distribution
 - if weights not provided, default to uniform among `HEALTH|AMMO|ENERGY`
 
 ### 7.4 Pickup semantics (collision)

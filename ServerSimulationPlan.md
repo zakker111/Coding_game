@@ -131,13 +131,13 @@ Recommended tick phases:
 
 4) **Projectile/deployable updates**
    - advance bullets (1 sector/tick)
-   - advance grenades + decrement fuse
-   - mines: decrement arming timer
+   - (future modules) advance grenades + decrement fuse
+   - (future modules) mines: decrement arming timer
 
 5) **Hit / explosion resolution**
    - bullet hit resolution (sector-enter hit, lowest bot id)
-   - grenade detonation (AoE)
-   - mine detonation (AoE)
+   - (future modules) grenade detonation (AoE)
+   - (future modules) mine detonation (AoE)
 
 6) **Pickups**
    - powerup pickup: an **alive** bot occupies the same location anchor as a powerup
@@ -148,7 +148,7 @@ Recommended tick phases:
    - in this phase, emit `BOT_DIED` and remove dead bots from the arena (so the replay/stat updates happen at a stable point)
 
 8) **End-of-tick maintenance**
-   - decrement cooldowns, bot-local timers, and `moveCooldownRemaining`
+   - decrement cooldowns, bot-local timers, and `moveCooldownRemaining` (see `Ruleset.md` §1.2 for movement cooldown semantics)
    - decrement the global powerup spawn timer; if it reaches `0`, attempt to spawn one powerup and reset the timer (see `Ruleset.md`)
    - because spawn happens after pickups, newly spawned powerups cannot be picked up until the next tick
 

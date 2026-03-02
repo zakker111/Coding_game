@@ -71,9 +71,11 @@ Speed/weight (locked direction):
 - Bullets are **slow-moving projectiles** updated each tick (not instant hits).
 - Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
 - **Bullets stop at walls** (locked).
-- Explosives (grenades/mines) (locked v1):
-  - AoE radius = **1 sector** (center + adjacent)
-  - damage falloff: **center sector takes more damage** than adjacent sectors
+  - v1: bullets are removed immediately on wall contact (see `ArenaPlan.md`, `CombatPlan.md`).
+- Explosives (grenades/mines) (planned future modules):
+  - when introduced, AoE shape is pre-locked:
+    - radius = **1 sector** (center + adjacent)
+    - damage falloff: **center sector takes more damage** than adjacent sectors
 - Weapon mechanics planning (cooldowns, ammo/energy costs, projectile/hitscan delivery, grenades, mines): see `CombatPlan.md`.
 
 ### Fault tolerance / corrupted bot code
@@ -92,14 +94,13 @@ Speed/weight (locked direction):
 
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).
-- **Walls are gameplay** (new):
-  - when a bot bumps into a wall it takes a small amount of damage and “bounces”.
-  - bots have a **32×32 collision box** (new).
-  - decide whether this is implemented as:
-    - **sector-only collisions** (attempted illegal move => no move + bump damage; "bounce" is mostly visual; collision box mainly for UI/hit testing), or
-    - **continuous positions/velocity** inside the arena (true bounce/reflect; collision box used for real collisions; implies a larger simulation model).
+- **Walls are gameplay** (locked v1):
+  - when a bot bumps into the outer wall: no movement + `BUMP_WALL` damage
+  - v1 collision is **anchor-based** (bounce is primarily visual feedback)
+  - future: continuous physics/velocity is a major ruleset change (see `ArenaPlan.md`)
 - Movement semantics for `MOVE_TO_*`:
-  - shortest-path rules + deterministic tie-breaks when multiple shortest paths exist.
+  - v1 uses the **anchor adjacency graph** defined in `ArenaPlan.md`
+  - still to finalize: deterministic tie-break rules when multiple shortest paths exist (if any remain after adjacency definition)
 - Bullet pathing:
   - whether bullet locks a path at fire time vs re-targets dynamically.
 - Bullet/wall interaction (future): do bullets collide/bounce/stop on walls?

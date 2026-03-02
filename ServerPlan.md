@@ -58,9 +58,12 @@ Implementation guidance (recommended stack):
 - **Match**
   - `id`, `daily_run_id`, `created_at`
   - `match_seed` (deterministic per match)
-  - `participants`: list of `{ bot_version_id, bot_id, user_id }`
+  - `status` (`queued|running|complete|failed`)
+  - `participants`: list of `{ bot_version_id, bot_id, user_id, slot: BOT1|BOT2|BOT3|BOT4 }`
+    - spawn location is deterministic from slot (see `ArenaPlan.md`)
   - `result` (winner, placements, scores, etc.)
   - `replay_ref` (pointer to stored replay)
+  - `error_metadata` (only if failed)
 
 ### 2.3 Replay storage
 
@@ -68,7 +71,7 @@ A replay should minimally include:
 - `ruleset_version`
 - `match_seed`
 - participant bot version hashes
-- initial placements (or enough info to derive them from the seed)
+- spawn slot assignments (`BOT1..BOT4`) (spawn locations are deterministic given slot)
 - per-tick events + instruction trace (see `ReplayViewerPlan.md`)
 
 ---

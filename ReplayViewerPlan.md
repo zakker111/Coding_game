@@ -98,6 +98,7 @@ A replay should support 2 independent requirements:
 
 - `schemaVersion`
 - `rulesetVersion`
+- `ticksPerSecond` (so “1× playback” can mean real time for that ruleset version)
 - `matchSeed`
 - `tickCap`
 - `bots[]`:

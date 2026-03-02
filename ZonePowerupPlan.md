@@ -85,6 +85,7 @@ Related v1 mechanics:
 
 On spawn:
 - pick an empty anchor among the 45 anchors (seeded RNG)
+  - constraint: at most **1** powerup may exist at a given anchor at a time
 - pick a type (seeded RNG; optional weights)
 
 ### 4.2 Pickup = collision

@@ -106,7 +106,7 @@ Choose one:
 Locked (from `ArenaPlan.md` / `Todo.md`):
 - bullets **stop at walls** (outer boundary in v1).
 
-Recommended v1 behavior:
+Recommended v1 behavior (locked):
 - if a bullet’s next step would go outside the arena: remove bullet immediately and emit a replay event.
 
 ### 3.6 Hit resolution

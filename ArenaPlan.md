@@ -126,17 +126,20 @@ Locked geometry:
 
 Recommended v1 semantics:
 - a bot’s authoritative location is a deterministic anchor (`SECTOR s` or `SECTOR s ZONE z`)
-- two bots cannot occupy the same anchor
+- collision/occupancy in v1 is **anchor-based**:
+  - two bots cannot occupy the same anchor
+  - the 32×32 collision box is primarily for **visuals/intuition** (until a future physics migration)
 
 ---
 
-## 4) Movement model options (needs a decision)
+## 4) Movement model (locked for v1)
 
-Because we want commands like:
-- `MOVE_TO_SECTOR 1` (go to sector center)
-- `MOVE_TO_SECTOR 1 ZONE 2` (go to a specific zone)
+v1 is locked to **Option A (discrete anchors)**.
 
-…the simulation should pick one of these models.
+Rationale:
+- easiest determinism and debugging
+- matches the bot language (move to sector/zone)
+- supports a clean replay viewer
 
 ### Option A — Discrete anchors (recommended)
 
@@ -149,6 +152,18 @@ Rules:
 - collisions are grid-like:
   - attempting to step outside the outer boundary → wall bump (no movement + bump damage)
   - attempting to step into an occupied anchor → bot bump (no movement + bump event)
+
+Anchor adjacency (v1; defines distance + pathfinding):
+- Each **sector center** connects to its 4 **zone centers** (`ZONE 1..4`) within that sector.
+- Zone centers connect across sector borders (orthogonal neighbors):
+  - Right edge: `(sector s, zone 2)` connects to `(sector s+1, zone 1)` if `s` is not in column 3.
+  - Right edge: `(sector s, zone 4)` connects to `(sector s+1, zone 3)` if `s` is not in column 3.
+  - Left edge is symmetric.
+  - Bottom edge: `(sector s, zone 3)` connects to `(sector s+3, zone 1)` if `s` is not in row 3.
+  - Bottom edge: `(sector s, zone 4)` connects to `(sector s+3, zone 2)` if `s` is not in row 3.
+  - Top edge is symmetric.
+
+Directional moves (`MOVE <DIR>`) select among adjacent anchors whose destination is in that direction (destination has smaller `y` for `UP`, larger `y` for `DOWN`, smaller `x` for `LEFT`, larger `x` for `RIGHT`), then apply deterministic tie-breakers.
 
 Pros:
 - deterministic, easy to replay/debug
@@ -184,9 +199,8 @@ If later you want physics-style bounce and more granular positioning, you can mi
 
 ## 6) Open parameters (regardless of option)
 
-- `wall_bump_damage` (small integer)
-- **Bullets vs walls (locked):** bullets **stop at walls**.
-  - still to define: do they disappear immediately, or remain as a stuck entity for 1+ ticks?
+- `wallBumpDamage` (small integer; ruleset parameter, see `Ruleset.md`)
+- **Bullets vs walls (locked v1):** bullets **stop at walls** and are **removed immediately** (emit replay event `BULLET_DESPAWN reason=WALL`).
 - Doors:
   - **Locked:** there are **no doors**.
 
