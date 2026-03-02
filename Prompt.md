@@ -62,6 +62,11 @@ Non-goals (until explicitly requested):
 - **Document the “why”, not just the “what”.**
   - In PRs/changes: explain tradeoffs and how to test.
 
+- **Specs/docs should stay beginner-friendly while keeping a stable core.**
+  - Prefer a small set of canonical primitives, then layer convenience aliases (“sugar”) on top.
+  - When adding sugar (new convenience instructions/predicates), explicitly label it as an alias and point at the canonical form.
+  - Keep naming consistent across docs: if an instruction/predicate is introduced or renamed, do a quick pass to update references and examples in other spec files.
+
 ---
 
 ## 3. Repository Layout & Module Boundaries

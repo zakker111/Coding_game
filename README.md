@@ -23,6 +23,7 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 5. `ServerSimulationPlan.md` / `ServerPlan.md` — deterministic server runner + storage/API
 
 Supporting docs:
+- `examples/bot1.md` — sample beginner-friendly combat bots (BULLET/SAW + SHIELD)
 - `CombatPlan.md` — weapons/projectiles planning
 - `UIPlan.md` — client UI layout + rendering requirements
 - `DailyCompetition.md` — daily/season competition format

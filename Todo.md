@@ -37,6 +37,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
+- Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
+  - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
+  - `IN_ZONE(<ZONE>)`
 
 ### Loadout / modules
 - Each bot has **3 slot positions**: `SLOT1|SLOT2|SLOT3`.
@@ -150,9 +153,11 @@ Speed/weight (locked direction):
 
 ### Observability / bot sensing
 - Locked: bots have **global knowledge of powerup locations** (supporting `POWERUP_EXISTS` and `DIST_TO_CLOSEST_POWERUP`).
-- Locked: bots can query **other bots' resources** (supporting `BOT_HEALTH(BOTn)`, etc.).
+- Locked: bots can sense other bots’ **presence + proximity** (see `BotInstructions.md` predicates like `BOT_IN_SAME_SECTOR`, `BOT_IN_ADJ_SECTOR`, `DIST_TO_BOT`, `DIST_TO_CLOSEST_BOT`).
+- Locked: bots can read `TARGET_HEALTH` for their current target bot (evaluates to `0` if no valid target bot exists).
 - Still to define:
   - bullet sensing (near-only vs predictive)
+  - whether to expose per-bot resource queries like `BOT_HEALTH(BOTn)` (not part of the stable v1 language today)
   - whether any opponent info should be hidden later for fairness (if desired)
 
 ---

@@ -11,14 +11,16 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Added
 - Project documentation scaffolding: `Prompt.md`, `Versions.md`, `Bugs.md`, `Todo.md`.
 - New rules documentation for v1 bot speed model (movement cooldown affected by equipped slot count).
-- Future-proof combat planning for advanced weapons: burst MG/SMG, fast rifle rounds, deterministic wavy projectiles, and lasers/beams that can ignore shields.
-- Replay viewer schema forward-compatibility notes for burst sequences, variable-speed/curved projectiles, and beams.
+- Beginner-friendly zone convenience in the bot language:
+  - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
+  - `IN_ZONE(<ZONE>)`
+- New sample scripts: `examples/bot1.md` (combat bot variants).
 
 ### Changed
 - Loadout rules: slots may be empty; at most one weapon equipped (v1: `BULLET` or `SAW`).
 - Gameplay timing locked in docs: `ticksPerSecond = 1` and powerup spawn interval is 10–20 seconds.
-- UI plan clarified/expanded (arena grid rendering + replay viewer layout).
-- Future-proofing docs expanded: standardized module capability flags (`delivery`, shield interaction flags), standardized target kinds (`BOT|LOCATION|DIRECTION|NONE`), and a plan for generic slot introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) in vNext.
+- UI plan clarified: Landing page is a single **Start Game** button for v1 (auth planned later).
+- Docs authoring rule: keep a stable core language and add “sugar” only as explicit aliases.
 
 ### Fixed
 - Documentation formatting/copy issues across planning docs.

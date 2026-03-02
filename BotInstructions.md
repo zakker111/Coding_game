@@ -127,6 +127,19 @@ Movement is **zone-aware** and operates on deterministic location anchors from `
 
 These instructions attempt **exactly one** movement step (one **location-anchor** step) during the movement phase of the current tick.
 
+#### Zone-only convenience (current sector)
+
+For beginners, you can move to a zone **without** spelling out the sector. These are pure syntactic sugar aliases; they do not change v1 movement semantics.
+
+- `MOVE_TO_ZONE <ZONE>`
+  - Alias semantics:
+    - let `S = SECTOR()` (evaluated once when the instruction executes)
+    - behave as if the script had written: `MOVE_TO_SECTOR S ZONE <ZONE>`
+  - Moves one step toward the center of zone `<ZONE>` **in your current sector**.
+  - This never changes your sector (because `S` is your current sector).
+
+> If you want to move to a specific sector+zone, use `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`.
+
 Speed note (important):
 - Movement attempts can be blocked by the bot’s **movement cooldown** (see `Ruleset.md` §1.2).
 - If `moveCooldownRemaining > 0`, any movement request for that tick results in **no movement**.
@@ -190,6 +203,11 @@ These instructions set a **movement goal** in bot state. When a goal is set, the
 Instructions:
 - `SET_MOVE_TO_SECTOR <SECTOR>`
 - `SET_MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
+- `SET_MOVE_TO_ZONE <ZONE>`
+  - Alias semantics:
+    - let `S = SECTOR()` (evaluated once when the instruction executes)
+    - behave as if the script had written: `SET_MOVE_TO_SECTOR S ZONE <ZONE>`
+  - Sets a navigation goal to zone `<ZONE>` **in your current sector**.
 - `SET_MOVE_TO_BOT <BOT_TARGET>`
 - `SET_MOVE_TO_POWERUP <TYPE>`
 - `SET_MOVE_TO_TARGET`
@@ -325,6 +343,9 @@ Location:
 - `ZONE()` → int
   - current zone id (1..4) if at a zone anchor
   - returns `0` if currently at the sector center anchor
+- `IN_ZONE(<ZONE>)` → bool
+  - Alias of: `ZONE() == <ZONE>`
+  - true iff you are currently standing on the zone-center anchor for that zone
 
 Sector proximity:
 - `BOT_IN_SAME_SECTOR(<BOT>)` → bool
@@ -523,5 +544,27 @@ IF (SLOT_READY(SLOT1)) DO USE_SLOT1 CLOSEST_BOT
 ; if we bumped a bot last tick, turn saw on
 IF (BUMPED_BOT()) DO SAW ON
 
+GOTO LOOP
+```
+
+### Example H — Zone-to-zone movement inside the current sector
+
+```text
+LABEL LOOP
+
+; if we are in zone 1, step toward zone 2 (same sector)
+IF (IN_ZONE(1)) DO MOVE_TO_ZONE 2
+
+; if we are in zone 2, step toward zone 3 (same sector)
+IF (IN_ZONE(2)) DO MOVE_TO_ZONE 3
+
+GOTO LOOP
+```
+
+### Example I — If low HP and a health powerup exists, move toward it
+
+```text
+LABEL LOOP
+IF (HEALTH < 10 && POWERUP_EXISTS(HEALTH)) DO MOVE_TO_POWERUP HEALTH
 GOTO LOOP
 ```

@@ -52,9 +52,15 @@ From `BotInstructions.md`:
 Movement targets:
 - `MOVE_TO_SECTOR <SECTOR>` → toward sector center
 - `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>` → toward zone center
+- zone-in-current-sector sugar (aliases; see `BotInstructions.md` for exact semantics):
+  - `MOVE_TO_ZONE <ZONE>` → toward zone center in your current sector
 - persistent goals:
   - `SET_MOVE_TO_SECTOR <SECTOR>`
   - `SET_MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
+  - `SET_MOVE_TO_ZONE <ZONE>` → goal toward zone center in your current sector
+
+Zone convenience (examples):
+- `IN_ZONE(<ZONE>)` (equivalent to `ZONE() == <ZONE>`)
 
 Powerup sensing (examples):
 - `POWERUP_IN_ZONE(HEALTH, 1, 2)`
