@@ -15,7 +15,7 @@ This is a **single-line-per-tick** language:
 > - `<TARGET>`: `<BOT_TARGET>|SECTOR <SECTOR>|SELF|NONE`
 > - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
 > - `<SECTOR>`: `1..9`
-> - `<ZONE>`: `1..9` (alias of sectors in v1)
+> - Zones: each sector contains **zones `1..4`** (2×2). Zones are used for deterministic placement/collision but are **not addressable** by bot instructions in v1.
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 > - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >
@@ -112,7 +112,6 @@ These instructions attempt **exactly one** sector step during the movement phase
 
 - `MOVE <DIR>`
 - `MOVE_TO_SECTOR <SECTOR>`
-- `MOVE_TO_ZONE <ZONE>` (alias of `MOVE_TO_SECTOR` in v1)
 
 Bot chasing:
 - `MOVE_TO_BOT <BOT>`
@@ -289,7 +288,6 @@ Distances (Manhattan distance over sectors):
 - `DIST_TO_CLOSEST_BOT()` → int
   - distance to the closest alive bot (ties: lowest bot id); returns `999` if none
 - `DIST_TO_SECTOR(<SECTOR>)` → int
-- `DIST_TO_ZONE(<ZONE>)` → int (alias of `DIST_TO_SECTOR` in v1)
 
 Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool

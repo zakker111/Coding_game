@@ -25,15 +25,58 @@ Client-only testing note:
 - The client may support **1v1 testing** by spawning only 2 bots in two corners (e.g., `1` and `9`).
 - This is a UI/testing feature; server daily matches remain 4-bot.
 
-### 1.1 Client-side render sizing (v1)
+### 1.1 World units: sectors + zones (locked)
 
-You stated: "arena size for now is clamped **128×128** but might need to be bigger in future" and clarified it is **client-side**.
+The arena is still a **3×3 grid of sectors (1..9)**, but each sector is subdivided into **4 zones**.
 
-Recommended interpretation:
-- **128×128 is the render size per sector cell** (not gameplay/world units).
-- total arena render size is therefore ~ **384×384** at default scale (3×3).
+- Each **sector** contains **zones `1..4`** arranged as a 2×2 grid:
+  - `1 2`
+  - `3 4`
+- Each **zone** is **32×32 world units**.
+- Therefore each **sector** is **64×64 world units**.
+- Therefore the full arena is:
+  - **width = 3 × 64 = 192 world units**
+  - **height = 3 × 64 = 192 world units**
 
-The simulation remains sector-based; this is a UI sizing rule.
+Why zones matter:
+- It gives us a simple, integer coordinate system for rendering + future collision detail.
+- It gives deterministic, non-overlapping placement anchors inside each sector (up to 4 bots).
+
+### 1.1.1 Coordinate mapping (sector/zone → world)
+
+Assume world coordinates:
+- origin `(0,0)` at the **top-left** of the arena
+- `+x` to the right, `+y` downward
+
+Sector mapping:
+- `sectorRow = floor((sectorId - 1) / 3)`
+- `sectorCol = (sectorId - 1) % 3`
+- `sectorOrigin = (sectorCol * 64, sectorRow * 64)`
+
+Zone mapping inside a sector:
+- zone `1` → offset `(0, 0)`
+- zone `2` → offset `(32, 0)`
+- zone `3` → offset `(0, 32)`
+- zone `4` → offset `(32, 32)`
+
+Therefore:
+- `zoneOrigin = sectorOrigin + zoneOffset`
+
+This maps cleanly to a **32×32 bot collision box** (a bot in a zone occupies exactly that zone in world units).
+
+### 1.2 Client-side render sizing
+
+The UI may scale world units to screen pixels.
+
+Recommended v1 approach:
+- Treat the world as **192×192 units**.
+- Choose a `scale` factor for rendering (e.g., 2×, 3×, 4×) based on available screen size.
+- Derived sizes:
+  - `zoneRenderPx = 32 * scale`
+  - `sectorRenderPx = 64 * scale`
+  - `arenaRenderPx = 192 * scale`
+
+If you still want a clamp, apply it to **`sectorRenderPx`** or **`arenaRenderPx`** rather than redefining world units.
 
 ---
 

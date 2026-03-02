@@ -145,20 +145,31 @@ Details: `ReplayViewerPlan.md`.
 
 ### 4.2 Sprite sizing policy (user-customizable bots)
 
-- **Render size is fixed**: bots display at **32×32 CSS pixels**.
-- User uploads can be any size, but should be normalized into a 32×32 rendered form.
+- Each sector is subdivided into **4 zones**, and each zone is **32×32 world units**.
+- Recommended v1 rule: a bot’s collision box is **32×32 world units** (fits exactly in one zone).
 
-### 4.3 Arena sizing (client-side; sector render size clamp)
+Rendering:
+- Bot sprites should be rendered proportional to the chosen `scale`:
+  - `botRenderPx = 32 * scale`
+- User uploads can be any size, but should be normalized into the bot’s rendered size.
 
-You clarified: the **128×128 clamp is client-side**.
+### 4.3 Arena sizing (client-side)
 
-Recommended interpretation:
-- default **sector render size** is ~128×128
-- total arena render is ~384×384 (3×3)
+World units (from `ArenaPlan.md`):
+- each **zone** is **32×32**
+- each **sector** is **64×64** (2×2 zones)
+- the full arena is **192×192** (3×3 sectors)
 
-Responsive sizing approach:
-- `sectorRenderPx = clamp(floor(min(availableWidth, availableHeight) / 3), 128, 256)`
-- total arena size is `3 * sectorRenderPx`
+Client rendering should scale these world units.
+
+Recommended responsive sizing:
+- choose a `scale` based on available space
+- `zoneRenderPx = 32 * scale`
+- `sectorRenderPx = 64 * scale`
+- `arenaRenderPx = 192 * scale`
+
+If you want clamping, clamp `sectorRenderPx` or `arenaRenderPx` directly (example):
+- `sectorRenderPx = clamp(floor(min(availableWidth, availableHeight) / 3), 64, 256)`
 
 ### 4.4 Arena model on screen
 
@@ -178,10 +189,14 @@ Responsive sizing approach:
 ### 4.6 Multi-entity layout inside a sector (avoid overlapping)
 
 Deterministic placement (recommended):
-- Predefine **4 anchors** inside each sector cell:
-  - top-left, top-right, bottom-left, bottom-right
-- Assign bots to anchors deterministically (by bot id order).
-- Place powerup icon at the center.
+- Each sector is subdivided into **4 zones** (2×2) per `ArenaPlan.md`:
+  - zone `1`: top-left
+  - zone `2`: top-right
+  - zone `3`: bottom-left
+  - zone `4`: bottom-right
+- Assign bots to sector-zones deterministically (by bot id order):
+  - lowest bot id gets the lowest available zone number
+- Place powerup icon at the sector center.
 - Render bullets on an overlay layer above sector background.
 
 ### 4.7 Walls (distinct sector boundaries, and gameplay-relevant)
