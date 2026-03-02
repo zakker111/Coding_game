@@ -42,6 +42,15 @@ New content is added primarily by:
 - implementing its deterministic behavior in the simulation engine
 - defining its resource usage (ammo/energy), cooldowns, and effects in data
 
+Recommended module schema fields (high-level):
+- activation: `INSTANT | TOGGLE | PASSIVE`
+- costs (vector): `costAmmo`, `costEnergy`
+- cooldown: `cooldownOnUseTicks`
+- optional drains while active: `drainEnergyPerTick`
+- delivery model for attacks: `PROJECTILE | HITSCAN`
+
+See `CombatPlan.md` for projectile + cooldown details.
+
 The bot language does **not** need a new opcode for each module.
 
 ---
