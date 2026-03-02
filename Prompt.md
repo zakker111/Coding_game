@@ -64,33 +64,33 @@ Non-goals (until explicitly requested):
 
 ## 3. Repository Layout & Module Boundaries
 
-The repo is currently minimal. As code is introduced, prefer a layout like:
+The repo is currently minimal. As code is introduced, keep a clean separation by **domain**:
 
-- `core/` — **Simulation engine & rules**
+- **Simulation engine & rules**
   - Tick loop, state transitions, RNG wiring, collision/damage rules.
-- `bots/` — **Bot interfaces and adapters**
+- **Bot interfaces and adapters**
   - Bot API types, loaders, examples, validation.
-- `sandbox/` — **Untrusted execution**
-  - Worker/vm/wasm isolation, CPU/memory limits, timeouts.
-- `data/` — **Content**
-  - Arena presets, item defs, rule knobs, balance numbers.
-- `ui/` — **Visualization**
+- **Untrusted execution (sandbox)**
+  - Isolation boundary, CPU/memory limits, timeouts.
+- **Content / balance data**
+  - Arena presets, item definitions, rule knobs, balance numbers.
+- **Visualization / UI**
   - Renderer, debug overlays, replay viewer.
-- `server/` (optional) — **Authoritative match runner**
-  - Matchmaking, persistence, ladders.
+- **Optional authoritative runner**
+  - Match orchestration for tournaments/ladders, persistence.
 
-Rules:
+Rule of thumb:
 
-- If it’s **game rules / simulation** → `core/`.
-- If it’s **untrusted code execution** → `sandbox/`.
-- If it’s **user-facing rendering** → `ui/`.
-- If it’s **content knobs** → `data/`.
+- If it’s **game rules / simulation** → keep it in the simulation domain.
+- If it’s **untrusted code execution** → keep it in the sandbox domain.
+- If it’s **user-facing rendering** → keep it in the UI domain.
+- If it’s **content knobs** → keep it in data.
 
 ### 3.1 Adding New Files / Folders
 
 - Add new modules only when they reduce coupling or clarify ownership.
 - Avoid adding new top-level directories unless the domain will contain multiple modules.
-- Prefer `lower_snake_case` for filenames unless the repo establishes another convention.
+- Prefer consistent naming (e.g. `lower_snake_case`) unless the repo establishes another convention.
 
 ---
 
