@@ -36,6 +36,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - `ARMOR` (passive defense)
 - **No duplicate modules** in v1.
 - If bot code calls an instruction for a module it doesn’t have equipped → **no-op**.
+- **Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
 
 ### Resources
 - `health`, `ammo`, `energy` are integers in **0..100**.

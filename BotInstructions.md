@@ -159,22 +159,34 @@ Target-driven movement:
 
 ## 5) Module actions (slot-addressed)
 
-These are optional but intended to be supported.
+Slot-addressed actions are the **future-proof** layer for adding new modules without growing the opcode set.
 
-- `FIRE_SLOT1 <BOT_TARGET>`
-- `FIRE_SLOT2 <BOT_TARGET>`
-- `FIRE_SLOT3 <BOT_TARGET>`
+### 5.1 Generic slot use (recommended)
+
+- `USE_SLOT1 <BOT_TARGET>`
+- `USE_SLOT2 <BOT_TARGET>`
+- `USE_SLOT3 <BOT_TARGET>`
 
 Semantics:
-- If slot contains **BULLET**: fires at `<BOT_TARGET>`.
-- If slot contains **SAW**: same as `SAW ON` (target ignored).
-- If slot contains **SHIELD**: same as `SHIELD ON` (target ignored).
-- If slot contains **ARMOR**: no-op (passive).
+- Triggers the **primary action** of whatever module is equipped in that slot.
+- Modules may ignore targets that are not relevant.
 
 To turn off toggles via slot:
 - `STOP_SLOT1`
 - `STOP_SLOT2`
 - `STOP_SLOT3`
+
+### 5.2 Compatibility aliases (v1)
+
+- `FIRE_SLOT1 <BOT_TARGET>` (alias of `USE_SLOT1 <BOT_TARGET>`)
+- `FIRE_SLOT2 <BOT_TARGET>` (alias of `USE_SLOT2 <BOT_TARGET>`)
+- `FIRE_SLOT3 <BOT_TARGET>` (alias of `USE_SLOT3 <BOT_TARGET>`)
+
+Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
+- If slot contains **BULLET**: fires at `<BOT_TARGET>`.
+- If slot contains **SAW**: same as `SAW ON` (target ignored).
+- If slot contains **SHIELD**: same as `SHIELD ON` (target ignored).
+- If slot contains **ARMOR**: no-op (passive).
 
 Optional convenience:
 - `FIRE_TARGET <SLOT>`
