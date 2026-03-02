@@ -11,27 +11,20 @@ It builds on:
 
 ---
 
-## 1) UI goals
-
-- **Readable match playback** in a 9-sector arena.
-- **First-class debugging**: clearly show which instruction executed on each tick.
-- **Per-bot inspection**: click a bot to view its code, state, loadout, and recent events.
-- **Replay navigation**: start/pause, speed control, step tick, jump to tick.
-- **Determinism-friendly**: the UI is a pure view over replay data/simulation state.
-
----
-
-## 2) MVP app flow (rough v1)
+## 1.1 MVP app flow (new)
 
 The client should have a minimal, end-to-end loop:
 
 1) **Landing / Auth**
-2) **Bot Workshop** (name + avatar + code editor + instruction reference)
-3) **Match Screen** (arena + playback + click bots to inspect code)
+2) **Bot Workshop** (avatar + code editor + instruction reference)
+3) **Match Screen / Replay Viewer** (arena + playback + click bots to inspect code)
+4) **Match History (Battle Picker)** (list saved replays; later list server matches)
 
 This is client-first UX planning; server integration can come later.
 
-### 2.1 Landing / Auth screen
+Replay viewer + battle picker requirements are detailed in `ReplayViewerPlan.md`.
+
+### 1.1.1 Landing / Auth screen
 
 Goal: let a user either create an account or sign in.
 
@@ -49,7 +42,7 @@ UI elements:
 Notes:
 - No advanced flows in v1 (forgot password, email verification) unless needed.
 
-### 2.2 Bot Workshop screen
+### 1.1.2 Bot Workshop screen
 
 Left/center:
 - **Bot name** (display name)
@@ -81,11 +74,11 @@ Opponents (v1):
 - opponents are **dummy bots** (preset scripts + preset avatars)
 - user can inspect their code on the Match Screen
 
-### 2.3 Match Screen
+### 1.1.3 Match Screen / Replay Viewer
 
-When the user clicks **Load Match**:
+When the user clicks **Load Match** (or opens an existing replay):
 - show the arena + bot list
-- show a **Start** button to begin ticking the simulation
+- show a **Start** button to begin ticking the simulation (local sim) or start playback (replay)
 
 Playback:
 - default is a “real-time feeling” by advancing ticks automatically at a modest speed
@@ -97,6 +90,17 @@ Inspection:
   - **display name** (user-chosen)
   - **match slot id** (`BOT1..BOT4`) for deterministic reference
 - the code viewer highlights the current instruction per tick
+
+Details: `ReplayViewerPlan.md`.
+
+### 1.1.4 Match History (Battle Picker)
+
+- Lists saved replays.
+  - Client-first: local matches saved in the browser.
+  - Later: also list server-run matches for logged-in users.
+- Selecting a match opens the **Replay Viewer**.
+
+Details: `ReplayViewerPlan.md`.
 
 ---
 

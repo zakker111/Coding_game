@@ -94,6 +94,8 @@ A match worker:
 
 ## 4) Worker architecture (recommended)
 
+For the initial test scale you described (≈10 bots, ≈10 matches/day), you can run **API + worker in a single process** and still keep the architecture compatible with future split services.
+
 ### 4.1 Components
 
 - **Scheduler**: triggers a daily run (cron or internal scheduler)

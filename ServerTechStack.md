@@ -98,7 +98,7 @@ Given your expected initial scale (~10 bots, ~10 matches/day), you can start wit
 
 Minimal setup:
 - Runtime: **Node.js + TypeScript**
-- Deployment: **single server / docker-compose**
+- Deployment: **single process** (API + worker in one service) on a single server / docker-compose
 - DB: **PostgreSQL**
 - Queue: **DB-backed queue table** (polling) instead of Redis
 - Replays: store compressed replay blobs in **Postgres** (acceptable at small scale)
