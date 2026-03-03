@@ -32,16 +32,58 @@ function pickScale(canvas) {
   return 1;
 }
 
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function withAlpha(ctx, a, fn) {
+  const prev = ctx.globalAlpha;
+  ctx.globalAlpha = prev * a;
+  fn();
+  ctx.globalAlpha = prev;
+}
+
+function byId(arr, key) {
+  const m = new Map();
+  for (const it of arr ?? []) m.set(it?.[key], it);
+  return m;
+}
+
+function findEvent(events, type, pred) {
+  for (const e of events ?? []) {
+    if (!e || e.type !== type) continue;
+    if (!pred || pred(e)) return e;
+  }
+  return null;
+}
+
+function findEvents(events, type) {
+  return (events ?? []).filter(e => e?.type === type);
+}
+
 /**
+ * Render a transition from `fromSnapshot` (end of tick t) to `toSnapshot`
+ * (end of tick t+1). Pass `tickEvents = events[t+1]`.
+ *
  * @param {{
  *  canvas: HTMLCanvasElement,
- *  snapshot: any,
+ *  fromSnapshot: any,
+ *  toSnapshot: any,
+ *  tickEvents?: any[],
+ *  events?: any[],
  *  showAnchors: boolean,
  *  progress01: number,
  * }} params
  */
 export function renderFrame(params) {
-  const { canvas, snapshot, showAnchors, progress01 } = params;
+  const { canvas, fromSnapshot, toSnapshot, showAnchors } = params;
+  const events = params.tickEvents ?? params.events ?? [];
+  const p = clamp01(params.progress01);
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
@@ -55,57 +97,141 @@ export function renderFrame(params) {
   ctx.fillStyle = '#06101a';
   ctx.fillRect(ox, oy, arenaPx, arenaPx);
 
-  // grid
   drawGrid(ctx, ox, oy, arenaPx);
 
-  // anchors overlay
   if (showAnchors) {
     ctx.fillStyle = 'rgba(255,255,255,0.16)';
     for (const a of enumerateAnchors()) {
-      const p = anchorWorldCenter(a);
+      const w = anchorWorldCenter(a);
       ctx.beginPath();
-      ctx.arc(ox + p.x*S, oy + p.y*S, Math.max(1, 2*S/3), 0, Math.PI*2);
+      ctx.arc(ox + w.x*S, oy + w.y*S, Math.max(1, 2*S/3), 0, Math.PI*2);
       ctx.fill();
     }
   }
 
-  // powerups
-  for (const p of snapshot.powerups ?? []) {
-    const c = anchorWorldCenter(p.loc);
-    drawPowerup(ctx, ox + c.x*S, oy + c.y*S, p.type, S);
-  }
+  renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p);
+  renderBulletsFromEvents(ctx, ox, oy, S, events, p);
+  renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p);
 
-  // bullets (sector-level)
-  for (const b of snapshot.bullets ?? []) {
-    const loc = { sector: b.sector, zone: 0 };
-    const c = anchorWorldCenter(loc);
-    const dirOff = dirOffset(b.dir, 10 * progress01);
+  const tickLabel = toSnapshot?.tick ?? fromSnapshot?.tick ?? 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = `${12 + S}px ui-monospace, monospace`;
+  ctx.fillText(`tick ${tickLabel}`, ox + 8, oy + 18);
+}
+
+function renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p) {
+  const from = byId(fromSnapshot?.powerups ?? [], 'powerupId');
+  const to = byId(toSnapshot?.powerups ?? [], 'powerupId');
+
+  const ids = new Set([...from.keys(), ...to.keys()]);
+  for (const id of ids) {
+    if (id == null) continue;
+    const a = from.get(id);
+    const b = to.get(id);
+    if (a && b) {
+      const c = anchorWorldCenter(b.loc);
+      drawPowerup(ctx, ox + c.x*S, oy + c.y*S, b.powerupType ?? b.type, S);
+    } else if (!a && b) {
+      withAlpha(ctx, p, () => {
+        const c = anchorWorldCenter(b.loc);
+        drawPowerup(ctx, ox + c.x*S, oy + c.y*S, b.powerupType ?? b.type, S);
+      });
+    } else if (a && !b) {
+      withAlpha(ctx, 1 - p, () => {
+        const c = anchorWorldCenter(a.loc);
+        drawPowerup(ctx, ox + c.x*S, oy + c.y*S, a.powerupType ?? a.type, S);
+      });
+    }
+  }
+}
+
+function renderBulletsFromEvents(ctx, ox, oy, S, events, p) {
+  const moves = findEvents(events, 'BULLET_MOVE');
+  for (const m of moves) {
+    const a = anchorWorldCenter({ sector: m.fromSector, zone: 0 });
+    const b = anchorWorldCenter({ sector: m.toSector, zone: 0 });
+    const x = lerp(a.x, b.x, p);
+    const y = lerp(a.y, b.y, p);
+
+    ctx.strokeStyle = 'rgba(229,238,252,0.28)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox + a.x*S, oy + a.y*S);
+    ctx.lineTo(ox + x*S, oy + y*S);
+    ctx.stroke();
+
     ctx.fillStyle = '#e5eefc';
     ctx.beginPath();
-    ctx.arc(ox + (c.x + dirOff.x) * S, oy + (c.y + dirOff.y) * S, Math.max(2, S), 0, Math.PI*2);
+    ctx.arc(ox + x*S, oy + y*S, Math.max(2, S + 1), 0, Math.PI*2);
     ctx.fill();
   }
 
-  // bots
-  for (const bot of snapshot.bots ?? []) {
-    if (!bot.alive) continue;
-    const c = anchorWorldCenter(bot.loc);
-    const cx = ox + c.x*S;
-    const cy = oy + c.y*S;
-    drawBot(ctx, cx, cy, bot, S);
+  const spawns = findEvents(events, 'BULLET_SPAWN');
+  for (const s of spawns) {
+    withAlpha(ctx, 1 - p, () => {
+      const c = anchorWorldCenter({ sector: s.sector, zone: 0 });
+      ctx.fillStyle = '#e5eefc';
+      ctx.beginPath();
+      ctx.arc(ox + c.x*S, oy + c.y*S, Math.max(2, S + 1), 0, Math.PI*2);
+      ctx.fill();
+    });
+  }
+}
+
+function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
+  const from = byId(fromSnapshot?.bots ?? [], 'id');
+  const to = byId(toSnapshot?.bots ?? [], 'id');
+  const ids = ['BOT1','BOT2','BOT3','BOT4'];
+
+  for (const id of ids) {
+    const a = from.get(id);
+    const b = to.get(id) ?? a;
+    if (!a && !b) continue;
+
+    const mv = findEvent(events, 'BOT_MOVED', e => e.botId === id);
+    const fromLoc = mv?.fromLoc ?? a?.loc ?? b?.loc;
+    const toLoc = mv?.toLoc ?? b?.loc ?? a?.loc;
+    if (!fromLoc || !toLoc) continue;
+
+    const ca = anchorWorldCenter(fromLoc);
+    const cb = anchorWorldCenter(toLoc);
+    const x = lerp(ca.x, cb.x, p);
+    const y = lerp(ca.y, cb.y, p);
+
+    const aliveFrom = a?.alive !== false;
+    const aliveTo = b?.alive !== false;
+    if (!aliveFrom && !aliveTo) continue;
+
+    const fade = (!aliveTo && aliveFrom) ? (1 - p) : 1;
+    withAlpha(ctx, fade, () => {
+      drawBot(ctx, ox + x*S, oy + y*S, b ?? a, S);
+    });
   }
 
-  // tick label
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = `${12 + S}px ui-monospace, monospace`;
-  ctx.fillText(`tick ${snapshot.tick}`, ox + 8, oy + 18);
+  if (p > 0.82) {
+    const hits = findEvents(events, 'BULLET_HIT');
+    if (hits.length) {
+      const a = (p - 0.82) / 0.18;
+      for (const h of hits) {
+        const bot = to.get(h.victimBotId) ?? from.get(h.victimBotId);
+        if (!bot || !bot.loc) continue;
+        const c = anchorWorldCenter(bot.loc);
+        withAlpha(ctx, a, () => {
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(ox + c.x*S, oy + c.y*S, 16, 0, Math.PI*2);
+          ctx.stroke();
+        });
+      }
+    }
+  }
 }
 
 function drawGrid(ctx, ox, oy, arenaPx) {
-  const zone = arenaPx / 6; // 32*S
+  const zone = arenaPx / 6;
   const sector = zone * 2;
 
-  // zone grid
   ctx.strokeStyle = 'rgba(80,255,110,0.25)';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 6; i++) {
@@ -122,7 +248,6 @@ function drawGrid(ctx, ox, oy, arenaPx) {
     ctx.stroke();
   }
 
-  // sector grid
   ctx.strokeStyle = 'rgba(80,255,110,0.55)';
   ctx.lineWidth = 2;
   for (let i = 0; i <= 3; i++) {
@@ -139,12 +264,10 @@ function drawGrid(ctx, ox, oy, arenaPx) {
     ctx.stroke();
   }
 
-  // outer wall
   ctx.strokeStyle = 'rgba(140,165,190,0.85)';
   ctx.lineWidth = 3;
   ctx.strokeRect(ox + 1.5, oy + 1.5, arenaPx - 3, arenaPx - 3);
 
-  // sector labels 1..9
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.font = `14px ui-monospace, monospace`;
   for (let s = 1; s <= 9; s++) {
@@ -167,14 +290,12 @@ function drawBot(ctx, cx, cy, bot, S) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // label
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(cx - 18, cy - r - 16, 36, 14);
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   ctx.font = `12px ui-monospace, monospace`;
   ctx.fillText(bot.id, cx - 14, cy - r - 5);
 
-  // HP bar
   const hp = Math.max(0, Math.min(100, bot.health));
   const w = 28;
   const h = 4;
@@ -196,12 +317,4 @@ function drawPowerup(ctx, cx, cy, type, S) {
   ctx.rect(-size/2, -size/2, size, size);
   ctx.fill();
   ctx.restore();
-}
-
-function dirOffset(dir, mag) {
-  if (dir === 'UP') return { x: 0, y: -mag };
-  if (dir === 'DOWN') return { x: 0, y: mag };
-  if (dir === 'LEFT') return { x: -mag, y: 0 };
-  if (dir === 'RIGHT') return { x: mag, y: 0 };
-  return { x: 0, y: 0 };
 }

@@ -26,10 +26,12 @@ const eventLog = el('eventLog');
 
 /** @type {import('./engine.js').Replay|null} */
 let replay = null;
-let tick = 0;
+
 let playing = false;
 let lastFrameMs = 0;
-let tickAccumulator = 0;
+
+// Continuous playhead in ticks (float), used for interpolation.
+let playhead = 0;
 
 function setUiEnabled(hasReplay) {
   btnPlay.disabled = !hasReplay;
@@ -67,7 +69,7 @@ function updateMeta() {
   meta.textContent = `ruleset=${replay.header.rulesetVersion} seed=${replay.header.matchSeed} hash=${hash}`;
 }
 
-function updateEventLog() {
+function updateEventLog(tickIndex) {
   if (!replay) {
     eventPanel.style.display = 'none';
     return;
@@ -75,7 +77,7 @@ function updateEventLog() {
   eventPanel.style.display = showEventsEl.checked ? 'block' : 'none';
   if (!showEventsEl.checked) return;
 
-  const ev = replay.events[tick] ?? [];
+  const ev = replay.events[tickIndex] ?? [];
   eventLog.textContent = ev.map(formatEvent).join('\n');
 }
 
@@ -87,8 +89,8 @@ function formatEvent(e) {
   if (t === 'BULLET_HIT') return `${t} #${e.bulletId} victim=${e.victimBotId} dmg=${e.damage}`;
   if (t === 'DAMAGE') return `${t} victim=${e.victimBotId} amt=${e.amount} src=${e.source}${e.sourceBotId ? ' by '+e.sourceBotId : ''} kind=${e.kind}`;
   if (t === 'BOT_DIED') return `${t} victim=${e.victimBotId} credited=${e.creditedBotId}`;
-  if (t === 'POWERUP_SPAWN') return `${t} #${e.powerupId} ${e.type} at ${locStr(e.loc)}`;
-  if (t === 'POWERUP_PICKUP') return `${t} ${e.botId} got ${e.type} at ${locStr(e.loc)}`;
+  if (t === 'POWERUP_SPAWN') return `${t} #${e.powerupId} ${(e.powerupType ?? e.type)} at ${locStr(e.loc)}`;
+  if (t === 'POWERUP_PICKUP') return `${t} ${e.botId} got ${(e.powerupType ?? e.type)} at ${locStr(e.loc)}`;
   if (t === 'RESOURCE_DELTA') return `${t} ${e.botId} hp=${e.healthDelta} ammo=${e.ammoDelta} energy=${e.energyDelta} cause=${e.cause}`;
   if (t === 'MATCH_END') return `${t} reason=${e.endReason} winner=${e.winnerBotId}`;
   if (t === 'SCORE') return `${t} ${JSON.stringify(e.bots)}`;
@@ -104,9 +106,11 @@ function escapeHtml(s) {
   return s.replace(/[&<>\"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;' }[c]));
 }
 
-function clampTick() {
+function clampPlayhead() {
   if (!replay) return;
-  tick = Math.max(0, Math.min(tick, replay.state.length - 1));
+  const maxTick = replay.state.length - 1;
+  if (playhead < 0) playhead = 0;
+  if (playhead > maxTick) playhead = maxTick;
 }
 
 function render() {
@@ -114,12 +118,30 @@ function render() {
     hud.textContent = '';
     return;
   }
-  clampTick();
-  const snapshot = replay.state[tick];
-  const p = playing ? Math.min(1, tickAccumulator) : 1;
-  renderFrame({ canvas, snapshot, showAnchors: showAnchorsEl.checked, progress01: p });
-  hud.textContent = `tick=${tick}/${replay.state.length - 1}  speed=${currentSpeed()}×  ended=${replay.result.endReason}`;
-  updateEventLog();
+
+  clampPlayhead();
+
+  const maxTick = replay.state.length - 1;
+  const base = Math.floor(playhead);
+  const next = Math.min(maxTick, base + 1);
+  const progress01 = playing ? (playhead - base) : 0;
+
+  const fromSnapshot = replay.state[base];
+  const toSnapshot = playing ? replay.state[next] : replay.state[base];
+  const ev = playing ? (replay.events[next] ?? []) : (replay.events[base] ?? []);
+
+  renderFrame({
+    canvas,
+    fromSnapshot,
+    toSnapshot,
+    events: ev,
+    showAnchors: showAnchorsEl.checked,
+    progress01,
+  });
+
+  const shownTick = (progress01 > 0) ? next : base;
+  hud.textContent = `tick=${shownTick}/${maxTick}  speed=${currentSpeed()}×  ended=${replay.result.endReason}`;
+  updateEventLog(shownTick);
 }
 
 function animate(ms) {
@@ -127,24 +149,20 @@ function animate(ms) {
     requestAnimationFrame(animate);
     return;
   }
+
   if (!lastFrameMs) lastFrameMs = ms;
   const dt = (ms - lastFrameMs) / 1000;
   lastFrameMs = ms;
 
   if (playing) {
     const ticksPerSec = replay.header.ticksPerSecond * currentSpeed();
-    tickAccumulator += dt * ticksPerSec;
-    while (tickAccumulator >= 1) {
-      tickAccumulator -= 1;
-      tick += 1;
-      if (tick >= replay.state.length - 1) {
-        tick = replay.state.length - 1;
-        playing = false;
-        break;
-      }
+    playhead += dt * ticksPerSec;
+
+    const maxTick = replay.state.length - 1;
+    if (playhead >= maxTick) {
+      playhead = maxTick;
+      playing = false;
     }
-  } else {
-    tickAccumulator = 0;
   }
 
   render();
@@ -155,10 +173,11 @@ btnRun.addEventListener('click', () => {
   const seed = Number(seedInput.value || '0');
   const tickCap = Number(tickCapInput.value || '300');
   replay = createReplay({ matchSeed: seed, tickCap });
-  tick = 0;
+
+  playhead = 0;
   playing = false;
   lastFrameMs = 0;
-  tickAccumulator = 0;
+
   setUiEnabled(true);
   updateSummary();
   updateMeta();
@@ -172,28 +191,33 @@ btnPlay.addEventListener('click', () => {
 
 btnPause.addEventListener('click', () => {
   playing = false;
+  render();
 });
 
 btnStep.addEventListener('click', () => {
   if (!replay) return;
   playing = false;
-  tick += 1;
-  clampTick();
+  playhead = Math.min(replay.state.length - 1, Math.floor(playhead) + 1);
   render();
 });
 
 btnReset.addEventListener('click', () => {
   if (!replay) return;
   playing = false;
-  tick = 0;
+  playhead = 0;
   render();
 });
 
 showAnchorsEl.addEventListener('change', render);
-showEventsEl.addEventListener('change', () => {
-  updateEventLog();
-});
+showEventsEl.addEventListener('change', render);
 
 setUiEnabled(false);
-renderFrame({ canvas, snapshot: { tick: 0, bots: [], bullets: [], powerups: [] }, showAnchors: false, progress01: 1 });
+renderFrame({
+  canvas,
+  fromSnapshot: { tick: 0, bots: [], bullets: [], powerups: [] },
+  toSnapshot: { tick: 0, bots: [], bullets: [], powerups: [] },
+  events: [],
+  showAnchors: false,
+  progress01: 0,
+});
 requestAnimationFrame(animate);

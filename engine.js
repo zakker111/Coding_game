@@ -1,4 +1,5 @@
 // Deterministic engine (browser-safe) — inspired by repo specs.
+// Implements a minimal BotInstructions v1 compiler+VM sufficient for examples/bot2.md and bot3.md.
 // This is a skeleton implementation to enable a playable replay viewer.
 
 /** @typedef {"BOT1"|"BOT2"|"BOT3"|"BOT4"} BotId */
@@ -25,6 +26,10 @@
  *  ammo: number,
  *  energy: number,
  *  pc: number,
+ *  targetBotId: BotId|null,
+ *  targetPowerupType: "HEALTH"|"AMMO"|"ENERGY"|null,
+ *  moveGoal: any,
+ *  slotCooldownRemaining: {slot1:number, slot2:number, slot3:number},
  *  moveCooldownRemaining: number,
  *  lastDamageByBotId: BotId|null,
  *  kills: number,
@@ -391,6 +396,692 @@ function attemptSpawnPowerup(st, rng, rules, events) {
   st.spawnRemainingTicks = rng.intInclusive(rules.powerupSpawnIntervalMinTicks, rules.powerupSpawnIntervalMaxTicks);
 }
 
+// ---------------- BotInstructions v1 (minimal compiler + VM) ----------------
+
+const BUILTIN_BOT2_SOURCE = `SET_MOVE_TO_BOT CLOSEST_BOT
+LABEL LOOP
+IF (HEALTH < 30 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
+IF (AMMO < 15 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
+IF (HEALTH >= 30 && AMMO >= 15) DO SET_MOVE_TO_BOT CLOSEST_BOT
+IF (SLOT_READY(SLOT1)) DO USE_SLOT1 NEAREST_BOT
+GOTO LOOP
+`;
+
+const BUILTIN_BOT3_SOURCE = `SET_MOVE_TO_SECTOR 1 ZONE 1
+LABEL LOOP
+IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
+IF (AMMO < 20 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
+IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
+IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 3) DO USE_SLOT1 WEAKEST_BOT
+GOTO LOOP
+`;
+
+/** @typedef {{t:"ID"|"NUM"|"OP"|"PUNC", v:string}} ExprTok */
+
+/** @typedef {{kind:"NUM", n:number}|{kind:"IDENT", name:string}|{kind:"CALL", name:string, args:ExprNode[]}|{kind:"UNARY", op:"!", expr:ExprNode}|{kind:"BINARY", op:string, left:ExprNode, right:ExprNode}} ExprNode */
+
+/**
+ * @typedef {{
+ *  instructions: CompiledInstr[],
+ *  pcToSourceLine: number[],
+ * }} CompiledProgram
+ */
+
+/**
+ * @typedef {{
+ *  op: "NOP"|"GOTO"|"IF_GOTO"|"IF_DO"|"SET_MOVE_TO_BOT"|"SET_MOVE_TO_POWERUP"|"SET_MOVE_TO_SECTOR"|"USE_SLOT"|"INVALID",
+ *  text: string,
+ *  sourceLine: number,
+ *  label?: string,
+ *  targetPc?: number,
+ *  expr?: ExprNode,
+ *  inner?: CompiledInstr,
+ *  botTarget?: string,
+ *  powerupType?: string,
+ *  sector?: number,
+ *  zone?: number,
+ *  slot?: 1|2|3,
+ *  target?: any,
+ * }} CompiledInstr
+ */
+
+/** @param {string} s */
+function normalizeBotTargetToken(s) {
+  if (s === "NEAREST_BOT") return "CLOSEST_BOT";
+  if (s === "WEAKEST_BOT") return "LOWEST_HEALTH_BOT";
+  if (s === "TARGET_CLOSEST_BOT") return "CLOSEST_BOT";
+  return s;
+}
+
+/** @param {string} s */
+function normalizePowerupTypeToken(s) {
+  if (s === "HEALTH" || s === "AMMO" || s === "ENERGY") return s;
+  return "";
+}
+
+/** @param {string} s */
+function normalizeSlotToken(s) {
+  if (s === "SLOT1" || s === "SLOT2" || s === "SLOT3") return s;
+  return "";
+}
+
+/** @param {string} expr */
+function tokenizeExpr(expr) {
+  /** @type {ExprTok[]} */
+  const out = [];
+  let i = 0;
+  const isIdStart = (c) => /[A-Za-z_]/.test(c);
+  const isId = (c) => /[A-Za-z0-9_]/.test(c);
+  const isDigit = (c) => /[0-9]/.test(c);
+  while (i < expr.length) {
+    const c = expr[i];
+    if (c === " " || c === "\t" || c === "\r" || c === "\n") { i++; continue; }
+
+    const two = expr.slice(i, i + 2);
+    if (two === "&&" || two === "||" || two === "==" || two === "!=" || two === "<=" || two === ">=") {
+      out.push({ t: "OP", v: two });
+      i += 2;
+      continue;
+    }
+
+    if (c === "<" || c === ">" || c === "!" ) {
+      out.push({ t: "OP", v: c });
+      i += 1;
+      continue;
+    }
+
+    if (c === "(" || c === ")" || c === ",") {
+      out.push({ t: "PUNC", v: c });
+      i += 1;
+      continue;
+    }
+
+    if (isDigit(c)) {
+      let j = i + 1;
+      while (j < expr.length && isDigit(expr[j])) j++;
+      out.push({ t: "NUM", v: expr.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    if (isIdStart(c)) {
+      let j = i + 1;
+      while (j < expr.length && isId(expr[j])) j++;
+      out.push({ t: "ID", v: expr.slice(i, j) });
+      i = j;
+      continue;
+    }
+
+    return null;
+  }
+  return out;
+}
+
+/** @param {ExprTok[]} toks */
+function parseExpr(toks) {
+  let i = 0;
+
+  const peek = () => toks[i];
+  const take = () => toks[i++];
+
+  const parsePrimary = () => {
+    const t = peek();
+    if (!t) return null;
+    if (t.t === "NUM") { take(); return { kind: "NUM", n: Number(t.v) }; }
+    if (t.t === "ID") {
+      take();
+      const name = t.v;
+      const next = peek();
+      if (next && next.t === "PUNC" && next.v === "(") {
+        take(); // (
+        /** @type {ExprNode[]} */
+        const args = [];
+        const close = peek();
+        if (close && close.t === "PUNC" && close.v === ")") {
+          take();
+          return { kind: "CALL", name, args };
+        }
+        while (true) {
+          const e = parseOr();
+          if (!e) return null;
+          args.push(e);
+          const p = peek();
+          if (p && p.t === "PUNC" && p.v === ",") { take(); continue; }
+          const q = peek();
+          if (q && q.t === "PUNC" && q.v === ")") { take(); break; }
+          return null;
+        }
+        return { kind: "CALL", name, args };
+      }
+      return { kind: "IDENT", name };
+    }
+    if (t.t === "PUNC" && t.v === "(") {
+      take();
+      const e = parseOr();
+      const c = peek();
+      if (!e || !c || c.t !== "PUNC" || c.v !== ")") return null;
+      take();
+      return e;
+    }
+    return null;
+  };
+
+  const parseUnary = () => {
+    const t = peek();
+    if (t && t.t === "OP" && t.v === "!") {
+      take();
+      const e = parseUnary();
+      if (!e) return null;
+      return { kind: "UNARY", op: "!", expr: e };
+    }
+    return parsePrimary();
+  };
+
+  const parseCompare = () => {
+    let left = parseUnary();
+    if (!left) return null;
+    while (true) {
+      const t = peek();
+      if (!t || t.t !== "OP") break;
+      if (!["==","!=","<","<=",">",">="].includes(t.v)) break;
+      const op = t.v;
+      take();
+      const right = parseUnary();
+      if (!right) return null;
+      left = { kind: "BINARY", op, left, right };
+    }
+    return left;
+  };
+
+  const parseAnd = () => {
+    let left = parseCompare();
+    if (!left) return null;
+    while (true) {
+      const t = peek();
+      if (!t || t.t !== "OP" || t.v !== "&&") break;
+      take();
+      const right = parseCompare();
+      if (!right) return null;
+      left = { kind: "BINARY", op: "&&", left, right };
+    }
+    return left;
+  };
+
+  const parseOr = () => {
+    let left = parseAnd();
+    if (!left) return null;
+    while (true) {
+      const t = peek();
+      if (!t || t.t !== "OP" || t.v !== "||") break;
+      take();
+      const right = parseAnd();
+      if (!right) return null;
+      left = { kind: "BINARY", op: "||", left, right };
+    }
+    return left;
+  };
+
+  const root = parseOr();
+  if (!root) return null;
+  if (i !== toks.length) return null;
+  return root;
+}
+
+/**
+ * @param {ExprNode} n
+ * @param {{st:MatchState, bot:BotState, rules:any}} ctx
+ */
+function evalExprNode(n, ctx) {
+  const truthy = (v) => (typeof v === "boolean" ? v : (v | 0) !== 0);
+  const toNum = (v) => (typeof v === "number" ? v : truthy(v) ? 1 : 0);
+
+  if (n.kind === "NUM") return { ok: true, v: n.n };
+  if (n.kind === "IDENT") {
+    if (n.name === "HEALTH") return { ok: true, v: ctx.bot.health };
+    if (n.name === "AMMO") return { ok: true, v: ctx.bot.ammo };
+    if (n.name === "ENERGY") return { ok: true, v: ctx.bot.energy };
+    return { ok: false, v: 0 };
+  }
+  if (n.kind === "UNARY") {
+    const r = evalExprNode(n.expr, ctx);
+    if (!r.ok) return r;
+    return { ok: true, v: !truthy(r.v) };
+  }
+  if (n.kind === "BINARY") {
+    if (n.op === "&&") {
+      const l = evalExprNode(n.left, ctx);
+      if (!l.ok) return l;
+      if (!truthy(l.v)) return { ok: true, v: false };
+      const rr = evalExprNode(n.right, ctx);
+      if (!rr.ok) return rr;
+      return { ok: true, v: truthy(rr.v) };
+    }
+    if (n.op === "||") {
+      const l = evalExprNode(n.left, ctx);
+      if (!l.ok) return l;
+      if (truthy(l.v)) return { ok: true, v: true };
+      const rr = evalExprNode(n.right, ctx);
+      if (!rr.ok) return rr;
+      return { ok: true, v: truthy(rr.v) };
+    }
+
+    const l = evalExprNode(n.left, ctx);
+    if (!l.ok) return l;
+    const r = evalExprNode(n.right, ctx);
+    if (!r.ok) return r;
+    const a = toNum(l.v);
+    const b = toNum(r.v);
+
+    if (n.op === "==") return { ok: true, v: a === b };
+    if (n.op === "!=") return { ok: true, v: a !== b };
+    if (n.op === "<") return { ok: true, v: a < b };
+    if (n.op === "<=") return { ok: true, v: a <= b };
+    if (n.op === ">") return { ok: true, v: a > b };
+    if (n.op === ">=") return { ok: true, v: a >= b };
+    return { ok: false, v: 0 };
+  }
+  if (n.kind === "CALL") {
+    const name = n.name;
+    if (name === "POWERUP_EXISTS") {
+      if (n.args.length !== 1) return { ok: false, v: false };
+      const a0 = n.args[0];
+      if (a0.kind !== "IDENT") return { ok: false, v: false };
+      const ty = normalizePowerupTypeToken(a0.name);
+      if (!ty) return { ok: false, v: false };
+      return { ok: true, v: ctx.st.powerups.some(p => p.type === ty) };
+    }
+    if (name === "SLOT_READY") {
+      if (n.args.length !== 1) return { ok: false, v: false };
+      const a0 = n.args[0];
+      if (a0.kind !== "IDENT") return { ok: false, v: false };
+      const slot = normalizeSlotToken(a0.name);
+      if (!slot) return { ok: false, v: false };
+
+      const module = slot === "SLOT1" ? ctx.bot.loadout.slot1 : slot === "SLOT2" ? ctx.bot.loadout.slot2 : ctx.bot.loadout.slot3;
+      const cd = slot === "SLOT1" ? ctx.bot.slotCooldownRemaining.slot1 : slot === "SLOT2" ? ctx.bot.slotCooldownRemaining.slot2 : ctx.bot.slotCooldownRemaining.slot3;
+      if (!module) return { ok: true, v: false };
+      if (cd !== 0) return { ok: true, v: false };
+      if (module === "BULLET") return { ok: true, v: ctx.bot.ammo >= ctx.rules.bulletCostAmmo };
+      return { ok: true, v: false };
+    }
+    if (name === "DIST_TO_CLOSEST_BOT") {
+      if (n.args.length !== 0) return { ok: false, v: 999 };
+      const tgt = selectClosestEnemy(ctx.st, ctx.bot);
+      if (!tgt) return { ok: true, v: 999 };
+      const d = (distanceMap(ctx.bot.loc).get(`${tgt.loc.sector}:${tgt.loc.zone}`) ?? 999);
+      return { ok: true, v: d };
+    }
+    return { ok: false, v: 0 };
+  }
+
+  return { ok: false, v: 0 };
+}
+
+/**
+ * @param {string} sourceText
+ * @returns {CompiledProgram}
+ */
+function compileBotInstructionsV1(sourceText) {
+  const lines = sourceText.split(/\n/);
+
+  /** @type {Map<string, number>} */
+  const labels = new Map();
+
+  /** @type {CompiledInstr[]} */
+  const instructions = [];
+  /** @type {number[]} */
+  const pcToSourceLine = [];
+
+  const addInstr = (instr, srcLine) => {
+    instructions.push(instr);
+    pcToSourceLine.push(srcLine);
+  };
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const srcLine = idx + 1;
+    const raw = lines[idx];
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith(";")) continue;
+
+    if (trimmed.startsWith("LABEL ")) {
+      const name = trimmed.slice(6).trim();
+      if (name) labels.set(name, instructions.length + 1);
+      continue;
+    }
+
+    const instr = parseInstructionLine(trimmed, srcLine);
+    addInstr(instr, srcLine);
+  }
+
+  // Resolve labels
+  for (const instr of instructions) {
+    if ((instr.op === "GOTO" || instr.op === "IF_GOTO") && instr.label) {
+      const target = labels.get(instr.label);
+      if (target != null) {
+        instr.targetPc = target;
+      } else {
+        instr.op = "INVALID";
+      }
+    }
+  }
+
+  return { instructions, pcToSourceLine };
+}
+
+/** @param {string} line @param {number} sourceLine */
+function parseInstructionLine(line, sourceLine) {
+  const text = line;
+
+  if (line === "NOP") return { op: "NOP", text, sourceLine };
+
+  if (line.startsWith("GOTO ")) {
+    const label = line.slice(5).trim();
+    if (!label) return { op: "INVALID", text, sourceLine };
+    return { op: "GOTO", text, sourceLine, label };
+  }
+
+  if (line.startsWith("IF ")) {
+    const rest = line.slice(3).trim();
+    const idxGoto = rest.indexOf(" GOTO ");
+    const idxDo = rest.indexOf(" DO ");
+
+    if (idxGoto >= 0 && (idxDo < 0 || idxGoto < idxDo)) {
+      const exprStr = rest.slice(0, idxGoto).trim();
+      const label = rest.slice(idxGoto + 6).trim();
+      const expr = compileExpr(exprStr);
+      if (!expr || !label) return { op: "INVALID", text, sourceLine };
+      return { op: "IF_GOTO", text, sourceLine, expr, label };
+    }
+
+    if (idxDo >= 0) {
+      const exprStr = rest.slice(0, idxDo).trim();
+      const innerStr = rest.slice(idxDo + 4).trim();
+      const expr = compileExpr(exprStr);
+      if (!expr || !innerStr) return { op: "INVALID", text, sourceLine };
+      const inner = parseInstructionLine(innerStr, sourceLine);
+      if (["GOTO","IF_GOTO","IF_DO"].includes(inner.op)) return { op: "INVALID", text, sourceLine };
+      return { op: "IF_DO", text, sourceLine, expr, inner };
+    }
+
+    return { op: "INVALID", text, sourceLine };
+  }
+
+  if (line.startsWith("SET_MOVE_TO_BOT ")) {
+    const tok = normalizeBotTargetToken(line.slice("SET_MOVE_TO_BOT ".length).trim());
+    if (!tok) return { op: "INVALID", text, sourceLine };
+    return { op: "SET_MOVE_TO_BOT", text, sourceLine, botTarget: tok };
+  }
+
+  if (line.startsWith("SET_MOVE_TO_POWERUP ")) {
+    const ty = normalizePowerupTypeToken(line.slice("SET_MOVE_TO_POWERUP ".length).trim());
+    if (!ty) return { op: "INVALID", text, sourceLine };
+    return { op: "SET_MOVE_TO_POWERUP", text, sourceLine, powerupType: ty };
+  }
+
+  if (line.startsWith("SET_MOVE_TO_SECTOR ")) {
+    const toks = line.split(/\s+/);
+    // SET_MOVE_TO_SECTOR <S> [ZONE <Z>]
+    if (toks.length !== 2 && toks.length !== 4) return { op: "INVALID", text, sourceLine };
+    const sector = Number(toks[1]);
+    if (!(sector >= 1 && sector <= 9)) return { op: "INVALID", text, sourceLine };
+    if (toks.length === 2) {
+      return { op: "SET_MOVE_TO_SECTOR", text, sourceLine, sector, zone: 0 };
+    }
+    if (toks[2] !== "ZONE") return { op: "INVALID", text, sourceLine };
+    const zone = Number(toks[3]);
+    if (!(zone >= 1 && zone <= 4)) return { op: "INVALID", text, sourceLine };
+    return { op: "SET_MOVE_TO_SECTOR", text, sourceLine, sector, zone };
+  }
+
+  if (line.startsWith("USE_SLOT")) {
+    const toks = line.split(/\s+/);
+    if (toks.length !== 2) return { op: "INVALID", text, sourceLine };
+    const slotTok = toks[0];
+    const slot = slotTok === "USE_SLOT1" ? 1 : slotTok === "USE_SLOT2" ? 2 : slotTok === "USE_SLOT3" ? 3 : null;
+    if (!slot) return { op: "INVALID", text, sourceLine };
+    const targetTok = normalizeBotTargetToken(toks[1]);
+    return { op: "USE_SLOT", text, sourceLine, slot, target: targetTok };
+  }
+
+  return { op: "INVALID", text, sourceLine };
+}
+
+/** @param {string} exprStr */
+function compileExpr(exprStr) {
+  const toks = tokenizeExpr(exprStr);
+  if (!toks) return null;
+  return parseExpr(toks);
+}
+
+/**
+ * Execute exactly one instruction for this bot (or NOP if dead/invalid).
+ * Invalid instruction => NOP + pc resets to 1 next tick.
+ *
+ * @param {{st:MatchState, bot:BotState, program:CompiledProgram, rules:any, events:ReplayEvent[], immediateMoves:Map<BotId, Loc|null>}} params
+ */
+function execBotTickV1(params) {
+  const { st, bot, program, rules, events, immediateMoves } = params;
+
+  const pcBefore = bot.pc;
+  const instr = program.instructions[pcBefore - 1];
+
+  if (!bot.alive) {
+    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore, pcAfter: pcBefore });
+    return;
+  }
+
+  if (!instr) {
+    bot.pc = 1;
+    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_PC", pcBefore, pcAfter: bot.pc });
+    return;
+  }
+
+  const ctx = { st, bot, rules };
+
+  let pcAfter = pcBefore + 1;
+  let fault = false;
+
+  const doAction = (a) => {
+    if (!a) return { ok: false, reason: "MALFORMED" };
+
+    if (a.op === "NOP") return { ok: true };
+
+    if (a.op === "SET_MOVE_TO_BOT") {
+      bot.moveGoal = { kind: "BOT", target: a.botTarget };
+      return { ok: true };
+    }
+
+    if (a.op === "SET_MOVE_TO_POWERUP") {
+      bot.moveGoal = { kind: "POWERUP", type: a.powerupType };
+      return { ok: true };
+    }
+
+    if (a.op === "SET_MOVE_TO_SECTOR") {
+      bot.moveGoal = { kind: "LOC", loc: { sector: a.sector, zone: a.zone } };
+      return { ok: true };
+    }
+
+    if (a.op === "USE_SLOT") {
+      const slot = a.slot;
+      const module = slot === 1 ? bot.loadout.slot1 : slot === 2 ? bot.loadout.slot2 : bot.loadout.slot3;
+      const cd = slot === 1 ? bot.slotCooldownRemaining.slot1 : slot === 2 ? bot.slotCooldownRemaining.slot2 : bot.slotCooldownRemaining.slot3;
+
+      if (!module || cd !== 0) return { ok: true };
+      if (module === "BULLET") {
+        if (bot.ammo < rules.bulletCostAmmo) return { ok: true };
+
+        const resolved = resolveBotTargetToken(st, bot, a.target);
+        if (!resolved) return { ok: true };
+
+        bot.ammo -= rules.bulletCostAmmo;
+        if (slot === 1) bot.slotCooldownRemaining.slot1 = rules.bulletCooldownOnUseTicks + 1;
+        if (slot === 2) bot.slotCooldownRemaining.slot2 = rules.bulletCooldownOnUseTicks + 1;
+        if (slot === 3) bot.slotCooldownRemaining.slot3 = rules.bulletCooldownOnUseTicks + 1;
+
+        const dir = (rules.bulletDirPolicy === "A")
+          ? bulletDirA(bot.loc.sector, resolved.loc.sector)
+          : bulletDirA(bot.loc.sector, resolved.loc.sector);
+
+        /** @type {Bullet} */
+        const bullet = {
+          bulletId: st.nextBulletId++,
+          ownerBotId: bot.id,
+          targetBotId: resolved.id,
+          sector: bot.loc.sector,
+          dir,
+          ttlRemaining: rules.bulletTtlTicks,
+        };
+        st.bullets.push(bullet);
+        events.push({ type: "BULLET_SPAWN", bulletId: bullet.bulletId, ownerBotId: bullet.ownerBotId, sector: bullet.sector, dir: bullet.dir });
+        events.push({ type: "RESOURCE_DELTA", botId: bot.id, ammoDelta: -rules.bulletCostAmmo, energyDelta: 0, healthDelta: 0, cause: "USE_SLOT" });
+        return { ok: true };
+      }
+      return { ok: true };
+    }
+
+    return { ok: false, reason: "UNKNOWN_OP" };
+  };
+
+  const execOne = () => {
+    if (instr.op === "NOP") return { ok: true, reason: "NOP" };
+
+    if (instr.op === "GOTO") {
+      if (instr.targetPc == null) return { ok: false, reason: "BAD_LABEL" };
+      pcAfter = instr.targetPc;
+      return { ok: true, reason: "GOTO" };
+    }
+
+    if (instr.op === "IF_GOTO") {
+      if (!instr.expr || instr.targetPc == null) return { ok: false, reason: "MALFORMED_IF" };
+      const r = evalExprNode(instr.expr, ctx);
+      if (!r.ok) return { ok: false, reason: "BAD_EXPR" };
+      if (typeof r.v === "boolean" ? r.v : (r.v | 0) !== 0) pcAfter = instr.targetPc;
+      return { ok: true, reason: "IF_GOTO" };
+    }
+
+    if (instr.op === "IF_DO") {
+      if (!instr.expr || !instr.inner) return { ok: false, reason: "MALFORMED_IF" };
+      const r = evalExprNode(instr.expr, ctx);
+      if (!r.ok) return { ok: false, reason: "BAD_EXPR" };
+      const cond = (typeof r.v === "boolean" ? r.v : (r.v | 0) !== 0);
+      if (!cond) return { ok: true, reason: "IF_DO_FALSE" };
+      const rr = doAction(instr.inner);
+      if (!rr.ok) return rr;
+      return { ok: true, reason: "IF_DO_TRUE" };
+    }
+
+    if (instr.op === "SET_MOVE_TO_BOT" || instr.op === "SET_MOVE_TO_POWERUP" || instr.op === "SET_MOVE_TO_SECTOR" || instr.op === "USE_SLOT") {
+      return doAction(instr);
+    }
+
+    return { ok: false, reason: "INVALID_INSTR" };
+  };
+
+  const r = execOne();
+  if (!r.ok) fault = true;
+
+  if (fault) {
+    bot.pc = 1;
+    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_INSTRUCTION", pcBefore, pcAfter: bot.pc, instr: instr.text, sourceLine: instr.sourceLine, detail: r.reason ?? null });
+  } else {
+    if (program.instructions.length > 0) {
+      if (pcAfter < 1 || pcAfter > program.instructions.length) pcAfter = 1;
+    } else {
+      pcAfter = 1;
+    }
+    bot.pc = pcAfter;
+    events.push({ type: "BOT_EXEC", botId: bot.id, result: "EXECUTED", reason: r.reason ?? null, pcBefore, pcAfter: bot.pc, instr: instr.text, sourceLine: instr.sourceLine });
+  }
+}
+
+/**
+ * @param {MatchState} st
+ * @param {BotState} self
+ * @param {string} tok
+ */
+function resolveBotTargetToken(st, self, tok) {
+  const t = normalizeBotTargetToken(tok);
+  if (t === "TARGET") {
+    if (!self.targetBotId) return null;
+    const b = st.bots.find(x => x.alive && x.id === self.targetBotId);
+    return b ?? null;
+  }
+  if (t === "CLOSEST_BOT") return selectClosestEnemy(st, self);
+  if (t === "LOWEST_HEALTH_BOT") return selectLowestHealthEnemy(st, self);
+  if (t === "BOT1" || t === "BOT2" || t === "BOT3" || t === "BOT4") {
+    const b = st.bots.find(x => x.alive && x.id === t);
+    if (b && b.id !== self.id) return b;
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Deterministic target selection: lowest health alive bot, ties => lowest bot id.
+ * @param {MatchState} st
+ * @param {BotState} self
+ */
+function selectLowestHealthEnemy(st, self) {
+  const alive = st.bots.filter(b => b.alive && b.id !== self.id);
+  if (!alive.length) return null;
+  let best = alive[0];
+  for (const b of alive) {
+    if (b.health < best.health) best = b;
+    else if (b.health === best.health && botIdIndex(b.id) < botIdIndex(best.id)) best = b;
+  }
+  return best;
+}
+
+/**
+ * Resolve movement goal (if any) into a single anchor-step.
+ * @param {MatchState} st
+ * @param {BotState} bot
+ */
+function computeGoalMoveStep(st, bot) {
+  if (!bot.moveGoal || !bot.alive) return null;
+
+  if (bot.moveGoal.kind === "LOC") {
+    const goalLoc = bot.moveGoal.loc;
+    if (locEq(bot.loc, goalLoc)) {
+      bot.moveGoal = null;
+      return null;
+    }
+    return nextStepToward(bot.loc, goalLoc);
+  }
+
+  if (bot.moveGoal.kind === "POWERUP") {
+    const type = bot.moveGoal.type;
+    const candidates = st.powerups.filter(p => p.type === type);
+    if (!candidates.length) {
+      bot.moveGoal = null;
+      return null;
+    }
+
+    const distFrom = distanceMap(bot.loc);
+    const key = (/** @type {Loc} */l) => `${l.sector}:${l.zone}`;
+    let best = candidates[0];
+    let bestD = distFrom.get(key(best.loc)) ?? 999;
+    for (const p of candidates) {
+      const d = distFrom.get(key(p.loc)) ?? 999;
+      if (d < bestD) { bestD = d; best = p; }
+      else if (d === bestD && compareLoc(p.loc, best.loc) < 0) best = p;
+    }
+    return nextStepToward(bot.loc, best.loc);
+  }
+
+  if (bot.moveGoal.kind === "BOT") {
+    const resolved = resolveBotTargetToken(st, bot, bot.moveGoal.target);
+    if (!resolved) {
+      bot.moveGoal = null;
+      return null;
+    }
+    return nextStepToward(bot.loc, resolved.loc);
+  }
+
+  return null;
+}
+
 /**
  * @param {{matchSeed:number, tickCap:number, rules?:Partial<typeof DEFAULT_RULESET>}} params
  * @returns {Replay}
@@ -406,13 +1097,17 @@ export function createReplay(params) {
       displayName: "BOT1",
       appearance: { kind: "COLOR", color: "#3b82f6" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: "; builtin: chase+shoot (hardcoded)",
+      sourceText: BUILTIN_BOT2_SOURCE,
       loc: { sector: 1, zone: 1 },
       alive: true,
       health: 100,
       ammo: 100,
       energy: 100,
       pc: 1,
+      targetBotId: null,
+      targetPowerupType: null,
+      moveGoal: null,
+      slotCooldownRemaining: { slot1: 0, slot2: 0, slot3: 0 },
       moveCooldownRemaining: 0,
       lastDamageByBotId: null,
       kills: 0,
@@ -423,13 +1118,17 @@ export function createReplay(params) {
       displayName: "BOT2",
       appearance: { kind: "COLOR", color: "#ef4444" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: "; builtin: chase+shoot (hardcoded)",
+      sourceText: BUILTIN_BOT2_SOURCE,
       loc: { sector: 3, zone: 2 },
       alive: true,
       health: 100,
       ammo: 100,
       energy: 100,
       pc: 1,
+      targetBotId: null,
+      targetPowerupType: null,
+      moveGoal: null,
+      slotCooldownRemaining: { slot1: 0, slot2: 0, slot3: 0 },
       moveCooldownRemaining: 0,
       lastDamageByBotId: null,
       kills: 0,
@@ -440,13 +1139,17 @@ export function createReplay(params) {
       displayName: "BOT3",
       appearance: { kind: "COLOR", color: "#22c55e" },
       loadout: { slot1: "BULLET", slot2: "ARMOR", slot3: null },
-      sourceText: "; builtin: bunker+shoot (hardcoded)",
+      sourceText: BUILTIN_BOT3_SOURCE,
       loc: { sector: 7, zone: 3 },
       alive: true,
       health: 100,
       ammo: 100,
       energy: 100,
       pc: 1,
+      targetBotId: null,
+      targetPowerupType: null,
+      moveGoal: null,
+      slotCooldownRemaining: { slot1: 0, slot2: 0, slot3: 0 },
       moveCooldownRemaining: 0,
       lastDamageByBotId: null,
       kills: 0,
@@ -457,19 +1160,27 @@ export function createReplay(params) {
       displayName: "BOT4",
       appearance: { kind: "COLOR", color: "#eab308" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: "; builtin: chase+shoot (hardcoded)",
+      sourceText: BUILTIN_BOT2_SOURCE,
       loc: { sector: 9, zone: 4 },
       alive: true,
       health: 100,
       ammo: 100,
       energy: 100,
       pc: 1,
+      targetBotId: null,
+      targetPowerupType: null,
+      moveGoal: null,
+      slotCooldownRemaining: { slot1: 0, slot2: 0, slot3: 0 },
       moveCooldownRemaining: 0,
       lastDamageByBotId: null,
       kills: 0,
       points: 0,
     },
   ];
+
+  /** @type {Map<BotId, CompiledProgram>} */
+  const programsByBotId = new Map();
+  for (const b of bots) programsByBotId.set(b.id, compileBotInstructionsV1(b.sourceText));
 
   /** @type {MatchState} */
   const st = {
@@ -529,69 +1240,38 @@ export function createReplay(params) {
     /** @type {ReplayEvent[]} */
     const ev = [];
 
-    // Phase 1: Bot "instruction" phase (hardcoded AI for skeleton)
+    // Phase 1: Bot instruction phase (BotInstructions v1) — exactly one instruction per bot
+    /** @type {Map<BotId, Loc|null>} */
+    const immediateMoves = new Map();
+    for (const bot of st.bots) immediateMoves.set(bot.id, null);
+
     for (const bot of st.bots) {
-      if (!bot.alive) {
-        ev.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore: bot.pc, pcAfter: bot.pc });
-        continue;
+      const program = programsByBotId.get(bot.id) ?? { instructions: [], pcToSourceLine: [] };
+      execBotTickV1({ st, bot, program, rules, events: ev, immediateMoves });
+    }
+
+    // Phase 2: Movement phase (goal movement runs even on non-movement instructions)
+    for (const bot of st.bots) {
+      if (!bot.alive) continue;
+
+      const next = immediateMoves.get(bot.id) ?? computeGoalMoveStep(st, bot);
+      if (!next) continue;
+
+      const equipped = equippedCount(bot.loadout);
+      const moveCooldownOnMoveTicks = rules.baseMoveCooldownOnMoveTicks + equipped * rules.perEquippedSlotMoveCooldownPenaltyTicks;
+
+      if (bot.moveCooldownRemaining !== 0) continue;
+
+      const occupied = st.bots.some(b => b.alive && b.id !== bot.id && locEq(b.loc, next));
+      if (!occupied) {
+        const fromLoc = bot.loc;
+        bot.loc = next;
+        bot.moveCooldownRemaining = moveCooldownOnMoveTicks + 1;
+        ev.push({ type: "BOT_MOVED", botId: bot.id, fromLoc, toLoc: next });
+      } else {
+        const other = st.bots.find(b => b.alive && locEq(b.loc, next));
+        ev.push({ type: "BUMP_BOT", botId: bot.id, otherBotId: other?.id ?? null });
       }
-
-      // Movement intent: chase closest
-      const target = selectClosestEnemy(st, bot);
-      if (target) {
-        const next = nextStepToward(bot.loc, target.loc);
-        // Movement cooldown enforcement (Ruleset.md §1.2)
-        const equipped = equippedCount(bot.loadout);
-        const moveCooldownOnMoveTicks = rules.baseMoveCooldownOnMoveTicks + equipped * rules.perEquippedSlotMoveCooldownPenaltyTicks;
-
-        if (next && bot.moveCooldownRemaining === 0) {
-          // collision check (anchor occupancy)
-          const occupied = st.bots.some(b => b.alive && b.id !== bot.id && locEq(b.loc, next));
-          if (!occupied) {
-            const fromLoc = bot.loc;
-            bot.loc = next;
-            bot.moveCooldownRemaining = moveCooldownOnMoveTicks + 1;
-            ev.push({ type: "BOT_MOVED", botId: bot.id, fromLoc, toLoc: next });
-          } else {
-            // bump bot (no damage for now)
-            const other = st.bots.find(b => b.alive && locEq(b.loc, next));
-            ev.push({ type: "BUMP_BOT", botId: bot.id, otherBotId: other?.id ?? null });
-          }
-        }
-      }
-
-      // For this skeleton: emulate a simple weapon cooldown by using `pc` as a counter.
-      // This is not the final DSL pc.
-      if (bot.pc > 1) bot.pc -= 1;
-
-      const tgt = selectClosestEnemy(st, bot);
-      if (tgt) {
-        const d = (distanceMap(bot.loc).get(`${tgt.loc.sector}:${tgt.loc.zone}`) ?? 999);
-        const canFire = (bot.pc === 1) && bot.ammo >= rules.bulletCostAmmo && d <= 3;
-        if (canFire) {
-          bot.ammo -= rules.bulletCostAmmo;
-          bot.pc = 1 + rules.bulletCooldownOnUseTicks;
-
-          const dir = (rules.bulletDirPolicy === "A")
-            ? bulletDirA(bot.loc.sector, tgt.loc.sector)
-            : bulletDirA(bot.loc.sector, tgt.loc.sector);
-
-          /** @type {Bullet} */
-          const bullet = {
-            bulletId: st.nextBulletId++,
-            ownerBotId: bot.id,
-            targetBotId: tgt.id,
-            sector: bot.loc.sector,
-            dir,
-            ttlRemaining: rules.bulletTtlTicks,
-          };
-          st.bullets.push(bullet);
-          ev.push({ type: "BULLET_SPAWN", bulletId: bullet.bulletId, ownerBotId: bullet.ownerBotId, sector: bullet.sector, dir: bullet.dir });
-          ev.push({ type: "RESOURCE_DELTA", botId: bot.id, ammoDelta: -rules.bulletCostAmmo, energyDelta: 0, healthDelta: 0, cause: "FIRE_BULLET" });
-        }
-      }
-
-      ev.push({ type: "BOT_EXEC", botId: bot.id, result: "EXECUTED", reason: "BUILTIN_AI", pcBefore: 1, pcAfter: bot.pc });
     }
 
     // Phase 4: Projectile updates (bullets)
@@ -640,6 +1320,7 @@ export function createReplay(params) {
         if (p.type === "HEALTH") { dh = rules.powerupHealthDelta; bot.health = Math.min(100, bot.health + dh); }
         if (p.type === "AMMO") { da = rules.powerupAmmoDelta; bot.ammo = Math.min(100, bot.ammo + da); }
         if (p.type === "ENERGY") { de = rules.powerupEnergyDelta; bot.energy = Math.min(100, bot.energy + de); }
+        if (bot.moveGoal && bot.moveGoal.kind === "POWERUP" && bot.moveGoal.type === p.type) bot.moveGoal = null;
         ev.push({ type: "POWERUP_PICKUP", botId: bot.id, powerupId: p.powerupId, type: p.type, loc: p.loc });
         ev.push({ type: "RESOURCE_DELTA", botId: bot.id, ammoDelta: da, energyDelta: de, healthDelta: dh, cause: `PICKUP_${p.type}` });
       }
@@ -657,6 +1338,20 @@ export function createReplay(params) {
     for (const bot of st.bots) {
       if (bot.moveCooldownRemaining > 0) bot.moveCooldownRemaining -= 1;
       if (bot.moveCooldownRemaining < 0) bot.moveCooldownRemaining = 0;
+
+      if (bot.slotCooldownRemaining.slot1 > 0) bot.slotCooldownRemaining.slot1 -= 1;
+      if (bot.slotCooldownRemaining.slot2 > 0) bot.slotCooldownRemaining.slot2 -= 1;
+      if (bot.slotCooldownRemaining.slot3 > 0) bot.slotCooldownRemaining.slot3 -= 1;
+
+      if (bot.targetBotId) {
+        const alive = st.bots.some(b => b.alive && b.id === bot.targetBotId);
+        if (!alive) bot.targetBotId = null;
+      }
+
+      if (bot.targetPowerupType) {
+        const exists = st.powerups.some(p => p.type === bot.targetPowerupType);
+        if (!exists) bot.targetPowerupType = null;
+      }
     }
 
     // Powerup spawn timer
