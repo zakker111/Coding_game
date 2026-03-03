@@ -14,10 +14,11 @@ It is aligned with:
 
 - **Readable at a glance**: players immediately see where bots are, what they’re doing, and who is winning.
 - **Deterministic + debug-friendly**: visuals are a pure view over replay state/events.
+- **Tick-based but smooth**: simulation state updates only on tick boundaries, but playback can animate motion within a tick for readability.
 - **Crisp rendering**: integer scaling for pixel-art style (no blurry grid/sprites).
 - **Low clutter by default**: show essentials always; show details on hover/selection.
 
-Non-goals (v1): cinematic effects, physics-grade interpolation, full minimap.
+Non-goals (v1): cinematic effects, physics-grade interpolation/easing, full minimap.
 
 ---
 
@@ -225,8 +226,8 @@ Future (post-v1):
 To make shooting/movement readable:
 - draw a small triangle/notch/arrow on the bot pointing in its current facing or last action direction.
 - if facing is not available in v1 state, derive from:
-  - last `BOT_MOVED` direction within the current tick window, else
-  - last `BULLET_SPAWN` direction.
+  - last `BOT_MOVED.dir` within the current tick window, else
+  - last `BULLET_SPAWN.dir`.
 
 ### 5.3 Bot id label (required)
 
@@ -298,7 +299,8 @@ Projectiles should be drawn from replay events (`ReplayViewerPlan.md`), not infe
 ### 7.1 Bullets
 
 - `BULLET_SPAWN`: draw a brief muzzle flash at the owner bot + create bullet entity visual
-  - spawn position rule: if replay provides `pos`, use it; otherwise use the owner bot’s current anchor center (per the replay tick convention)
+  - spawn position rule: if replay provides `pos`, use it; otherwise use the owner bot’s location at the moment of firing
+    - v1 tick loop note: instruction execution happens before movement (`ServerSimulationPlan.md`), so for tick `t` this is the bot location in `state[t-1]`.
 - `BULLET_MOVE`: animate bullet from `fromSector` → `toSector` over the tick duration
   - If `pathSectors[]` exists (speed>1): animate along the path within the same tick.
 - `BULLET_HIT`: hit spark on victim
@@ -310,9 +312,15 @@ Visual style:
 
 ### 7.2 Tick-based interpolation (recommended)
 
+The simulation is tick-based, but the viewer should feel smooth.
+
 While playing (not paused), render an intra-tick progress `p ∈ [0,1]` based on real time and playback speed.
 
-- For movement events (bots and projectiles), interpolate positions linearly from “from” to “to”.
+Recommended v1 policy (keeps gameplay semantics clear):
+- **Positions interpolate; game state stays tick-based.**
+  - Interpolate bot/projectile positions linearly from their tick-start location to their tick-end location.
+  - Keep non-positional state (HP/ammo/energy, deaths, pickups) “snapped” and only update it at tick boundaries.
+    - Concretely: at `p=0`, render `state[t-1]`; at `p=1`, render `state[t]`.
 - When paused or scrubbing, render the tick in a stable state:
   - recommended: render at `p=1` (end-of-tick positions) so the playhead tick matches the state after events resolve.
 

@@ -147,8 +147,12 @@ Bots do **discrete movement** between anchors:
 - sector centers (`SECTOR s`)
 - zone centers (`SECTOR s ZONE z`)
 
+Rendering note (client/viewer): movement can still be shown as **smooth** by interpolating between anchors over the tick duration, but gameplay remains tick-based and discrete.
+
 Rules:
 - movement is 1 anchor-step per tick (when a move occurs)
+  - simulation is tick-based; the authoritative location changes only on tick boundaries
+  - the client/replay viewer may render movement smoothly by interpolating from `fromLoc` → `toLoc` within the tick (presentation-only)
 - collisions are grid-like:
   - attempting to step outside the outer boundary → wall bump (no movement + bump damage)
   - attempting to step into an occupied anchor → bot bump (no movement + bump event)

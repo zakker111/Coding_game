@@ -3,7 +3,7 @@
 This document describes the **client-first UI/UX** for the bot battle game:
 - players write bot code
 - run local simulations
-- inspect/replay what happened (deterministic ticks)
+- inspect/replay what happened (deterministic ticks; simulation advances in whole ticks, but playback can render motion smoothly)
 
 v1 goal: ship the smallest UI that proves the core loop:
 **edit bot → run a 4-bot match locally → replay/debug → iterate**.
@@ -36,7 +36,9 @@ It builds on:
      - BOT2–BOT4 = built-in opponents (read-only)
    - **Replay what happened**
      - play/pause, step +1, restart to tick 0, jump to end, speed
-     - the viewer renders from replay state + playhead tick
+     - the simulation is tick-based (discrete state at each tick)
+     - while playing, the arena can render intra-tick motion smoothly by interpolating between tick states/events
+     - when paused or scrubbing/stepping, render the exact tick state
    - **Inspect bots**
      - bot list/inspector shows: appearance token, stats at playhead tick, and code view
      - BOT2–BOT4 code is read-only
@@ -79,7 +81,7 @@ Layout (v1):
   - comfortable padding (e.g. 24px)
 - minimal text (keep it short, but set expectations clearly):
   - title
-  - one sentence: “Code a bot. Run a 4‑bot match locally. Replay it tick‑by‑tick.”
+  - one sentence: “Code a bot. Run a 4‑bot match locally. Replay it tick‑by‑tick (with smooth motion during playback).”
   - optional 3 bullets:
     - Code your bot (BOT1)
     - Battle 3 built-in opponents
@@ -216,6 +218,18 @@ Single-source-of-truth rule:
 ## 5) Arena rendering (sectors + zones)
 
 Detailed visual/UX spec (grid rendering, scaling, entity visuals, overlays): see `ArenaVisualPlan.md`.
+
+### 5.0 Smooth movement (rendering) with tick-based simulation (v1)
+
+Simulation remains **tick-based and discrete**:
+- bot positions change only at tick boundaries (end-of-tick snapshots)
+- movement is still “one anchor step when a move succeeds” (subject to cooldown)
+
+Rendering should still feel smooth:
+- while playback is running, the viewer **interpolates** bot/projectile positions within each tick (linear interpolation is fine)
+- when paused or scrubbing, render the **exact tick snapshot** (no interpolation)
+
+(Implementation details and recommended interpolation rules: `ArenaVisualPlan.md` §7.2.)
 
 ### 5.1 World model + scaling
 

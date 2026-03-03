@@ -20,6 +20,7 @@ It complements:
 
 - **Battle picker / match history**: list and open past matches.
 - **Deterministic playback**: the UI is a pure view over replay data.
+- **Tick-based but smooth**: simulation/replay data is tick-indexed, but while playing the viewer can interpolate motion within a tick for readability.
 - **Debugging-first**:
   - show tick number
   - show which bot instruction executed
@@ -177,6 +178,12 @@ Notes:
 - Under this convention, viewers that render purely from `state[t]` will match "after resolution" visuals (moves applied, bullets advanced, hits applied, pickups applied, deaths resolved).
 - The per-tick event list remains the canonical explanation/debug log for how `state[t]` was reached.
 
+Rendering note (smooth playback; optional but recommended):
+- For tick `t`, treat `state[t-1]` as the **start-of-tick** state and `state[t]` as the **end-of-tick** state.
+- While playing, compute an intra-tick progress `p ∈ [0,1]` and interpolate *positions* from `start → end`.
+  - Keep non-positional state (HP/ammo/energy, deaths, pickups) snapped to tick boundaries.
+- When paused/scrubbing/stepping, render at `p=1` (end-of-tick) so the playhead tick matches `state[t]`.
+
 ---
 
 ## 4) Event types needed for correct visualization
@@ -187,10 +194,15 @@ Event ordering + compatibility:
 - The per-tick `events[]` list is ordered. When multiple events happen in the same tick (e.g., burst shots), the array order is the canonical sequence the viewer should use.
 - Unknown event types should be ignored (so older viewers can still open newer replays).
 
+Tick field convention:
+- Events are stored under `events[t]`, so the **tick is implied** by the container.
+- Individual event objects may include `tick` for redundancy/debugging, but it is optional and must match the container tick.
+
 ### 4.1 Bot execution trace
 
 - `BOT_EXEC`:
-  - `tick`, `botId`
+  - `botId`
+  - `tick` (optional; redundant; must match the container tick)
   - `pcBefore`, `pcAfter`
   - `instrText` (or `instrIndex`)
   - `result`: `EXECUTED | NOP | ERROR`
@@ -236,7 +248,18 @@ Optional future extension: continuous positions (`pos`)
 
 ### 4.3 Movement + bumps
 
-- `BOT_MOVED`: `botId`, `fromLoc`, `toLoc`
+- `BOT_MOVED`:
+  - `botId`
+  - `fromLoc` (a `loc`; see §4.2)
+  - `toLoc` (a `loc`; see §4.2)
+  - `dir` (`UP|DOWN|LEFT|RIGHT`)
+  - `tick` (optional; redundant; must match the container tick)
+
+Semantics:
+- Emit `BOT_MOVED` **only when movement succeeds**.
+- In tick `t`, `fromLoc` should match the bot location in `state[t-1]`, and `toLoc` should match the bot location in `state[t]`.
+- `dir` is the bot’s chosen move direction for the step (do not derive it from `fromLoc → toLoc`, because anchor steps can change both `x` and `y`).
+
 - `BUMP_WALL`: `botId`, `dir`, `damage`
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
@@ -270,7 +293,8 @@ Optional fields (not required in v1) support future weapons/features:
   - required: `bulletId`, `ownerBotId`, `sector`, `dir`
   - viewer spawn position rule:
     - if `pos` is present → render bullet spawn at `pos`
-    - else → render bullet spawn at the **owner bot’s current location center** (derived from `state[t]` / `state[t-1]`, per the chosen tick convention)
+    - else → render bullet spawn at the **owner bot’s location at the moment of firing**
+      - v1 tick loop note: instruction execution happens before movement (`ServerSimulationPlan.md`), so for tick `t` this is the bot location in `state[t-1]`.
   - optional:
     - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
     - `burst` (burst grouping; omitted for non-burst shots):
