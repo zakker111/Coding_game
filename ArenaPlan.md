@@ -148,7 +148,7 @@ Bots do **discrete movement** between anchors:
 - sector centers (`SECTOR s`)
 - zone centers (`SECTOR s ZONE z`)
 
-Rendering note (client/viewer): movement **must** be shown as smooth while playing by interpolating between anchors over the tick duration, but gameplay remains tick-based and discrete.
+Rendering note (client/viewer): movement **must** be shown as smooth while playing by interpolating between anchors over the tick duration, but gameplay remains tick-based and discrete (tick semantics + interpolation policy: `ReplayViewerPlan.md` §3.3, `ArenaVisualPlan.md` §7.2).
 
 Rules:
 - movement is 1 anchor-step per tick (when a move occurs)

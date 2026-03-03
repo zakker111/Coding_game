@@ -37,8 +37,9 @@ It builds on:
    - **Replay what happened**
      - play/pause, step +1, restart to tick 0, jump to end, speed
      - the simulation is tick-based (discrete state at each tick)
+     - tick convention: `state[t]` is the **end-of-tick** snapshot; `events[t]` explain `state[t-1] → state[t]` (see `ReplayViewerPlan.md` §3.3)
      - while playing, the arena **must** render intra-tick motion smoothly by interpolating between tick states/events
-     - when paused or scrubbing/stepping, render the exact tick state (no intra-tick interpolation)
+     - when paused or scrubbing/stepping, render the exact playhead snapshot (`state[t]`; no intra-tick interpolation)
    - **Inspect bots**
      - bot list/inspector shows: appearance token, stats at playhead tick, and code view
      - BOT2–BOT4 code is read-only
@@ -248,7 +249,7 @@ Render scaling:
 
 - draw **sector boundaries** as **thicker green** lines
 - draw **zone boundaries** as **thinner green** lines
-- optionally label sector ids 1..9
+- always show sector ids 1..9
 
 ### 5.3 Entity rendering
 

@@ -354,6 +354,8 @@ Visual style:
 
 The simulation is tick-based, but the viewer should feel smooth.
 
+Tick indexing convention (authoritative): see `ReplayViewerPlan.md` §3.3 (`state[t]` is end-of-tick; `events[t]` explain `state[t-1] → state[t]`).
+
 While playing (not paused), render an intra-tick progress `p ∈ [0,1]` based on real time and playback speed.
 
 Recommended v1 policy (keeps gameplay semantics clear):
