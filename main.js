@@ -42,6 +42,30 @@ const inspectorTitle = el('inspectorTitle');
 const inspectorExec = el('inspectorExec');
 const inspectorCode = el('inspectorCode');
 
+let canvasCssWidth = 0;
+let canvasCssHeight = 0;
+let canvasDpr = 1;
+
+function resizeCanvasToDisplaySize() {
+  const rect = canvas.getBoundingClientRect();
+  const cssWidth = rect.width || canvas.clientWidth || canvas.width;
+  const cssHeight = rect.height || canvas.clientHeight || canvas.height;
+  const dpr = window.devicePixelRatio || 1;
+
+  const nextWidth = Math.max(1, Math.round(cssWidth * dpr));
+  const nextHeight = Math.max(1, Math.round(cssHeight * dpr));
+
+  canvasCssWidth = cssWidth;
+  canvasCssHeight = cssHeight;
+  canvasDpr = dpr;
+
+  if (canvas.width === nextWidth && canvas.height === nextHeight) return false;
+
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
+  return true;
+}
+
 /** @type {import('./engine.js').Replay|null} */
 let replay = null;
 
@@ -386,8 +410,15 @@ function anchorWorldCenter(loc) {
   return { x: so.x + zoneOffset.x + 16, y: so.y + zoneOffset.y + 16 };
 }
 
-function pickScale(canvasEl) {
-  const minDim = Math.min(canvasEl.width, canvasEl.height);
+function canvasLogicalSize() {
+  return {
+    width: canvasCssWidth || canvas.clientWidth || canvas.width,
+    height: canvasCssHeight || canvas.clientHeight || canvas.height,
+  };
+}
+
+function pickScale(w, h) {
+  const minDim = Math.min(w, h);
   const candidates = [6,5,4,3,2,1];
   for (const s of candidates) {
     if (WORLD * s <= minDim) return s;
@@ -399,11 +430,23 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function computeViewTransform(canvasEl) {
-  const S = pickScale(canvasEl);
+function clamp01(x) {
+  return Math.max(0, Math.min(1, x));
+}
+
+function easeInOutCubic(t) {
+  t = clamp01(t);
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function computeViewTransform() {
+  const { width, height } = canvasLogicalSize();
+  const S = pickScale(width, height);
   const arenaPx = WORLD * S;
-  const ox = Math.floor((canvasEl.width - arenaPx) / 2);
-  const oy = Math.floor((canvasEl.height - arenaPx) / 2);
+  const ox = Math.floor((width - arenaPx) / 2);
+  const oy = Math.floor((height - arenaPx) / 2);
   return { S, ox, oy };
 }
 
@@ -426,9 +469,10 @@ function botScreenPos(renderCtx, botId) {
 
   const a = anchorWorldCenter(fromLoc);
   const b = anchorWorldCenter(toLoc);
-  const w = { x: lerp(a.x, b.x, progress01), y: lerp(a.y, b.y, progress01) };
+  const t = easeInOutCubic(progress01);
+  const w = { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
 
-  const { S, ox, oy } = computeViewTransform(canvas);
+  const { S, ox, oy } = computeViewTransform();
   return { x: ox + w.x * S, y: oy + w.y * S, r: 8 * S };
 }
 
@@ -479,13 +523,21 @@ function selectionOverlay(renderCtx) {
 }
 
 function canvasPointFromMouseEvent(ev) {
+  // Important: our rendering coordinate system is in **logical (CSS) pixels**.
+  // The renderer applies ctx.setTransform(dpr,0,0,dpr,0,0) internally.
+  // So for picking we must return logical coordinates as well (not device pixels).
   const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
+  const { width: lw, height: lh } = canvasLogicalSize();
+  const scaleX = lw / rect.width;
+  const scaleY = lh / rect.height;
   return { x: (ev.clientX - rect.left) * scaleX, y: (ev.clientY - rect.top) * scaleY };
 }
 
 function render() {
+  // Keep canvas resolution matched to its displayed size (hi-DPI aware).
+  // This reduces perceived jerkiness/jitter from browser scaling.
+  resizeCanvasToDisplaySize();
+
   if (!replay) {
     hud.textContent = '';
     return;
@@ -494,6 +546,8 @@ function render() {
   const renderCtx = computeRenderCtx();
   if (!renderCtx) return;
 
+  const { width: logicalWidth, height: logicalHeight } = canvasLogicalSize();
+
   renderFrame({
     canvas,
     fromSnapshot: renderCtx.fromSnapshot,
@@ -501,6 +555,9 @@ function render() {
     events: renderCtx.renderEvents,
     showAnchors: showAnchorsEl.checked,
     progress01: renderCtx.progress01,
+    dpr: canvasDpr,
+    logicalWidth,
+    logicalHeight,
   });
 
   selectionOverlay(renderCtx);
@@ -517,7 +574,10 @@ function animate(ms) {
   }
 
   if (!lastFrameMs) lastFrameMs = ms;
-  const dt = (ms - lastFrameMs) / 1000;
+  // Clamp dt so if the tab was inactive or the browser stutters,
+  // we don't skip multiple ticks in a single frame (looks jerky).
+  const dtRaw = (ms - lastFrameMs) / 1000;
+  const dt = Math.min(dtRaw, 0.1);
   lastFrameMs = ms;
 
   if (playing) {
@@ -652,6 +712,7 @@ setUiEnabled(false);
 setSelectedBot(null);
 updateCompileOut();
 
+resizeCanvasToDisplaySize();
 renderFrame({
   canvas,
   fromSnapshot: { tick: 0, bots: [], bullets: [], powerups: [] },
@@ -659,8 +720,18 @@ renderFrame({
   events: [],
   showAnchors: false,
   progress01: 0,
+  dpr: canvasDpr,
+  logicalWidth: canvasLogicalSize().width,
+  logicalHeight: canvasLogicalSize().height,
 });
 requestAnimationFrame(animate);
+
+// Re-fit canvas on layout changes.
+window.addEventListener('resize', () => {
+  // Avoid doing work if nothing changed.
+  const changed = resizeCanvasToDisplaySize();
+  if (changed) render();
+});
 
 // Initialize editor content + opponent sources
 (async () => {

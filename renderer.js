@@ -23,8 +23,8 @@ function anchorWorldCenter(loc) {
   return { x: so.x + zoneOffset.x + 16, y: so.y + zoneOffset.y + 16 };
 }
 
-function pickScale(canvas) {
-  const minDim = Math.min(canvas.width, canvas.height);
+function pickScale(w, h) {
+  const minDim = Math.min(w, h);
   const candidates = [6,5,4,3,2,1];
   for (const s of candidates) {
     if (WORLD * s <= minDim) return s;
@@ -38,6 +38,13 @@ function lerp(a, b, t) {
 
 function clamp01(x) {
   return Math.max(0, Math.min(1, x));
+}
+
+function easeInOutCubic(t) {
+  t = clamp01(t);
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 function withAlpha(ctx, a, fn) {
@@ -77,6 +84,9 @@ function findEvents(events, type) {
  *  events?: any[],
  *  showAnchors: boolean,
  *  progress01: number,
+ *  dpr?: number,
+ *  logicalWidth?: number,
+ *  logicalHeight?: number,
  * }} params
  */
 export function renderFrame(params) {
@@ -84,16 +94,22 @@ export function renderFrame(params) {
   const events = params.tickEvents ?? params.events ?? [];
   const p = clamp01(params.progress01);
 
+  const logicalWidth = params.logicalWidth ?? canvas.clientWidth ?? canvas.width;
+  const logicalHeight = params.logicalHeight ?? canvas.clientHeight ?? canvas.height;
+  const dpr = params.dpr ?? (logicalWidth ? (canvas.width / logicalWidth) : (window.devicePixelRatio || 1));
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const S = pickScale(canvas);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const S = pickScale(logicalWidth, logicalHeight);
   const arenaPx = WORLD * S;
-  const ox = Math.floor((canvas.width - arenaPx) / 2);
-  const oy = Math.floor((canvas.height - arenaPx) / 2);
+  const ox = Math.floor((logicalWidth - arenaPx) / 2);
+  const oy = Math.floor((logicalHeight - arenaPx) / 2);
 
   // background
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, logicalWidth, logicalHeight);
   ctx.fillStyle = '#06101a';
   ctx.fillRect(ox, oy, arenaPx, arenaPx);
 
@@ -160,6 +176,7 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
   }
 
   const impactStart = 0.82;
+  const moveT = easeInOutCubic(p);
 
   for (const m of moves) {
     const a = anchorWorldCenter({ sector: m.fromSector, zone: 0 });
@@ -179,7 +196,7 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
 
     if (hit && isFinalMoveThisTick && (impactTo.x !== sectorCenterTo.x || impactTo.y !== sectorCenterTo.y)) {
       if (p < impactStart) {
-        const t = p / impactStart;
+        const t = easeInOutCubic(p / impactStart);
         x = lerp(a.x, sectorCenterTo.x, t);
         y = lerp(a.y, sectorCenterTo.y, t);
 
@@ -190,7 +207,7 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
         ctx.lineTo(ox + x*S, oy + y*S);
         ctx.stroke();
       } else {
-        const t = (p - impactStart) / (1 - impactStart);
+        const t = easeInOutCubic((p - impactStart) / (1 - impactStart));
         x = lerp(sectorCenterTo.x, impactTo.x, t);
         y = lerp(sectorCenterTo.y, impactTo.y, t);
 
@@ -203,8 +220,8 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
         ctx.stroke();
       }
     } else {
-      x = lerp(a.x, sectorCenterTo.x, p);
-      y = lerp(a.y, sectorCenterTo.y, p);
+      x = lerp(a.x, sectorCenterTo.x, moveT);
+      y = lerp(a.y, sectorCenterTo.y, moveT);
 
       ctx.strokeStyle = 'rgba(229,238,252,0.28)';
       ctx.lineWidth = 2;
@@ -237,6 +254,8 @@ function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
   const to = byId(toSnapshot?.bots ?? [], 'id');
   const ids = ['BOT1','BOT2','BOT3','BOT4'];
 
+  const moveT = easeInOutCubic(p);
+
   for (const id of ids) {
     const a = from.get(id);
     const b = to.get(id) ?? a;
@@ -249,8 +268,8 @@ function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
 
     const ca = anchorWorldCenter(fromLoc);
     const cb = anchorWorldCenter(toLoc);
-    const x = lerp(ca.x, cb.x, p);
-    const y = lerp(ca.y, cb.y, p);
+    const x = lerp(ca.x, cb.x, moveT);
+    const y = lerp(ca.y, cb.y, moveT);
 
     const aliveFrom = a?.alive !== false;
     const aliveTo = b?.alive !== false;

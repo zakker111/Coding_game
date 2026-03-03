@@ -132,7 +132,8 @@ textarea {
 canvas {
   width: min(100%, 880px);
   height: auto;
-  image-rendering: pixelated;
+  /* Let the browser interpolate normally; pixelated scaling makes movement look jerky. */
+  image-rendering: auto;
   border-radius: 10px;
 }
 
