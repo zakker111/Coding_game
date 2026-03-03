@@ -896,45 +896,51 @@ function execBotTickV1(params) {
   const pcBefore = bot.pc;
   const instr = program.instructions[pcBefore - 1];
 
+  const pushExec = (e) => {
+    // Back-compat for early viewer code.
+    if (e.instrText != null && e.instr == null) e.instr = e.instrText;
+    events.push(e);
+  };
+
   if (!bot.alive) {
-    const e = { type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore, pcAfter: pcBefore, instr: null, sourceLine: null };
+    const e = { type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore, pcAfter: pcBefore, instrText: null, instr: null, sourceLine: null, error: null };
     if (instr) {
+      e.instrText = instr.text;
       e.instr = instr.text;
       e.sourceLine = instr.sourceLine;
     }
-    events.push(e);
+    pushExec(e);
     return;
   }
 
   if (!instr) {
     bot.pc = 1;
-    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_PC", pcBefore, pcAfter: bot.pc, instr: null, sourceLine: null });
+    pushExec({ type: "BOT_EXEC", botId: bot.id, result: "ERROR", reason: "INVALID_PC", pcBefore, pcAfter: bot.pc, instrText: null, instr: null, sourceLine: null, error: null });
     return;
   }
 
   const ctx = { st, bot, rules };
 
   let pcAfter = pcBefore + 1;
-  let fault = false;
 
   const doAction = (a) => {
-    if (!a) return { ok: false, reason: "MALFORMED" };
+    if (!a) return { ok: false, error: "MALFORMED" };
 
-    if (a.op === "NOP") return { ok: true };
+    if (a.op === "NOP") return { ok: true, result: "EXECUTED", reason: "NOP" };
 
     if (a.op === "SET_MOVE_TO_BOT") {
       bot.moveGoal = { kind: "BOT", target: a.botTarget };
-      return { ok: true };
+      return { ok: true, result: "EXECUTED", reason: "SET_MOVE_TO_BOT" };
     }
 
     if (a.op === "SET_MOVE_TO_POWERUP") {
       bot.moveGoal = { kind: "POWERUP", type: a.powerupType };
-      return { ok: true };
+      return { ok: true, result: "EXECUTED", reason: "SET_MOVE_TO_POWERUP" };
     }
 
     if (a.op === "SET_MOVE_TO_SECTOR") {
       bot.moveGoal = { kind: "LOC", loc: { sector: a.sector, zone: a.zone } };
-      return { ok: true };
+      return { ok: true, result: "EXECUTED", reason: "SET_MOVE_TO_SECTOR" };
     }
 
     if (a.op === "USE_SLOT") {
@@ -942,12 +948,14 @@ function execBotTickV1(params) {
       const module = slot === 1 ? bot.loadout.slot1 : slot === 2 ? bot.loadout.slot2 : bot.loadout.slot3;
       const cd = slot === 1 ? bot.slotCooldownRemaining.slot1 : slot === 2 ? bot.slotCooldownRemaining.slot2 : bot.slotCooldownRemaining.slot3;
 
-      if (!module || cd !== 0) return { ok: true };
+      if (!module) return { ok: true, result: "NOP", reason: "NO_MODULE" };
+      if (cd !== 0) return { ok: true, result: "NOP", reason: "COOLDOWN" };
+
       if (module === "BULLET") {
-        if (bot.ammo < rules.bulletCostAmmo) return { ok: true };
+        if (bot.ammo < rules.bulletCostAmmo) return { ok: true, result: "NOP", reason: "NO_AMMO" };
 
         const resolved = resolveBotTargetToken(st, bot, a.target);
-        if (!resolved) return { ok: true };
+        if (!resolved) return { ok: true, result: "NOP", reason: "INVALID_TARGET" };
 
         bot.ammo -= rules.bulletCostAmmo;
         if (slot === 1) bot.slotCooldownRemaining.slot1 = rules.bulletCooldownOnUseTicks + 1;
@@ -970,64 +978,86 @@ function execBotTickV1(params) {
         st.bullets.push(bullet);
         events.push({ type: "BULLET_SPAWN", bulletId: bullet.bulletId, ownerBotId: bullet.ownerBotId, sector: bullet.sector, dir: bullet.dir });
         events.push({ type: "RESOURCE_DELTA", botId: bot.id, ammoDelta: -rules.bulletCostAmmo, energyDelta: 0, healthDelta: 0, cause: "USE_SLOT" });
-        return { ok: true };
+        return { ok: true, result: "EXECUTED", reason: "USE_SLOT" };
       }
-      return { ok: true };
+
+      return { ok: true, result: "NOP", reason: "UNSUPPORTED_MODULE" };
     }
 
-    return { ok: false, reason: "UNKNOWN_OP" };
+    return { ok: false, error: "UNKNOWN_OP" };
   };
 
   const execOne = () => {
-    if (instr.op === "NOP") return { ok: true, reason: "NOP" };
+    if (instr.op === "NOP") return { ok: true, result: "EXECUTED", reason: "NOP" };
 
     if (instr.op === "GOTO") {
-      if (instr.targetPc == null) return { ok: false, reason: "BAD_LABEL" };
+      if (instr.targetPc == null) return { ok: false, error: "INVALID_LABEL" };
       pcAfter = instr.targetPc;
-      return { ok: true, reason: "GOTO" };
+      return { ok: true, result: "EXECUTED", reason: "GOTO" };
     }
 
     if (instr.op === "IF_GOTO") {
-      if (!instr.expr || instr.targetPc == null) return { ok: false, reason: "MALFORMED_IF" };
+      if (!instr.expr || instr.targetPc == null) return { ok: false, error: "MALFORMED_IF" };
       const r = evalExprNode(instr.expr, ctx);
-      if (!r.ok) return { ok: false, reason: "BAD_EXPR" };
+      if (!r.ok) return { ok: false, error: "INVALID_EXPR" };
       if (typeof r.v === "boolean" ? r.v : (r.v | 0) !== 0) pcAfter = instr.targetPc;
-      return { ok: true, reason: "IF_GOTO" };
+      return { ok: true, result: "EXECUTED", reason: "IF_GOTO" };
     }
 
     if (instr.op === "IF_DO") {
-      if (!instr.expr || !instr.inner) return { ok: false, reason: "MALFORMED_IF" };
+      if (!instr.expr || !instr.inner) return { ok: false, error: "MALFORMED_IF" };
       const r = evalExprNode(instr.expr, ctx);
-      if (!r.ok) return { ok: false, reason: "BAD_EXPR" };
+      if (!r.ok) return { ok: false, error: "INVALID_EXPR" };
       const cond = (typeof r.v === "boolean" ? r.v : (r.v | 0) !== 0);
-      if (!cond) return { ok: true, reason: "IF_DO_FALSE" };
-      const rr = doAction(instr.inner);
-      if (!rr.ok) return rr;
-      return { ok: true, reason: "IF_DO_TRUE" };
+      if (!cond) return { ok: true, result: "EXECUTED", reason: "IF_DO_FALSE" };
+      return doAction(instr.inner);
     }
 
     if (instr.op === "SET_MOVE_TO_BOT" || instr.op === "SET_MOVE_TO_POWERUP" || instr.op === "SET_MOVE_TO_SECTOR" || instr.op === "USE_SLOT") {
       return doAction(instr);
     }
 
-    return { ok: false, reason: "INVALID_INSTR" };
+    return { ok: false, error: "INVALID_INSTR" };
   };
 
   const r = execOne();
-  if (!r.ok) fault = true;
 
-  if (fault) {
+  if (!r.ok) {
     bot.pc = 1;
-    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_INSTRUCTION", pcBefore, pcAfter: bot.pc, instr: instr.text, sourceLine: instr.sourceLine, detail: r.reason ?? null });
-  } else {
-    if (program.instructions.length > 0) {
-      if (pcAfter < 1 || pcAfter > program.instructions.length) pcAfter = 1;
-    } else {
-      pcAfter = 1;
-    }
-    bot.pc = pcAfter;
-    events.push({ type: "BOT_EXEC", botId: bot.id, result: "EXECUTED", reason: r.reason ?? null, pcBefore, pcAfter: bot.pc, instr: instr.text, sourceLine: instr.sourceLine });
+    pushExec({
+      type: "BOT_EXEC",
+      botId: bot.id,
+      result: "ERROR",
+      reason: r.error ?? "ERROR",
+      pcBefore,
+      pcAfter: bot.pc,
+      instrText: instr.text,
+      instr: instr.text,
+      sourceLine: instr.sourceLine,
+      error: r.error ?? null,
+    });
+    return;
   }
+
+  if (program.instructions.length > 0) {
+    if (pcAfter < 1 || pcAfter > program.instructions.length) pcAfter = 1;
+  } else {
+    pcAfter = 1;
+  }
+  bot.pc = pcAfter;
+
+  pushExec({
+    type: "BOT_EXEC",
+    botId: bot.id,
+    result: r.result ?? "EXECUTED",
+    reason: r.reason ?? null,
+    pcBefore,
+    pcAfter: bot.pc,
+    instrText: instr.text,
+    instr: instr.text,
+    sourceLine: instr.sourceLine,
+    error: null,
+  });
 }
 
 /**

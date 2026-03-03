@@ -8,6 +8,13 @@ const canvas = /** @type {HTMLCanvasElement} */ (el('canvas'));
 const hud = el('hud');
 const meta = el('meta');
 
+const metaLine = document.createElement('div');
+const metaQaLine = document.createElement('div');
+metaQaLine.className = 'mono';
+meta.textContent = '';
+meta.appendChild(metaLine);
+meta.appendChild(metaQaLine);
+
 const btnRun = el('btnRun');
 const btnPlay = el('btnPlay');
 const btnPause = el('btnPause');
@@ -37,6 +44,9 @@ const inspectorCode = el('inspectorCode');
 
 /** @type {import('./engine.js').Replay|null} */
 let replay = null;
+
+/** @type {{ detOk:boolean, detHashA:string, detHashB:string, counts: Record<string, number> }|null} */
+let qaReadout = null;
 
 let playing = false;
 let lastFrameMs = 0;
@@ -123,11 +133,51 @@ function updateSummary() {
 
 function updateMeta() {
   if (!replay) {
-    meta.textContent = '';
+    metaLine.textContent = '';
+    metaQaLine.textContent = '';
     return;
   }
+
   const hash = stableHash({ header: replay.header, state0: replay.state[0], result: replay.result });
-  meta.textContent = `ruleset=${replay.header.rulesetVersion} seed=${replay.header.matchSeed} hash=${hash}`;
+  metaLine.textContent = `ruleset=${replay.header.rulesetVersion} seed=${replay.header.matchSeed} hash=${hash}`;
+
+  if (!qaReadout) {
+    metaQaLine.textContent = '';
+    return;
+  }
+
+  const c = qaReadout.counts;
+  metaQaLine.textContent = [
+    `QA det=${qaReadout.detOk ? 'OK' : 'FAIL'} (${qaReadout.detHashA}${qaReadout.detOk ? '' : ' != ' + qaReadout.detHashB})`,
+    `BOT_MOVED=${c.BOT_MOVED ?? 0}`,
+    `BULLET_SPAWN=${c.BULLET_SPAWN ?? 0}`,
+    `BULLET_HIT=${c.BULLET_HIT ?? 0}`,
+    `BOT_DIED=${c.BOT_DIED ?? 0}`,
+    `POWERUP_PICKUP=${c.POWERUP_PICKUP ?? 0}`,
+  ].join('  ');
+}
+
+function replayStablePayload(r) {
+  return { state: r.state, events: r.events, result: r.result };
+}
+
+function computeSmokeCounts(replayEvents) {
+  const counts = {
+    BOT_MOVED: 0,
+    BULLET_SPAWN: 0,
+    BULLET_HIT: 0,
+    BOT_DIED: 0,
+    POWERUP_PICKUP: 0,
+  };
+
+  for (const tickEvents of replayEvents ?? []) {
+    for (const e of tickEvents ?? []) {
+      const t = e?.type;
+      if (t && counts[t] != null) counts[t] += 1;
+    }
+  }
+
+  return counts;
 }
 
 function updateCompileOut() {
@@ -167,7 +217,7 @@ function updateEventLog(tickIndex) {
 function formatEvent(e) {
   if (!e || typeof e !== 'object') return String(e);
   const t = e.type;
-  if (t === 'BOT_EXEC') return `${t} ${e.botId} line=${e.sourceLine ?? '?'} pc=${e.pcBefore}->${e.pcAfter} ${e.reason ?? ''} ${e.instr ?? ''}`.trim();
+  if (t === 'BOT_EXEC') return `${t} ${e.botId} line=${e.sourceLine ?? '?'} pc=${e.pcBefore}->${e.pcAfter} ${e.result ?? ''} ${e.reason ?? ''} ${(e.instrText ?? e.instr) ?? ''}${e.error ? ' err='+e.error : ''}`.trim();
   if (t === 'BOT_MOVED') return `${t} ${e.botId} ${locStr(e.fromLoc)} -> ${locStr(e.toLoc)}`;
   if (t === 'BULLET_MOVE') return `${t} #${e.bulletId} ${e.fromSector} -> ${e.toSector}`;
   if (t === 'BULLET_HIT') return `${t} #${e.bulletId} victim=${e.victimBotId} dmg=${e.damage}`;
@@ -288,7 +338,7 @@ function updateInspector(tickIndex) {
   }
 
   const line = Number(execEv.sourceLine ?? 0) || null;
-  inspectorExec.textContent = `tick=${tickIndex} pc=${execEv.pcBefore}->${execEv.pcAfter} line=${execEv.sourceLine ?? '?'} ${execEv.instr ?? ''}`.trim();
+  inspectorExec.textContent = `tick=${tickIndex} pc=${execEv.pcBefore}->${execEv.pcAfter} line=${execEv.sourceLine ?? '?'} ${execEv.result ?? ''} ${(execEv.instrText ?? execEv.instr) ?? ''}${execEv.error ? ' err='+execEv.error : ''}`.trim();
   setHighlightedSourceLine(line);
 }
 
@@ -531,7 +581,7 @@ btnRun.addEventListener('click', () => {
   const seed = Number(seedInput.value || '0');
   const tickCap = Number(tickCapInput.value || '300');
 
-  replay = createReplay({
+  const params = {
     matchSeed: seed,
     tickCap,
     botSourceTextById: {
@@ -540,7 +590,23 @@ btnRun.addEventListener('click', () => {
       BOT3: botSources.BOT3,
       BOT4: botSources.BOT4,
     },
-  });
+  };
+
+  const replayA = createReplay(params);
+  const replayB = createReplay(params);
+
+  const detHashA = stableHash(replayStablePayload(replayA));
+  const detHashB = stableHash(replayStablePayload(replayB));
+  const detOk = detHashA === detHashB;
+
+  qaReadout = {
+    detOk,
+    detHashA,
+    detHashB,
+    counts: computeSmokeCounts(replayA.events),
+  };
+
+  replay = replayA;
 
   playhead = 0;
   playing = false;
