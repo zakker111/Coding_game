@@ -1,0 +1,144 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #0f1620;
+  --panel2: #121c28;
+  --text: #e5eefc;
+  --muted: #9ab0c9;
+  --grid1: rgba(80, 255, 110, 0.25);
+  --grid2: rgba(80, 255, 110, 0.55);
+  --wall: rgba(140, 165, 190, 0.85);
+  --danger: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.topbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.2);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.title { font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 12px;
+  padding: 12px;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.controls__row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+button {
+  background: #1b2a3b;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+input, select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: #0d141d;
+  color: var(--text);
+}
+
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panel__title {
+  padding: 10px 12px;
+  font-weight: 600;
+  background: var(--panel2);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.panel__body {
+  padding: 10px 12px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.canvasWrap {
+  background: #06101a;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+canvas {
+  width: min(100%, 880px);
+  height: auto;
+  image-rendering: pixelated;
+  border-radius: 10px;
+}
+
+.hud {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

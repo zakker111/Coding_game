@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Bot Arena (Skeleton)</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">Bot Arena — Skeleton (Deterministic Replay)</div>
+      <div class="meta" id="meta"></div>
+    </header>
+
+    <main class="layout">
+      <section class="controls">
+        <div class="controls__row">
+          <button id="btnRun">Run</button>
+          <button id="btnPlay" disabled>Play</button>
+          <button id="btnPause" disabled>Pause</button>
+          <button id="btnStep" disabled>Step</button>
+          <button id="btnReset" disabled>Reset</button>
+        </div>
+
+        <div class="controls__row">
+          <label>
+            Seed
+            <input id="seed" type="number" value="1337" step="1" />
+          </label>
+          <label>
+            Tick cap
+            <input id="tickCap" type="number" value="300" step="1" min="1" />
+          </label>
+          <label>
+            Speed
+            <select id="speed">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="6">6×</option>
+              <option value="12">12×</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="controls__row">
+          <label class="checkbox">
+            <input id="showAnchors" type="checkbox" />
+            Show anchors
+          </label>
+          <label class="checkbox">
+            <input id="showEvents" type="checkbox" checked />
+            Show event log
+          </label>
+        </div>
+
+        <div class="panel">
+          <div class="panel__title">Match</div>
+          <div class="panel__body" id="matchSummary">Click Run.</div>
+        </div>
+
+        <div class="panel" id="eventPanel">
+          <div class="panel__title">Events (current tick)</div>
+          <div class="panel__body mono" id="eventLog"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel__title">Scoring</div>
+          <div class="panel__body">
+            <ul>
+              <li><b>+1</b> per credited kill</li>
+              <li><b>+2</b> survivor bonus if exactly one bot alive at end</li>
+              <li>Kill points still count even if killer later dies</li>
+              <li>Draws: no survivor bonus</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="viewer">
+        <div class="canvasWrap">
+          <canvas id="canvas" width="768" height="768"></canvas>
+        </div>
+        <div class="hud mono" id="hud"></div>
+      </section>
+    </main>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
