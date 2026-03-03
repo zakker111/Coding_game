@@ -1,5 +1,6 @@
-import { createReplay, stableHash } from './engine.js';
+import { createReplay, stableHash, BUILTIN_BOT2_SOURCE, BUILTIN_BOT3_SOURCE } from './engine.js';
 import { renderFrame } from './renderer.js';
+import { extractPreferredCodeBlock } from './markdown.js';
 
 const el = (id) => /** @type {any} */ (document.getElementById(id));
 
@@ -20,9 +21,19 @@ const speedSel = /** @type {HTMLSelectElement} */ (el('speed'));
 const showAnchorsEl = /** @type {HTMLInputElement} */ (el('showAnchors'));
 const showEventsEl = /** @type {HTMLInputElement} */ (el('showEvents'));
 
+const btnLoadBot2 = el('btnLoadBot2');
+const btnLoadBot3 = el('btnLoadBot3');
+const btnLoadBot1 = el('btnLoadBot1');
+const bot1Source = /** @type {HTMLTextAreaElement} */ (el('bot1Source'));
+const compileOut = el('compileOut');
+
 const matchSummary = el('matchSummary');
 const eventPanel = el('eventPanel');
 const eventLog = el('eventLog');
+
+const inspectorTitle = el('inspectorTitle');
+const inspectorExec = el('inspectorExec');
+const inspectorCode = el('inspectorCode');
 
 /** @type {import('./engine.js').Replay|null} */
 let replay = null;
@@ -30,8 +41,31 @@ let replay = null;
 let playing = false;
 let lastFrameMs = 0;
 
-// Continuous playhead in ticks (float), used for interpolation.
+// Continuous playhead in ticks (float)
 let playhead = 0;
+
+/** @type {string|null} */
+let selectedBotId = null;
+
+let renderedInspectorBotId = null;
+let highlightedSourceLine = null;
+/** @type {Map<number, HTMLElement>} */
+let sourceLineEls = new Map();
+
+const LS_BOT1_DRAFT_KEY = 'botarena.bot1.draft.v1';
+
+async function fetchExampleScript(exampleName) {
+  const url = `./examples/${exampleName}.md`;
+  const md = await (await fetch(url)).text();
+  const code = extractPreferredCodeBlock(md, { preferredLangs: ['text', ''] });
+  if (!code) throw new Error(`No fenced code block found in ${url}`);
+  return code.trimEnd() + '\n';
+}
+
+async function setBot1SourceText(next, { save = true } = {}) {
+  bot1Source.value = next;
+  if (save) localStorage.setItem(LS_BOT1_DRAFT_KEY, next);
+}
 
 function setUiEnabled(hasReplay) {
   btnPlay.disabled = !hasReplay;
@@ -69,6 +103,28 @@ function updateMeta() {
   meta.textContent = `ruleset=${replay.header.rulesetVersion} seed=${replay.header.matchSeed} hash=${hash}`;
 }
 
+function updateCompileOut() {
+  if (!replay?.compile) {
+    compileOut.textContent = '';
+    compileOut.className = 'mono small';
+    return;
+  }
+
+  const diags = replay.compile.find(x => x.botId === 'BOT1')?.diagnostics ?? [];
+  if (!diags.length) {
+    compileOut.textContent = 'BOT1 compile: OK';
+    compileOut.className = 'mono small';
+    return;
+  }
+
+  compileOut.textContent = diags
+    .map(d => `${d.severity.toUpperCase()}: ${d.sourceLine != null ? 'line '+d.sourceLine : 'line ?'}: ${d.message}`)
+    .join('\n');
+
+  const hasErr = diags.some(d => d.severity === 'error');
+  compileOut.className = hasErr ? 'mono small error' : 'mono small';
+}
+
 function updateEventLog(tickIndex) {
   if (!replay) {
     eventPanel.style.display = 'none';
@@ -84,6 +140,7 @@ function updateEventLog(tickIndex) {
 function formatEvent(e) {
   if (!e || typeof e !== 'object') return String(e);
   const t = e.type;
+  if (t === 'BOT_EXEC') return `${t} ${e.botId} line=${e.sourceLine ?? '?'} pc=${e.pcBefore}->${e.pcAfter} ${e.reason ?? ''} ${e.instr ?? ''}`.trim();
   if (t === 'BOT_MOVED') return `${t} ${e.botId} ${locStr(e.fromLoc)} -> ${locStr(e.toLoc)}`;
   if (t === 'BULLET_MOVE') return `${t} #${e.bulletId} ${e.fromSector} -> ${e.toSector}`;
   if (t === 'BULLET_HIT') return `${t} #${e.bulletId} victim=${e.victimBotId} dmg=${e.damage}`;
@@ -113,11 +170,8 @@ function clampPlayhead() {
   if (playhead > maxTick) playhead = maxTick;
 }
 
-function render() {
-  if (!replay) {
-    hud.textContent = '';
-    return;
-  }
+function computeRenderCtx() {
+  if (!replay) return null;
 
   clampPlayhead();
 
@@ -130,18 +184,253 @@ function render() {
   const toSnapshot = playing ? replay.state[next] : replay.state[base];
   const renderEvents = playing ? (replay.events[next] ?? []) : [];
 
+  const shownTick = (progress01 > 0) ? next : base;
+  return { maxTick, progress01, fromSnapshot, toSnapshot, renderEvents, shownTick };
+}
+
+function setSelectedBot(botId) {
+  selectedBotId = botId;
+  highlightedSourceLine = null;
+
+  if (!selectedBotId) {
+    inspectorTitle.textContent = 'Inspector (no bot selected)';
+    inspectorExec.textContent = 'Click a bot on the canvas to inspect its source.';
+    inspectorCode.textContent = '';
+    renderedInspectorBotId = null;
+    sourceLineEls = new Map();
+    return;
+  }
+
+  inspectorTitle.textContent = `Inspector (${selectedBotId})`;
+  renderedInspectorBotId = null;
+  sourceLineEls = new Map();
+}
+
+function renderInspectorSourceIfNeeded() {
+  if (!replay || !selectedBotId) return;
+  if (renderedInspectorBotId === selectedBotId) return;
+
+  const bot = replay.header.bots.find(b => b.id === selectedBotId);
+  const src = bot?.sourceText ?? '';
+  const lines = src.split(/\n/);
+
+  inspectorCode.textContent = '';
+
+  const frag = document.createDocumentFragment();
+  sourceLineEls = new Map();
+
+  for (let i = 0; i < lines.length; i++) {
+    const ln = i + 1;
+    const line = lines[i];
+
+    const row = document.createElement('div');
+    row.className = 'codeLine';
+    row.dataset.line = String(ln);
+
+    const lnEl = document.createElement('span');
+    lnEl.className = 'ln';
+    lnEl.textContent = String(ln);
+
+    const txtEl = document.createElement('span');
+    txtEl.className = 'txt';
+    txtEl.textContent = line;
+
+    row.appendChild(lnEl);
+    row.appendChild(txtEl);
+
+    frag.appendChild(row);
+    sourceLineEls.set(ln, row);
+  }
+
+  inspectorCode.appendChild(frag);
+  renderedInspectorBotId = selectedBotId;
+}
+
+function updateInspector(tickIndex) {
+  if (!replay || !selectedBotId) return;
+
+  renderInspectorSourceIfNeeded();
+
+  const tickEvents = replay.events[tickIndex] ?? [];
+  const execEv = tickEvents.find(e => e?.type === 'BOT_EXEC' && e?.botId === selectedBotId) ?? null;
+
+  if (!execEv) {
+    inspectorExec.textContent = `tick=${tickIndex}: no BOT_EXEC for ${selectedBotId}`;
+    setHighlightedSourceLine(null);
+    return;
+  }
+
+  const line = Number(execEv.sourceLine ?? 0) || null;
+  inspectorExec.textContent = `tick=${tickIndex} pc=${execEv.pcBefore}->${execEv.pcAfter} line=${execEv.sourceLine ?? '?'} ${execEv.instr ?? ''}`.trim();
+  setHighlightedSourceLine(line);
+}
+
+function setHighlightedSourceLine(line) {
+  if (highlightedSourceLine === line) return;
+
+  if (highlightedSourceLine != null) {
+    const prev = sourceLineEls.get(highlightedSourceLine);
+    if (prev) prev.classList.remove('active');
+  }
+
+  highlightedSourceLine = line;
+
+  if (highlightedSourceLine != null) {
+    const cur = sourceLineEls.get(highlightedSourceLine);
+    if (cur) {
+      cur.classList.add('active');
+      cur.scrollIntoView({ block: 'center' });
+    }
+  }
+}
+
+// --- picking / selection overlay ---
+
+const WORLD = 192;
+
+function sectorOrigin(sector) {
+  const row = Math.floor((sector - 1) / 3);
+  const col = (sector - 1) % 3;
+  return { x: col * 64, y: row * 64 };
+}
+
+function anchorWorldCenter(loc) {
+  const so = sectorOrigin(loc.sector);
+  if (loc.zone === 0) {
+    return { x: so.x + 32, y: so.y + 32 };
+  }
+
+  const zoneOffset =
+    loc.zone === 1 ? { x: 0, y: 0 } :
+    loc.zone === 2 ? { x: 32, y: 0 } :
+    loc.zone === 3 ? { x: 0, y: 32 } :
+    { x: 32, y: 32 };
+
+  return { x: so.x + zoneOffset.x + 16, y: so.y + zoneOffset.y + 16 };
+}
+
+function pickScale(canvasEl) {
+  const minDim = Math.min(canvasEl.width, canvasEl.height);
+  const candidates = [6,5,4,3,2,1];
+  for (const s of candidates) {
+    if (WORLD * s <= minDim) return s;
+  }
+  return 1;
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function computeViewTransform(canvasEl) {
+  const S = pickScale(canvasEl);
+  const arenaPx = WORLD * S;
+  const ox = Math.floor((canvasEl.width - arenaPx) / 2);
+  const oy = Math.floor((canvasEl.height - arenaPx) / 2);
+  return { S, ox, oy };
+}
+
+function botScreenPos(renderCtx, botId) {
+  if (!renderCtx) return null;
+  const { fromSnapshot, toSnapshot, renderEvents, progress01 } = renderCtx;
+
+  const fromBot = (fromSnapshot?.bots ?? []).find(b => b?.id === botId) ?? null;
+  const toBot = (toSnapshot?.bots ?? []).find(b => b?.id === botId) ?? fromBot;
+  if (!fromBot && !toBot) return null;
+
+  const aliveFrom = fromBot?.alive !== false;
+  const aliveTo = toBot?.alive !== false;
+  if (!aliveFrom && !aliveTo) return null;
+
+  const mv = (renderEvents ?? []).find(e => e?.type === 'BOT_MOVED' && e?.botId === botId) ?? null;
+  const fromLoc = mv?.fromLoc ?? fromBot?.loc ?? toBot?.loc;
+  const toLoc = mv?.toLoc ?? toBot?.loc ?? fromBot?.loc;
+  if (!fromLoc || !toLoc) return null;
+
+  const a = anchorWorldCenter(fromLoc);
+  const b = anchorWorldCenter(toLoc);
+  const w = { x: lerp(a.x, b.x, progress01), y: lerp(a.y, b.y, progress01) };
+
+  const { S, ox, oy } = computeViewTransform(canvas);
+  return { x: ox + w.x * S, y: oy + w.y * S, r: 8 * S };
+}
+
+function pickBotAtPoint(renderCtx, x, y) {
+  if (!renderCtx || !replay) return null;
+
+  const ids = ['BOT1','BOT2','BOT3','BOT4'];
+  let best = null;
+  let bestD2 = Infinity;
+
+  for (const id of ids) {
+    const p = botScreenPos(renderCtx, id);
+    if (!p) continue;
+    const dx = x - p.x;
+    const dy = y - p.y;
+    const d2 = dx*dx + dy*dy;
+    const hitR = p.r + 8;
+    if (d2 <= hitR*hitR && d2 < bestD2) {
+      best = id;
+      bestD2 = d2;
+    }
+  }
+
+  return best;
+}
+
+function selectionOverlay(renderCtx) {
+  if (!renderCtx || !selectedBotId) return;
+  const p = botScreenPos(renderCtx, selectedBotId);
+  if (!p) return;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r + 6, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(59,130,246,0.9)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r + 10, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function canvasPointFromMouseEvent(ev) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return { x: (ev.clientX - rect.left) * scaleX, y: (ev.clientY - rect.top) * scaleY };
+}
+
+function render() {
+  if (!replay) {
+    hud.textContent = '';
+    return;
+  }
+
+  const renderCtx = computeRenderCtx();
+  if (!renderCtx) return;
+
   renderFrame({
     canvas,
-    fromSnapshot,
-    toSnapshot,
-    events: renderEvents,
+    fromSnapshot: renderCtx.fromSnapshot,
+    toSnapshot: renderCtx.toSnapshot,
+    events: renderCtx.renderEvents,
     showAnchors: showAnchorsEl.checked,
-    progress01,
+    progress01: renderCtx.progress01,
   });
 
-  const shownTick = (progress01 > 0) ? next : base;
-  hud.textContent = `tick=${shownTick}/${maxTick}  speed=${currentSpeed()}×  ended=${replay.result.endReason}`;
-  updateEventLog(shownTick);
+  selectionOverlay(renderCtx);
+
+  hud.textContent = `tick=${renderCtx.shownTick}/${renderCtx.maxTick}  speed=${currentSpeed()}×  ended=${replay.result.endReason}`;
+  updateEventLog(renderCtx.shownTick);
+  updateInspector(renderCtx.shownTick);
 }
 
 function animate(ms) {
@@ -169,18 +458,63 @@ function animate(ms) {
   requestAnimationFrame(animate);
 }
 
+// --- wire UI ---
+
+canvas.addEventListener('click', (ev) => {
+  if (!replay) return;
+
+  const renderCtx = computeRenderCtx();
+  const p = canvasPointFromMouseEvent(ev);
+  const hit = pickBotAtPoint(renderCtx, p.x, p.y);
+
+  setSelectedBot(hit);
+  render();
+});
+
+btnLoadBot2?.addEventListener('click', async () => {
+  try {
+    await setBot1SourceText(await fetchExampleScript('bot2'));
+  } catch {
+    await setBot1SourceText(BUILTIN_BOT2_SOURCE + '\n');
+  }
+});
+
+btnLoadBot3?.addEventListener('click', async () => {
+  try {
+    await setBot1SourceText(await fetchExampleScript('bot3'));
+  } catch {
+    await setBot1SourceText(BUILTIN_BOT3_SOURCE + '\n');
+  }
+});
+
+btnLoadBot1?.addEventListener('click', async () => {
+  // bot1 is NOT supported by the minimal VM yet, but we still load it for inspection.
+  try {
+    await setBot1SourceText(await fetchExampleScript('bot1'));
+  } catch {
+    await setBot1SourceText(BUILTIN_BOT2_SOURCE + '\n');
+  }
+});
+
+bot1Source?.addEventListener('input', () => {
+  localStorage.setItem(LS_BOT1_DRAFT_KEY, bot1Source.value);
+});
+
 btnRun.addEventListener('click', () => {
   const seed = Number(seedInput.value || '0');
   const tickCap = Number(tickCapInput.value || '300');
-  replay = createReplay({ matchSeed: seed, tickCap });
+  replay = createReplay({ matchSeed: seed, tickCap, bot1SourceText: bot1Source.value });
 
   playhead = 0;
   playing = false;
   lastFrameMs = 0;
 
+  setSelectedBot(null);
+
   setUiEnabled(true);
   updateSummary();
   updateMeta();
+  updateCompileOut();
   render();
 });
 
@@ -212,6 +546,9 @@ showAnchorsEl.addEventListener('change', render);
 showEventsEl.addEventListener('change', render);
 
 setUiEnabled(false);
+setSelectedBot(null);
+updateCompileOut();
+
 renderFrame({
   canvas,
   fromSnapshot: { tick: 0, bots: [], bullets: [], powerups: [] },
@@ -221,3 +558,18 @@ renderFrame({
   progress01: 0,
 });
 requestAnimationFrame(animate);
+
+// Initialize editor content
+(async () => {
+  const existing = localStorage.getItem(LS_BOT1_DRAFT_KEY);
+  if (existing) {
+    await setBot1SourceText(existing, { save: false });
+    return;
+  }
+
+  try {
+    await setBot1SourceText(await fetchExampleScript('bot2'), { save: false });
+  } catch {
+    await setBot1SourceText(BUILTIN_BOT2_SOURCE + '\n', { save: false });
+  }
+})();

@@ -110,7 +110,7 @@ export function renderFrame(params) {
   }
 
   renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p);
-  renderBulletsFromEvents(ctx, ox, oy, S, events, p);
+  renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p);
   renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p);
 
   const tickLabel = toSnapshot?.tick ?? fromSnapshot?.tick ?? 0;
@@ -145,20 +145,74 @@ function renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p) {
   }
 }
 
-function renderBulletsFromEvents(ctx, ox, oy, S, events, p) {
+function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
+  const fromBots = byId(fromSnapshot?.bots ?? [], 'id');
+  const toBots = byId(toSnapshot?.bots ?? [], 'id');
+
+  const hits = findEvents(events, 'BULLET_HIT');
+  const hitByBulletId = byId(hits, 'bulletId');
+
   const moves = findEvents(events, 'BULLET_MOVE');
+  const lastMoveByBulletId = new Map();
+  for (const m of moves) {
+    if (m?.bulletId == null) continue;
+    lastMoveByBulletId.set(m.bulletId, m);
+  }
+
+  const impactStart = 0.82;
+
   for (const m of moves) {
     const a = anchorWorldCenter({ sector: m.fromSector, zone: 0 });
-    const b = anchorWorldCenter({ sector: m.toSector, zone: 0 });
-    const x = lerp(a.x, b.x, p);
-    const y = lerp(a.y, b.y, p);
+    const sectorCenterTo = anchorWorldCenter({ sector: m.toSector, zone: 0 });
 
-    ctx.strokeStyle = 'rgba(229,238,252,0.28)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(ox + a.x*S, oy + a.y*S);
-    ctx.lineTo(ox + x*S, oy + y*S);
-    ctx.stroke();
+    const hit = hitByBulletId.get(m.bulletId);
+    const isFinalMoveThisTick = lastMoveByBulletId.get(m.bulletId) === m;
+
+    let impactTo = sectorCenterTo;
+    if (hit && isFinalMoveThisTick) {
+      const bot = toBots.get(hit.victimBotId) ?? fromBots.get(hit.victimBotId);
+      if (bot?.loc) impactTo = anchorWorldCenter(bot.loc);
+    }
+
+    let x = 0;
+    let y = 0;
+
+    if (hit && isFinalMoveThisTick && (impactTo.x !== sectorCenterTo.x || impactTo.y !== sectorCenterTo.y)) {
+      if (p < impactStart) {
+        const t = p / impactStart;
+        x = lerp(a.x, sectorCenterTo.x, t);
+        y = lerp(a.y, sectorCenterTo.y, t);
+
+        ctx.strokeStyle = 'rgba(229,238,252,0.28)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ox + a.x*S, oy + a.y*S);
+        ctx.lineTo(ox + x*S, oy + y*S);
+        ctx.stroke();
+      } else {
+        const t = (p - impactStart) / (1 - impactStart);
+        x = lerp(sectorCenterTo.x, impactTo.x, t);
+        y = lerp(sectorCenterTo.y, impactTo.y, t);
+
+        ctx.strokeStyle = 'rgba(229,238,252,0.28)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ox + a.x*S, oy + a.y*S);
+        ctx.lineTo(ox + sectorCenterTo.x*S, oy + sectorCenterTo.y*S);
+        ctx.lineTo(ox + x*S, oy + y*S);
+        ctx.stroke();
+      }
+    } else {
+      x = lerp(a.x, sectorCenterTo.x, p);
+      y = lerp(a.y, sectorCenterTo.y, p);
+
+      ctx.strokeStyle = 'rgba(229,238,252,0.28)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ox + a.x*S, oy + a.y*S);
+      ctx.lineTo(ox + x*S, oy + y*S);
+      ctx.stroke();
+    }
 
     ctx.fillStyle = '#e5eefc';
     ctx.beginPath();
@@ -208,21 +262,50 @@ function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
     });
   }
 
-  if (p > 0.82) {
+  if (p > 0.78) {
     const hits = findEvents(events, 'BULLET_HIT');
     if (hits.length) {
-      const a = (p - 0.82) / 0.18;
+      const ringT = clamp01((p - 0.82) / 0.18);
+      const flashT = clamp01((p - 0.78) / 0.12);
+      const flashA = 1 - flashT;
+
       for (const h of hits) {
         const bot = to.get(h.victimBotId) ?? from.get(h.victimBotId);
         if (!bot || !bot.loc) continue;
         const c = anchorWorldCenter(bot.loc);
-        withAlpha(ctx, a, () => {
-          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(ox + c.x*S, oy + c.y*S, 16, 0, Math.PI*2);
-          ctx.stroke();
-        });
+
+        if (flashA > 0) {
+          withAlpha(ctx, flashA, () => {
+            const cx = ox + c.x*S;
+            const cy = oy + c.y*S;
+            const r0 = Math.max(2, 2*S);
+            const r1 = 5*S;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.beginPath();
+            ctx.arc(cx, cy, r0, 0, Math.PI*2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - r1, cy);
+            ctx.lineTo(cx + r1, cy);
+            ctx.moveTo(cx, cy - r1);
+            ctx.lineTo(cx, cy + r1);
+            ctx.stroke();
+          });
+        }
+
+        if (ringT > 0) {
+          withAlpha(ctx, ringT, () => {
+            ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(ox + c.x*S, oy + c.y*S, 12*S, 0, Math.PI*2);
+            ctx.stroke();
+          });
+        }
       }
     }
   }

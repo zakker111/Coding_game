@@ -55,6 +55,19 @@
         </div>
 
         <div class="panel">
+          <div class="panel__title">BOT1 code (BotInstructions v1)</div>
+          <div class="panel__body">
+            <div class="controls__row">
+              <button id="btnLoadBot2" type="button">Load example: bot2</button>
+              <button id="btnLoadBot3" type="button">Load example: bot3</button>
+              <button id="btnLoadBot1" type="button">Load example: bot1</button>
+            </div>
+            <textarea id="bot1Source" spellcheck="false"></textarea>
+            <div class="mono small" id="compileOut"></div>
+          </div>
+        </div>
+
+        <div class="panel">
           <div class="panel__title">Match</div>
           <div class="panel__body" id="matchSummary">Click Run.</div>
         </div>
@@ -82,6 +95,16 @@
           <canvas id="canvas" width="768" height="768"></canvas>
         </div>
         <div class="hud mono" id="hud"></div>
+      </section>
+
+      <section class="inspector">
+        <div class="panel">
+          <div class="panel__title" id="inspectorTitle">Inspector (no bot selected)</div>
+          <div class="panel__body">
+            <div class="mono small" id="inspectorExec">Click a bot on the canvas to inspect its source.</div>
+            <div class="codeView mono" id="inspectorCode" aria-label="Selected bot source"></div>
+          </div>
+        </div>
       </section>
     </main>
 

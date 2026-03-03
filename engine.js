@@ -76,8 +76,13 @@
  *  bots: ReplayBotHeader[],
  * }} ReplayHeader */
 
+/**
+ * @typedef {{ botId: BotId, diagnostics: CompileDiagnostic[] }} BotCompileReport
+ */
+
 /** @typedef {{
  *  header: ReplayHeader,
+ *  compile: BotCompileReport[],
  *  state: any[],
  *  events: ReplayEvent[][],
  *  result: {
@@ -398,23 +403,25 @@ function attemptSpawnPowerup(st, rng, rules, events) {
 
 // ---------------- BotInstructions v1 (minimal compiler + VM) ----------------
 
-const BUILTIN_BOT2_SOURCE = `SET_MOVE_TO_BOT CLOSEST_BOT
-LABEL LOOP
-IF (HEALTH < 30 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
-IF (AMMO < 15 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
-IF (HEALTH >= 30 && AMMO >= 15) DO SET_MOVE_TO_BOT CLOSEST_BOT
-IF (SLOT_READY(SLOT1)) DO USE_SLOT1 NEAREST_BOT
-GOTO LOOP
-`;
+export const BUILTIN_BOT2_SOURCE = [
+  "SET_MOVE_TO_BOT CLOSEST_BOT",
+  "LABEL LOOP",
+  "IF (HEALTH < 30 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH",
+  "IF (AMMO < 15 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO",
+  "IF (HEALTH >= 30 && AMMO >= 15) DO SET_MOVE_TO_BOT CLOSEST_BOT",
+  "IF (SLOT_READY(SLOT1)) DO USE_SLOT1 NEAREST_BOT",
+  "GOTO LOOP",
+].join("\n");
 
-const BUILTIN_BOT3_SOURCE = `SET_MOVE_TO_SECTOR 1 ZONE 1
-LABEL LOOP
-IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
-IF (AMMO < 20 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
-IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
-IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 3) DO USE_SLOT1 WEAKEST_BOT
-GOTO LOOP
-`;
+export const BUILTIN_BOT3_SOURCE = [
+  "SET_MOVE_TO_SECTOR 1 ZONE 1",
+  "LABEL LOOP",
+  "IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH",
+  "IF (AMMO < 20 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO",
+  "IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1",
+  "IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 3) DO USE_SLOT1 WEAKEST_BOT",
+  "GOTO LOOP",
+].join("\n");
 
 /** @typedef {{t:"ID"|"NUM"|"OP"|"PUNC", v:string}} ExprTok */
 
@@ -717,12 +724,17 @@ function evalExprNode(n, ctx) {
   return { ok: false, v: 0 };
 }
 
+/** @typedef {{severity:"error"|"warning", message:string, sourceLine:number|null}} CompileDiagnostic */
+
 /**
  * @param {string} sourceText
- * @returns {CompiledProgram}
+ * @returns {{ program: CompiledProgram, diagnostics: CompileDiagnostic[] }}
  */
 function compileBotInstructionsV1(sourceText) {
   const lines = sourceText.split(/\n/);
+
+  /** @type {CompileDiagnostic[]} */
+  const diagnostics = [];
 
   /** @type {Map<string, number>} */
   const labels = new Map();
@@ -746,11 +758,24 @@ function compileBotInstructionsV1(sourceText) {
 
     if (trimmed.startsWith("LABEL ")) {
       const name = trimmed.slice(6).trim();
-      if (name) labels.set(name, instructions.length + 1);
+      if (name) {
+        if (labels.has(name)) {
+          diagnostics.push({ severity: "warning", message: `Duplicate label: ${name}`, sourceLine: srcLine });
+        }
+        labels.set(name, instructions.length + 1);
+      } else {
+        diagnostics.push({ severity: "error", message: "LABEL requires a name", sourceLine: srcLine });
+      }
       continue;
     }
 
     const instr = parseInstructionLine(trimmed, srcLine);
+    if (instr.op === "INVALID") {
+      diagnostics.push({ severity: "error", message: `Invalid instruction: ${trimmed}`, sourceLine: srcLine });
+    }
+    if (instr.op === "IF_DO" && instr.inner?.op === "INVALID") {
+      diagnostics.push({ severity: "error", message: `Invalid instruction in IF DO: ${instr.inner.text}`, sourceLine: srcLine });
+    }
     addInstr(instr, srcLine);
   }
 
@@ -761,12 +786,17 @@ function compileBotInstructionsV1(sourceText) {
       if (target != null) {
         instr.targetPc = target;
       } else {
+        diagnostics.push({ severity: "error", message: `Unknown label: ${instr.label}`, sourceLine: instr.sourceLine ?? null });
         instr.op = "INVALID";
       }
     }
   }
 
-  return { instructions, pcToSourceLine };
+  if (instructions.length === 0) {
+    diagnostics.push({ severity: "warning", message: "Program is empty (no instructions)", sourceLine: null });
+  }
+
+  return { program: { instructions, pcToSourceLine }, diagnostics };
 }
 
 /** @param {string} line @param {number} sourceLine */
@@ -867,13 +897,18 @@ function execBotTickV1(params) {
   const instr = program.instructions[pcBefore - 1];
 
   if (!bot.alive) {
-    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore, pcAfter: pcBefore });
+    const e = { type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "DEAD", pcBefore, pcAfter: pcBefore, instr: null, sourceLine: null };
+    if (instr) {
+      e.instr = instr.text;
+      e.sourceLine = instr.sourceLine;
+    }
+    events.push(e);
     return;
   }
 
   if (!instr) {
     bot.pc = 1;
-    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_PC", pcBefore, pcAfter: bot.pc });
+    events.push({ type: "BOT_EXEC", botId: bot.id, result: "NOP", reason: "INVALID_PC", pcBefore, pcAfter: bot.pc, instr: null, sourceLine: null });
     return;
   }
 
@@ -1083,7 +1118,7 @@ function computeGoalMoveStep(st, bot) {
 }
 
 /**
- * @param {{matchSeed:number, tickCap:number, rules?:Partial<typeof DEFAULT_RULESET>}} params
+ * @param {{matchSeed:number, tickCap:number, bot1SourceText?:string, rules?:Partial<typeof DEFAULT_RULESET>}} params
  * @returns {Replay}
  */
 export function createReplay(params) {
@@ -1097,7 +1132,7 @@ export function createReplay(params) {
       displayName: "BOT1",
       appearance: { kind: "COLOR", color: "#3b82f6" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: BUILTIN_BOT2_SOURCE,
+      sourceText: params.bot1SourceText ?? BUILTIN_BOT2_SOURCE,
       loc: { sector: 1, zone: 1 },
       alive: true,
       health: 100,
@@ -1180,7 +1215,15 @@ export function createReplay(params) {
 
   /** @type {Map<BotId, CompiledProgram>} */
   const programsByBotId = new Map();
-  for (const b of bots) programsByBotId.set(b.id, compileBotInstructionsV1(b.sourceText));
+
+  /** @type {BotCompileReport[]} */
+  const compile = [];
+
+  for (const b of bots) {
+    const r = compileBotInstructionsV1(b.sourceText);
+    programsByBotId.set(b.id, r.program);
+    compile.push({ botId: b.id, diagnostics: r.diagnostics });
+  }
 
   /** @type {MatchState} */
   const st = {
@@ -1394,7 +1437,7 @@ export function createReplay(params) {
     bots: st.bots.map(b => ({ botId: b.id, kills: b.kills, points: b.points, alive: b.alive })),
   };
 
-  return { header, state, events, result };
+  return { header, compile, state, events, result };
 }
 
 /**
