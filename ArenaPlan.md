@@ -103,7 +103,8 @@ You confirmed walls are part of gameplay:
 - bots can **bump into walls**
 - on bump:
   - bot takes a **small amount of damage**
-  - bot **bounces**
+  - the bot does **not** move to a new anchor (discrete-anchor v1)
+  - the UI/replay viewer should show a small **bounce** effect (purely rendering; see `ArenaVisualPlan.md` §5.7)
 
 ### 2.1 Wall layout
 

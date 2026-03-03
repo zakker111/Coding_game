@@ -37,8 +37,8 @@ It builds on:
    - **Replay what happened**
      - play/pause, step +1, restart to tick 0, jump to end, speed
      - the simulation is tick-based (discrete state at each tick)
-     - while playing, the arena can render intra-tick motion smoothly by interpolating between tick states/events
-     - when paused or scrubbing/stepping, render the exact tick state
+     - while playing, the arena **must** render intra-tick motion smoothly by interpolating between tick states/events
+     - when paused or scrubbing/stepping, render the exact tick state (no intra-tick interpolation)
    - **Inspect bots**
      - bot list/inspector shows: appearance token, stats at playhead tick, and code view
      - BOT2–BOT4 code is read-only
@@ -256,6 +256,7 @@ Render scaling:
   - v1 (locked): render each bot as a **circle token** (solid fill) + slot id (`BOT1..BOT4`) + resource bars
     - color comes from the replay header `bots[].appearance` (see `ReplayViewerPlan.md`)
     - fallback when missing: deterministic per-slot palette (e.g. BOT1 blue, BOT2 red, BOT3 green, BOT4 yellow)
+  - bump feedback (render-only): when `BUMP_WALL` or `BUMP_BOT` occurs, render a small deterministic “bounce” effect (no gameplay physics). See `ArenaVisualPlan.md` §5.7.
   - later (images/gifs): if `bots[].appearance.kind = "IMAGE"` and the avatar resolves, draw the image **clipped to the same circle**, otherwise keep the v1 circle fallback
     - always keep a readable overlay (slot id or initials) for debugging
 - powerups: icons at their anchor location

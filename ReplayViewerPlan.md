@@ -263,6 +263,14 @@ Semantics:
 - `BUMP_WALL`: `botId`, `dir`, `damage`
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
+Rendering note (required for v1):
+- Bump events are the canonical signal for “failed movement attempt” feedback.
+- They do **not** imply any gameplay position change beyond what `state[t]` already encodes (in v1 discrete-anchor rules, a bump means the bot stays at the same `loc`).
+- While playing, the viewer should apply a small deterministic “bounce” visual effect during tick `t` using the bump `dir` (see `ArenaVisualPlan.md` §5.7). When paused/scrubbing (render `p=1`), the bounce offset is `0`.
+
+Determinism note:
+- If multiple bump events for the same `botId` exist in `events[t]`, the viewer should use the **last** one in event order for the bounce direction.
+
 ### 4.4 Powerups
 
 Timing note:

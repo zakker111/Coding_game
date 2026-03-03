@@ -152,9 +152,13 @@ The victim receives:
 
 Walls are gameplay:
 - if a bot bumps a wall it takes a small amount of damage (`BUMP_WALL`)
+- in v1 (discrete anchors), a wall bump means **no location change** (the bot stays at the same anchor)
 - wall damage is `source == ENV`
 - wall damage **can cause death**
 - if wall damage causes death, kill credit still goes to `lastDamageByBotId` (if present)
+
+Rendering note:
+- The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_WALL` (purely visual; see `ArenaVisualPlan.md` §5.7).
 
 Ruleset parameters:
 - `wallBumpDamage` (int; v1 TBD)
@@ -175,6 +179,9 @@ Direction rule (recommended for v1):
 - If the collision was caused by a bot’s movement attempt in direction `<DIR>`, then:
   - mover records `dir = <DIR>`
   - the other bot records `dir = OPPOSITE(<DIR>)`
+
+Rendering note:
+- The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_BOT` (purely visual; see `ArenaVisualPlan.md` §5.7).
 
 Damage (to finalize):
 - If you decide that bot-to-bot bumps cause damage, it should be recorded as `source == BOT` with `kind == BUMP_BOT`, so it participates in kill credit via `lastDamageByBotId`.

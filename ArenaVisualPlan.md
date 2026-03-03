@@ -18,7 +18,7 @@ It is aligned with:
 - **Crisp rendering**: integer scaling for pixel-art style (no blurry grid/sprites).
 - **Low clutter by default**: show essentials always; show details on hover/selection.
 
-Non-goals (v1): cinematic effects, physics-grade interpolation/easing, full minimap.
+Non-goals (v1): cinematic effects, physics-grade motion/continuous collision, full minimap.
 
 ---
 
@@ -263,6 +263,46 @@ Rules:
 When `BOT_DIED` occurred:
 - remove the bot body from subsequent ticks
 - optional: render a faint “wreck” mark for 1–2 ticks at the death location
+
+### 5.7 Bump “bounce” feedback (render-only; required)
+
+When a bot bumps a wall or another bot, show a minimal, deterministic “bounce” effect.
+
+Goals:
+- make failed movement attempts visually legible ("hit wall" / "collided")
+- stay purely presentational (no gameplay physics; the authoritative anchor location does not change)
+- remain deterministic and stable when paused/scrubbing
+
+Inputs (from replay events; see `ReplayViewerPlan.md` §4.3):
+- `BUMP_WALL { botId, dir, damage }`
+- `BUMP_BOT  { botId, otherBotId, dir }`
+
+Rendering rule (recommended):
+- During tick `t`, render bots at their interpolated position (§7.2), then add a transient **bounce offset** for any bot that has a bump event in `events[t]`.
+- When paused/scrubbing/stepping (render `p=1`), the offset is `0` so the tick is stable.
+
+Concrete deterministic bounce model:
+- Define a small distance in world units:
+  - `bounceDistanceWorld = 3` (≈ 3/8 of the v1 bot radius)
+- Define a short duration within the tick:
+  - `bounceDuration = 0.35` (fraction of the tick)
+- Map the bump `dir` to a unit vector `v` in world-space:
+  - `UP    => ( 0, -1)`
+  - `DOWN  => ( 0,  1)`
+  - `LEFT  => (-1,  0)`
+  - `RIGHT => ( 1,  0)`
+- With intra-tick progress `p ∈ [0,1]`, compute:
+  - `q = clamp(p / bounceDuration, 0, 1)`
+  - `w = (q < 0.5) ? (2*q) : (2 - 2*q)`  (triangle wave; 0→1→0)
+  - `offsetWorld = v * (bounceDistanceWorld * w)`
+
+Apply `offsetWorld` to the **entire bot visual group** (token + outline + label + bars) so everything moves together.
+
+Multiple bumps in the same tick (deterministic policy):
+- If multiple bump events for the same `botId` exist in `events[t]`, use the **last** one in event order for the bounce direction.
+
+Optional (still deterministic; v1-friendly):
+- Add a slight squash at peak (`w≈1`): scale the bot token by ~`1.05` along the axis perpendicular to `dir` and ~`0.95` along `dir`.
 
 ---
 
