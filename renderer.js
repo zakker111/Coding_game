@@ -84,6 +84,7 @@ function findEvents(events, type) {
  *  events?: any[],
  *  showAnchors: boolean,
  *  progress01: number,
+ *  botVisualWorldById?: Record<string, {x:number,y:number}>|null,
  *  dpr?: number,
  *  logicalWidth?: number,
  *  logicalHeight?: number,
@@ -93,6 +94,7 @@ export function renderFrame(params) {
   const { canvas, fromSnapshot, toSnapshot, showAnchors } = params;
   const events = params.tickEvents ?? params.events ?? [];
   const p = clamp01(params.progress01);
+  const botVisualWorldById = params.botVisualWorldById ?? null;
 
   const logicalWidth = params.logicalWidth ?? canvas.clientWidth ?? canvas.width;
   const logicalHeight = params.logicalHeight ?? canvas.clientHeight ?? canvas.height;
@@ -126,8 +128,8 @@ export function renderFrame(params) {
   }
 
   renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p);
-  renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p);
-  renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p);
+  renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p, botVisualWorldById);
+  renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p, botVisualWorldById);
 
   const tickLabel = toSnapshot?.tick ?? fromSnapshot?.tick ?? 0;
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -161,7 +163,7 @@ function renderPowerups(ctx, ox, oy, S, fromSnapshot, toSnapshot, p) {
   }
 }
 
-function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
+function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p, botVisualWorldById) {
   const fromBots = byId(fromSnapshot?.bots ?? [], 'id');
   const toBots = byId(toSnapshot?.bots ?? [], 'id');
 
@@ -187,8 +189,13 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
 
     let impactTo = sectorCenterTo;
     if (hit && isFinalMoveThisTick) {
-      const bot = toBots.get(hit.victimBotId) ?? fromBots.get(hit.victimBotId);
-      if (bot?.loc) impactTo = anchorWorldCenter(bot.loc);
+      const w = botVisualWorldById?.[hit.victimBotId] ?? null;
+      if (w) {
+        impactTo = w;
+      } else {
+        const bot = toBots.get(hit.victimBotId) ?? fromBots.get(hit.victimBotId);
+        if (bot?.loc) impactTo = anchorWorldCenter(bot.loc);
+      }
     }
 
     let x = 0;
@@ -249,7 +256,7 @@ function renderBulletsFromEvents(ctx, ox, oy, S, fromSnapshot, toSnapshot, event
   }
 }
 
-function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
+function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p, botVisualWorldById) {
   const from = byId(fromSnapshot?.bots ?? [], 'id');
   const to = byId(toSnapshot?.bots ?? [], 'id');
   const ids = ['BOT1','BOT2','BOT3','BOT4'];
@@ -261,15 +268,24 @@ function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
     const b = to.get(id) ?? a;
     if (!a && !b) continue;
 
-    const mv = findEvent(events, 'BOT_MOVED', e => e.botId === id);
-    const fromLoc = mv?.fromLoc ?? a?.loc ?? b?.loc;
-    const toLoc = mv?.toLoc ?? b?.loc ?? a?.loc;
-    if (!fromLoc || !toLoc) continue;
+    let x = 0;
+    let y = 0;
 
-    const ca = anchorWorldCenter(fromLoc);
-    const cb = anchorWorldCenter(toLoc);
-    const x = lerp(ca.x, cb.x, moveT);
-    const y = lerp(ca.y, cb.y, moveT);
+    const w = botVisualWorldById?.[id] ?? null;
+    if (w) {
+      x = w.x;
+      y = w.y;
+    } else {
+      const mv = findEvent(events, 'BOT_MOVED', e => e.botId === id);
+      const fromLoc = mv?.fromLoc ?? a?.loc ?? b?.loc;
+      const toLoc = mv?.toLoc ?? b?.loc ?? a?.loc;
+      if (!fromLoc || !toLoc) continue;
+
+      const ca = anchorWorldCenter(fromLoc);
+      const cb = anchorWorldCenter(toLoc);
+      x = lerp(ca.x, cb.x, moveT);
+      y = lerp(ca.y, cb.y, moveT);
+    }
 
     const aliveFrom = a?.alive !== false;
     const aliveTo = b?.alive !== false;
@@ -291,7 +307,7 @@ function renderBots(ctx, ox, oy, S, fromSnapshot, toSnapshot, events, p) {
       for (const h of hits) {
         const bot = to.get(h.victimBotId) ?? from.get(h.victimBotId);
         if (!bot || !bot.loc) continue;
-        const c = anchorWorldCenter(bot.loc);
+        const c = botVisualWorldById?.[h.victimBotId] ?? anchorWorldCenter(bot.loc);
 
         if (flashA > 0) {
           withAlpha(ctx, flashA, () => {

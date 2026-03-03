@@ -27,6 +27,7 @@ const speedSel = /** @type {HTMLSelectElement} */ (el('speed'));
 
 const showAnchorsEl = /** @type {HTMLInputElement} */ (el('showAnchors'));
 const showEventsEl = /** @type {HTMLInputElement} */ (el('showEvents'));
+const cinematicMovementEl = /** @type {HTMLInputElement} */ (el('cinematicMovement'));
 
 const btnLoadBot2 = el('btnLoadBot2');
 const btnLoadBot3 = el('btnLoadBot3');
@@ -69,6 +70,124 @@ function resizeCanvasToDisplaySize() {
 /** @type {import('./engine.js').Replay|null} */
 let replay = null;
 
+/**
+ * Cinematic movement keyframes per bot.
+ * Each entry is a sorted list of keyframes where the bot's discrete `loc` changes (plus tick 0).
+ *
+ * @type {Record<string, Array<{tick:number, world:{x:number,y:number}}>>|null}
+ */
+let botVisualKeyframesById = null;
+
+/** @type {Record<string, {x:number,y:number}>|null} */
+let botVisualWorldById = null;
+
+function botLocAtTick(state, tick, botId) {
+  const snap = state?.[tick];
+  return (snap?.bots ?? []).find(b => b?.id === botId)?.loc ?? null;
+}
+
+function locEq(a, b) {
+  return !!a && !!b && a.sector === b.sector && a.zone === b.zone;
+}
+
+function computeBotVisualKeyframesById(r) {
+  const ids = (r?.header?.bots ?? []).map(b => b?.id).filter(Boolean);
+  /** @type {Record<string, Array<{tick:number, world:{x:number,y:number}}>>} */
+  const out = {};
+  /** @type {Record<string, any>} */
+  const lastLocById = {};
+
+  for (const id of ids) out[id] = [];
+
+  const maxTick = (r?.state?.length ?? 0) - 1;
+  for (let t = 0; t <= maxTick; t++) {
+    for (const id of ids) {
+      const loc = botLocAtTick(r.state, t, id);
+      if (!loc) continue;
+
+      const last = lastLocById[id] ?? null;
+      const changed = (t === 0) || !last || !locEq(last, loc);
+      if (!changed) continue;
+
+      out[id].push({ tick: t, world: anchorWorldCenter(loc) });
+      lastLocById[id] = loc;
+    }
+  }
+
+  // Ensure tick 0 exists even if a bot was missing from tick 0 for any reason.
+  for (const id of ids) {
+    if (out[id].length === 0 || out[id][0].tick !== 0) {
+      const loc0 = botLocAtTick(r.state, 0, id);
+      if (loc0) out[id].unshift({ tick: 0, world: anchorWorldCenter(loc0) });
+    }
+  }
+
+  return out;
+}
+
+function keyframeIndexAtOrBefore(keyframes, t) {
+  // Rightmost keyframe with tick <= t
+  let lo = 0;
+  let hi = keyframes.length - 1;
+  let ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (keyframes[mid].tick <= t) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return ans;
+}
+
+function computeBotVisualWorldByIdAtPlayhead(r, keyframesById, visualPlayheadValue) {
+  /** @type {Record<string, {x:number,y:number}>} */
+  const out = {};
+  const ids = (r?.header?.bots ?? []).map(b => b?.id).filter(Boolean);
+
+  // Safety: avoid "ghost drifting" across long stationary periods.
+  // We only smear motion across a small window (good for movement cooldowns),
+  // but if a bot doesn't move for a long time, it should look mostly stationary.
+  const MAX_SMEAR_TICKS = 3;
+
+  for (const id of ids) {
+    const keyframes = keyframesById?.[id] ?? null;
+    if (!keyframes?.length) continue;
+
+    const i = keyframeIndexAtOrBefore(keyframes, visualPlayheadValue);
+    const a = keyframes[i];
+    const b = keyframes[i + 1] ?? a;
+
+    if (a.tick === b.tick) {
+      out[id] = a.world;
+      continue;
+    }
+
+    const span = b.tick - a.tick;
+
+    let startTick = a.tick;
+    let denom = span;
+
+    if (span > MAX_SMEAR_TICKS) {
+      // Hold at `a` until the last MAX_SMEAR_TICKS before `b`, then animate into `b`.
+      startTick = b.tick - MAX_SMEAR_TICKS;
+      denom = MAX_SMEAR_TICKS;
+      if (visualPlayheadValue < startTick) {
+        out[id] = a.world;
+        continue;
+      }
+    }
+
+    const t01 = clamp01((visualPlayheadValue - startTick) / denom);
+    const tEase = easeInOutCubic(t01);
+    out[id] = { x: lerp(a.world.x, b.world.x, tEase), y: lerp(a.world.y, b.world.y, tEase) };
+  }
+
+  return out;
+}
+
 /** @type {{ detOk:boolean, detHashA:string, detHashB:string, counts: Record<string, number> }|null} */
 let qaReadout = null;
 
@@ -77,6 +196,9 @@ let lastFrameMs = 0;
 
 // Continuous playhead in ticks (float)
 let playhead = 0;
+
+// Visual playhead used for rendering/picking (may lag behind in cinematic mode).
+let visualPlayhead = 0;
 
 /** @type {string|null} */
 let selectedBotId = null;
@@ -264,30 +386,46 @@ function escapeHtml(s) {
   return s.replace(/[&<>\"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;' }[c]));
 }
 
-function clampPlayhead() {
-  if (!replay) return;
+function clampToReplayTicks(v) {
+  if (!replay) return v;
   const maxTick = replay.state.length - 1;
-  if (playhead < 0) playhead = 0;
-  if (playhead > maxTick) playhead = maxTick;
+  if (v < 0) return 0;
+  if (v > maxTick) return maxTick;
+  return v;
+}
+
+function syncVisualPlayhead() {
+  visualPlayhead = playhead;
 }
 
 function computeRenderCtx() {
   if (!replay) return null;
 
-  clampPlayhead();
+  visualPlayhead = clampToReplayTicks(visualPlayhead);
 
   const maxTick = replay.state.length - 1;
-  const base = Math.floor(playhead);
+  const base = Math.floor(visualPlayhead);
   const next = Math.min(maxTick, base + 1);
-  const progress01 = playing ? (playhead - base) : 0;
+  const progress01 = playing ? (visualPlayhead - base) : 0;
 
   const fromSnapshot = replay.state[base];
   const toSnapshot = playing ? replay.state[next] : replay.state[base];
   const renderEvents = playing ? (replay.events[next] ?? []) : [];
 
+  // Cinematic movement: compute continuous bot positions based on loc-change keyframes.
+  if (cinematicMovementEl.checked && botVisualKeyframesById) {
+    // When paused, snap to the discrete tick.
+    const vp = playing ? visualPlayhead : base;
+    botVisualWorldById = computeBotVisualWorldByIdAtPlayhead(replay, botVisualKeyframesById, vp);
+  } else {
+    botVisualWorldById = null;
+  }
+
   const shownTick = (progress01 > 0) ? next : base;
-  return { maxTick, progress01, fromSnapshot, toSnapshot, renderEvents, shownTick };
+  return { maxTick, progress01, fromSnapshot, toSnapshot, renderEvents, shownTick, botVisualWorldById };
 }
+
+
 
 function setSelectedBot(botId) {
   selectedBotId = botId;
@@ -452,7 +590,7 @@ function computeViewTransform() {
 
 function botScreenPos(renderCtx, botId) {
   if (!renderCtx) return null;
-  const { fromSnapshot, toSnapshot, renderEvents, progress01 } = renderCtx;
+  const { fromSnapshot, toSnapshot, renderEvents, progress01, botVisualWorldById } = renderCtx;
 
   const fromBot = (fromSnapshot?.bots ?? []).find(b => b?.id === botId) ?? null;
   const toBot = (toSnapshot?.bots ?? []).find(b => b?.id === botId) ?? fromBot;
@@ -462,15 +600,21 @@ function botScreenPos(renderCtx, botId) {
   const aliveTo = toBot?.alive !== false;
   if (!aliveFrom && !aliveTo) return null;
 
-  const mv = (renderEvents ?? []).find(e => e?.type === 'BOT_MOVED' && e?.botId === botId) ?? null;
-  const fromLoc = mv?.fromLoc ?? fromBot?.loc ?? toBot?.loc;
-  const toLoc = mv?.toLoc ?? toBot?.loc ?? fromBot?.loc;
-  if (!fromLoc || !toLoc) return null;
+  // Cinematic mode can provide a direct world-space position override.
+  let w = botVisualWorldById?.[botId] ?? null;
 
-  const a = anchorWorldCenter(fromLoc);
-  const b = anchorWorldCenter(toLoc);
-  const t = easeInOutCubic(progress01);
-  const w = { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+  if (!w) {
+    // Exact tick interpolation fallback (previous behavior).
+    const mv = (renderEvents ?? []).find(e => e?.type === 'BOT_MOVED' && e?.botId === botId) ?? null;
+    const fromLoc = mv?.fromLoc ?? fromBot?.loc ?? toBot?.loc;
+    const toLoc = mv?.toLoc ?? toBot?.loc ?? fromBot?.loc;
+    if (!fromLoc || !toLoc) return null;
+
+    const a = anchorWorldCenter(fromLoc);
+    const b = anchorWorldCenter(toLoc);
+    const t = easeInOutCubic(progress01);
+    w = { x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) };
+  }
 
   const { S, ox, oy } = computeViewTransform();
   return { x: ox + w.x * S, y: oy + w.y * S, r: 8 * S };
@@ -555,6 +699,7 @@ function render() {
     events: renderCtx.renderEvents,
     showAnchors: showAnchorsEl.checked,
     progress01: renderCtx.progress01,
+    botVisualWorldById: renderCtx.botVisualWorldById ?? null,
     dpr: canvasDpr,
     logicalWidth,
     logicalHeight,
@@ -591,22 +736,24 @@ function animate(ms) {
     }
   }
 
+  playhead = clampToReplayTicks(playhead);
+
+  if (cinematicMovementEl.checked && playing) {
+    // Smooth the visual playhead towards the true playhead.
+    // This reduces apparent jerkiness at high playback speeds or when frames stutter.
+    const tauSeconds = 0.09;
+    const a = 1 - Math.exp(-dt / tauSeconds);
+    visualPlayhead += (playhead - visualPlayhead) * a;
+    visualPlayhead = clampToReplayTicks(visualPlayhead);
+  } else {
+    syncVisualPlayhead();
+  }
+
   render();
   requestAnimationFrame(animate);
 }
 
 // --- wire UI ---
-
-canvas.addEventListener('click', (ev) => {
-  if (!replay) return;
-
-  const renderCtx = computeRenderCtx();
-  const p = canvasPointFromMouseEvent(ev);
-  const hit = pickBotAtPoint(renderCtx, p.x, p.y);
-
-  setSelectedBot(hit);
-  render();
-});
 
 btnLoadBot2?.addEventListener('click', async () => {
   try {
@@ -667,8 +814,11 @@ btnRun.addEventListener('click', () => {
   };
 
   replay = replayA;
+  botVisualKeyframesById = computeBotVisualKeyframesById(replayA);
+  botVisualWorldById = null;
 
   playhead = 0;
+  syncVisualPlayhead();
   playing = false;
   lastFrameMs = 0;
 
@@ -688,6 +838,7 @@ btnPlay.addEventListener('click', () => {
 
 btnPause.addEventListener('click', () => {
   playing = false;
+  syncVisualPlayhead();
   render();
 });
 
@@ -695,6 +846,7 @@ btnStep.addEventListener('click', () => {
   if (!replay) return;
   playing = false;
   playhead = Math.min(replay.state.length - 1, Math.floor(playhead) + 1);
+  syncVisualPlayhead();
   render();
 });
 
@@ -702,11 +854,16 @@ btnReset.addEventListener('click', () => {
   if (!replay) return;
   playing = false;
   playhead = 0;
+  syncVisualPlayhead();
   render();
 });
 
 showAnchorsEl.addEventListener('change', render);
 showEventsEl.addEventListener('change', render);
+cinematicMovementEl.addEventListener('change', () => {
+  syncVisualPlayhead();
+  render();
+});
 
 setUiEnabled(false);
 setSelectedBot(null);
