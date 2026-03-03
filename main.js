@@ -128,13 +128,13 @@ function render() {
 
   const fromSnapshot = replay.state[base];
   const toSnapshot = playing ? replay.state[next] : replay.state[base];
-  const ev = playing ? (replay.events[next] ?? []) : (replay.events[base] ?? []);
+  const renderEvents = playing ? (replay.events[next] ?? []) : [];
 
   renderFrame({
     canvas,
     fromSnapshot,
     toSnapshot,
-    events: ev,
+    events: renderEvents,
     showAnchors: showAnchorsEl.checked,
     progress01,
   });
