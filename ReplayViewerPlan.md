@@ -178,7 +178,7 @@ Notes:
 - Under this convention, viewers that render purely from `state[t]` will match "after resolution" visuals (moves applied, bullets advanced, hits applied, pickups applied, deaths resolved).
 - The per-tick event list remains the canonical explanation/debug log for how `state[t]` was reached.
 
-Rendering note (smooth playback; optional but recommended):
+Rendering note (smooth playback; required for v1 Workshop/replay viewer):
 - For tick `t`, treat `state[t-1]` as the **start-of-tick** state and `state[t]` as the **end-of-tick** state.
 - While playing, compute an intra-tick progress `p ∈ [0,1]` and interpolate *positions* from `start → end`.
   - Keep non-positional state (HP/ammo/energy, deaths, pickups) snapped to tick boundaries.

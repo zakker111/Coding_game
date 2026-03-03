@@ -225,9 +225,9 @@ Simulation remains **tick-based and discrete**:
 - bot positions change only at tick boundaries (end-of-tick snapshots)
 - movement is still “one anchor step when a move succeeds” (subject to cooldown)
 
-Rendering should still feel smooth:
+Rendering must feel smooth while playing:
 - while playback is running, the viewer **interpolates** bot/projectile positions within each tick (linear interpolation is fine)
-- when paused or scrubbing, render the **exact tick snapshot** (no interpolation)
+- when paused or scrubbing, render the **exact tick snapshot** (no intra-tick interpolation)
 
 (Implementation details and recommended interpolation rules: `ArenaVisualPlan.md` §7.2.)
 

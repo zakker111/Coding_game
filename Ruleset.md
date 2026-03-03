@@ -14,8 +14,8 @@ It complements:
 - The authoritative game simulation advances in **discrete ticks**.
 - All gameplay-relevant state changes (movement, damage, pickups, deaths, cooldown updates) happen during tick resolution and are visible in the replay as **per-tick** snapshots/events.
 - “Smooth movement” is a **rendering-only** concern:
-  - the UI/replay viewer may interpolate positions between tick snapshots for readability while playing
-  - when paused/scrubbing/stepping, the UI should render the exact tick snapshot
+  - the UI/replay viewer should interpolate positions between tick snapshots for readability while playing
+  - when paused/scrubbing/stepping, the UI should render the exact tick snapshot (no intra-tick interpolation)
 
 (See `ReplayViewerPlan.md` §3.3 and `ArenaVisualPlan.md` §7.2.)
 
