@@ -54,12 +54,39 @@ let sourceLineEls = new Map();
 
 const LS_BOT1_DRAFT_KEY = 'botarena.bot1.draft.v1';
 
+/**
+ * Bot sources for opponents, ideally loaded from `examples/*.md`.
+ * Stored in JS memory so `Run` can remain synchronous.
+ */
+const botSources = {
+  BOT2: BUILTIN_BOT2_SOURCE + '\n',
+  BOT3: BUILTIN_BOT3_SOURCE + '\n',
+  // BOT4 needs SAW/SHIELD which isn't implemented yet; use a bullet bot script for now.
+  BOT4: BUILTIN_BOT2_SOURCE + '\n',
+};
+
 async function fetchExampleScript(exampleName) {
   const url = `./examples/${exampleName}.md`;
   const md = await (await fetch(url)).text();
   const code = extractPreferredCodeBlock(md, { preferredLangs: ['text', ''] });
   if (!code) throw new Error(`No fenced code block found in ${url}`);
   return code.trimEnd() + '\n';
+}
+
+async function refreshBotSourcesFromMd() {
+  try {
+    botSources.BOT2 = await fetchExampleScript('bot2');
+    botSources.BOT4 = botSources.BOT2;
+  } catch {
+    botSources.BOT2 = BUILTIN_BOT2_SOURCE + '\n';
+    botSources.BOT4 = botSources.BOT2;
+  }
+
+  try {
+    botSources.BOT3 = await fetchExampleScript('bot3');
+  } catch {
+    botSources.BOT3 = BUILTIN_BOT3_SOURCE + '\n';
+  }
 }
 
 async function setBot1SourceText(next, { save = true } = {}) {
@@ -503,7 +530,17 @@ bot1Source?.addEventListener('input', () => {
 btnRun.addEventListener('click', () => {
   const seed = Number(seedInput.value || '0');
   const tickCap = Number(tickCapInput.value || '300');
-  replay = createReplay({ matchSeed: seed, tickCap, bot1SourceText: bot1Source.value });
+
+  replay = createReplay({
+    matchSeed: seed,
+    tickCap,
+    botSourceTextById: {
+      BOT1: bot1Source.value,
+      BOT2: botSources.BOT2,
+      BOT3: botSources.BOT3,
+      BOT4: botSources.BOT4,
+    },
+  });
 
   playhead = 0;
   playing = false;
@@ -559,8 +596,10 @@ renderFrame({
 });
 requestAnimationFrame(animate);
 
-// Initialize editor content
+// Initialize editor content + opponent sources
 (async () => {
+  await refreshBotSourcesFromMd();
+
   const existing = localStorage.getItem(LS_BOT1_DRAFT_KEY);
   if (existing) {
     await setBot1SourceText(existing, { save: false });

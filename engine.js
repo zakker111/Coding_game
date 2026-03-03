@@ -1118,12 +1118,27 @@ function computeGoalMoveStep(st, bot) {
 }
 
 /**
- * @param {{matchSeed:number, tickCap:number, bot1SourceText?:string, rules?:Partial<typeof DEFAULT_RULESET>}} params
+ * @param {{
+ *  matchSeed:number,
+ *  tickCap:number,
+ *  /** Back-compat: if provided, treated as BOT1 source. *\/ bot1SourceText?:string,
+ *  botSourceTextById?: Partial<Record<BotId, string>>,
+ *  rules?:Partial<typeof DEFAULT_RULESET>
+ * }} params
  * @returns {Replay}
  */
 export function createReplay(params) {
   const rules = { ...DEFAULT_RULESET, ...(params.rules ?? {}) };
   const rng = createRng(params.matchSeed);
+
+  /** @type {Partial<Record<BotId,string>>} */
+  const srcById = { ...(params.botSourceTextById ?? {}) };
+  if (params.bot1SourceText != null && srcById.BOT1 == null) srcById.BOT1 = params.bot1SourceText;
+
+  const srcBOT1 = srcById.BOT1 ?? BUILTIN_BOT2_SOURCE;
+  const srcBOT2 = srcById.BOT2 ?? BUILTIN_BOT2_SOURCE;
+  const srcBOT3 = srcById.BOT3 ?? BUILTIN_BOT3_SOURCE;
+  const srcBOT4 = srcById.BOT4 ?? BUILTIN_BOT2_SOURCE;
 
   /** @type {BotState[]} */
   const bots = [
@@ -1132,7 +1147,7 @@ export function createReplay(params) {
       displayName: "BOT1",
       appearance: { kind: "COLOR", color: "#3b82f6" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: params.bot1SourceText ?? BUILTIN_BOT2_SOURCE,
+      sourceText: srcBOT1,
       loc: { sector: 1, zone: 1 },
       alive: true,
       health: 100,
@@ -1153,7 +1168,7 @@ export function createReplay(params) {
       displayName: "BOT2",
       appearance: { kind: "COLOR", color: "#ef4444" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: BUILTIN_BOT2_SOURCE,
+      sourceText: srcBOT2,
       loc: { sector: 3, zone: 2 },
       alive: true,
       health: 100,
@@ -1174,7 +1189,7 @@ export function createReplay(params) {
       displayName: "BOT3",
       appearance: { kind: "COLOR", color: "#22c55e" },
       loadout: { slot1: "BULLET", slot2: "ARMOR", slot3: null },
-      sourceText: BUILTIN_BOT3_SOURCE,
+      sourceText: srcBOT3,
       loc: { sector: 7, zone: 3 },
       alive: true,
       health: 100,
@@ -1195,7 +1210,7 @@ export function createReplay(params) {
       displayName: "BOT4",
       appearance: { kind: "COLOR", color: "#eab308" },
       loadout: { slot1: "BULLET", slot2: null, slot3: null },
-      sourceText: BUILTIN_BOT2_SOURCE,
+      sourceText: srcBOT4,
       loc: { sector: 9, zone: 4 },
       alive: true,
       health: 100,
