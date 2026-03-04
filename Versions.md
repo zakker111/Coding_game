@@ -39,7 +39,7 @@ Naming convention note:
 ### Added
 - Project documentation scaffolding: `Prompt.md`, `Versions.md`, `Bugs.md`, `Todo.md`.
 - Bot identity/version planning: `BotModelPlan.md` (future-proof built-ins → user-submitted bots).
-- New rules documentation for v1 bot speed model (movement cooldown affected by equipped slot count).
+- New rules documentation for v1 bot speed model (`speedUnitsPerTick` reduced by equipped slot count).
 - Beginner-friendly zone convenience in the bot language:
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
   - `IN_ZONE(<ZONE>)`

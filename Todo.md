@@ -28,7 +28,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
 ### Arena model
 - **9 sectors (1..9)** arranged as a 3×3 grid.
 - Each sector contains **4 zones (1..4)** arranged as a 2×2 grid.
-- Bots and powerups are placed on deterministic **location anchors**:
+- **Bots** have continuous world positions `pos = {x,y}` (32×32 hitbox) and can move freely inside the outer wall.
+  - Spawns are still specified via sector/zone anchors, and are initialized at the corresponding anchor center point.
+- **Powerups** spawn at deterministic **location anchors**:
   - sector center: `SECTOR s`
   - zone center: `SECTOR s ZONE z`
 
@@ -67,9 +69,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - If bot code calls an instruction for a module/slot it doesn’t have equipped → **no-op**.
 
 Speed/weight (locked direction):
-- Bots have a base movement speed, and **each equipped slot reduces speed**.
+- Bots have a base movement speed (`baseSpeedUnitsPerTick`), and **each equipped slot reduces speed**.
 - Empty slots make a bot **faster**.
-- The speed system is defined in `Ruleset.md` as a deterministic **movement cooldown** model.
+- The speed system is defined in `Ruleset.md` as a deterministic `speedUnitsPerTick` model (world units per tick).
 
 **Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
 
@@ -82,11 +84,11 @@ Speed/weight (locked direction):
 - Resource failure behavior (locked): bots may attempt actions, but if out of ammo/energy the action **does nothing**.
 
 ### Projectiles / explosives
-- Bullets are **slow-moving projectiles** updated each tick (not instant hits).
-- Bullet pathing (locked v1): on fire, record `targetSector` (the target bot’s sector at that moment), then step along a deterministic shortest path toward it each tick (vertical-first). (See `Ruleset.md` §5.1 / `CombatPlan.md` §3.3.)
-- Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
+- Bullets are **continuous projectiles** updated each tick (not instant hits).
+- Bullet direction (locked direction): on fire, resolve a target bot id, compute a velocity vector toward the target bot’s **position at fire time**, and keep that direction (no homing). (See `Ruleset.md` §5.1 / `CombatPlan.md` §3.3.)
+- Bullet collision model (locked direction): bullets can hit **any bot** they collide with (32×32 bot hitbox), not only the intended target.
 - **Bullets stop at walls** (locked).
-  - v1: bullets are removed immediately on wall contact (see `ArenaPlan.md`, `CombatPlan.md`).
+  - v1: bullets are removed immediately on wall contact and emit `BULLET_DESPAWN reason=WALL`.
 - Explosives (grenades/mines) (planned future modules):
   - when introduced, AoE shape is pre-locked:
     - radius = **1 sector** (center + adjacent)
@@ -110,14 +112,12 @@ Speed/weight (locked direction):
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).
 - **Walls are gameplay** (locked v1):
-  - when a bot bumps into the outer wall: no movement + `BUMP_WALL` damage
-  - v1 collision is **anchor-based** (bounce is primarily visual feedback)
-  - future: continuous physics/velocity is a major ruleset change (see `ArenaPlan.md`)
+  - when a bot’s movement request would cross the outer wall: clamp at the wall and apply `BUMP_WALL` damage (see `Ruleset.md`)
 - Movement semantics for `MOVE_TO_*`:
-  - v1 uses the **anchor adjacency graph** defined in `ArenaPlan.md`
-  - still to finalize: deterministic tie-break rules when multiple shortest paths exist (if any remain after adjacency definition)
+  - movement is continuous, but resolved as cardinal steps (`speedUnitsPerTick`) toward a target point
+  - deterministic direction choice + tie-breaks are defined in `BotInstructions.md`
 
-- Bullet/wall interaction (future): do bullets collide/bounce/stop on walls?
+- Bullet/wall interaction (future): do bullets bounce/penetrate? (v1 is stop+despawn)
 
 ### Match rules
 - Tune match end parameters (`tickCap`, stalemate grace/countdown). (Defaults are defined in `Ruleset.md` §0.1.)

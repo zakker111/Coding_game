@@ -23,16 +23,18 @@ Authoritative specs referenced:
 - Sector size: `64×64`
 - Arena size: `192×192`
 
-### 1.1 Deterministic anchors (v1)
+### 1.1 Positions vs anchors (v1)
 
-All entity positions are expressed as deterministic **location anchors**:
-- sector center: `SECTOR s`
-- zone center: `SECTOR s ZONE z`
+- **Bots** have continuous world positions: `pos = {x,y}` in arena world units (see `ArenaPlan.md`, `Ruleset.md`).
+  - Sectors/zones are still important, but they are **regions derived from `pos`**.
+- **Powerups** spawn at deterministic **location anchors**:
+  - sector center: `SECTOR s`
+  - zone center: `SECTOR s ZONE z`
 
 This is the basis for:
-- movement
-- collision
-- replay encoding
+- movement targets (bots move toward anchor *centers* and bot positions)
+- powerup spawn encoding (`loc`)
+- deterministic pickup collision between a bot hitbox and an anchored powerup point
 
 ---
 
@@ -100,8 +102,9 @@ On spawn:
 
 ### 4.2 Pickup = collision
 
-Pickup rule (anchor-based collision):
-- if `bot.loc == powerup.loc` after movement resolution, the bot picks it up.
+Pickup rule (hitbox overlap):
+- after movement resolution, if an alive bot’s **32×32 hitbox** overlaps the powerup’s anchored center point, the bot picks it up.
+  - equivalently: `abs(bot.pos.x - powerupCenter.x) <= 16` and `abs(bot.pos.y - powerupCenter.y) <= 16`
 
 Pickup effect rule (fixed amount per type; capped at 100):
 - `health = min(100, health + powerupHealthDelta)`
@@ -120,7 +123,7 @@ From `ServerSimulationPlan.md`:
 - Powerup spawning occurs in **End-of-tick maintenance**.
 
 This sequencing ensures:
-- bots can pick up a powerup in the same tick they arrive at its anchor
+- bots can pick up a powerup in the same tick they overlap its pickup region
 - spawns are deterministic and consistent across client/server
 
 ---
@@ -129,20 +132,21 @@ This sequencing ensures:
 
 From `ReplayViewerPlan.md`:
 
-- represent locations as `loc = { sector: 1..9, zone: 0..4 }` (`zone=0` = sector center)
+- bots use `pos = {x,y}` in `state[t]` and `BOT_MOVED.fromPos/toPos`.
+- powerups may remain anchored using `loc = { sector: 1..9, zone: 0..4 }` (`zone=0` = sector center)
 - emit:
-  - `POWERUP_SPAWN`
-  - `POWERUP_PICKUP`
+  - `POWERUP_SPAWN` / `POWERUP_PICKUP`
   - `RESOURCE_DELTA` with cause `PICKUP_*`
 
 ---
 
 ## 7) Physics migration (later)
 
-Current v1 is **anchor-based** (discrete).
+v1 already uses continuous bot positions, but movement/collision is intentionally simple (cardinal steps + cancel-on-overlap).
 
-When migrating to physics:
-- bots/powerups move to continuous `(x,y)` positions
-- collision becomes 32×32 AABB overlap
-- **spawn rate, type RNG, and fixed pickup deltas remain unchanged**
-- the main change is collision detection + movement model (and therefore replay detail level)
+Possible future upgrades (ruleset change):
+- sliding/pushing instead of cancel-on-overlap
+- swept collision for bots (not just bullets)
+- richer movement modules (dash, knockback, etc.)
+
+**Spawn rate, RNG, and fixed pickup deltas should remain unchanged** across these upgrades.

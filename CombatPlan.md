@@ -94,7 +94,8 @@ Recommended common weapon fields (draft):
   - interpreted using deterministic RNG (§5.1)
 - `delivery` (`PROJECTILE | HITSCAN | BEAM`)
 - projectile-only:
-  - `speedSectorsPerTick` (int >= 1)
+  - `speedUnitsPerTick` (number > 0; **arena world units** per tick; integer or fixed-point)
+  - `radiusUnits` (number >= 0; for collision/visuals; `0` means “point projectile”)
   - `trajectoryKind` (`LINEAR | WAVY | ...`)
   - `stopsOnFirstHit` (bool)
 - burst-only:
@@ -122,58 +123,73 @@ On a successful fire:
 
 ### 3.2 Projectile entity fields (minimum)
 
+A bullet is a continuous projectile entity.
+
 - `bulletId` (monotonic, deterministic)
 - `ownerBotId`
 - `targetBotId` (optional; for metadata/debug)
-- `targetSector` (1..9; the target bot’s sector at the moment of firing)
-- `sector` (current sector)
-- `dir` (UP/DOWN/LEFT/RIGHT; updated as the bullet paths toward `targetSector`)
+- `pos` (continuous world position; `{ x, y }` in arena world units)
+- `vel` (continuous world velocity; `{ x, y }` in world units per tick; integer/fixed-point)
+- `radiusUnits` (number >= 0; `0` means “point projectile”)
 - `ttlRemaining` (ticks)
 
-### 3.3 Bullet pathing / step direction (locked v1)
+### 3.3 Bullet direction (engine-internal; no player aim)
 
-This is an **engine-internal** rule (not a bot language feature). It is unrelated to vNext `DIR ...` targets.
+Bots have **no directional weapons**: there is no “aim” input.
 
 When a bullet is fired:
 - resolve `<TARGET>` to a concrete `targetBotId`
-- record `targetSector` as that target bot’s **current** sector at the moment of firing
+- compute:
+  - `spawnPos` = the shooter bot’s current world position
+  - `targetPos` = the target bot’s current world position **at the moment of firing**
+- compute an initial direction vector toward the target position:
+  - `dir = Normalize(targetPos - spawnPos)`
+- set bullet velocity:
+  - `vel = dir * speedUnitsPerTick`
 
-Each tick during projectile advancement:
-- the bullet moves **exactly 1 sector**
-- before moving, choose its step direction deterministically as a shortest path toward `targetSector`:
-  - if the bullet’s row differs from the target’s row: step vertically toward it
-  - else if the column differs: step horizontally toward it
-  - else (already at `targetSector`): keep moving in its previous direction (or use a fixed priority if it has no previous direction)
+Notes:
+- `Normalize(...)` must be implemented deterministically (integer/fixed-point; no platform-dependent floats).
+- The bullet’s direction is **locked at fire time** and does **not** update as the target moves.
 
 (Authoritative wording lives in `Ruleset.md` §5.1.)
 
-### 3.4 Projectile motion
+### 3.4 Projectile motion (continuous)
 
-- Bullets are “slow”: move **1 sector per tick**.
-- Bullets path toward `targetSector` recorded at fire time; they do **not** “home” onto a moving target bot.
-- As they path, bullets may change direction deterministically (see §3.3).
+Each tick during projectile advancement:
+- compute `fromPos = pos`
+- compute `candidateToPos = pos + vel`
+- treat bullet motion as the swept segment `fromPos → candidateToPos`
+- resolve the **earliest** collision along that segment (if any), then:
+  - if the earliest collision is a bot hit: apply damage and remove bullet
+  - else if the earliest collision is the outer wall: remove bullet
+  - else: set `pos = candidateToPos`
 
 ### 3.5 Walls
 
 Locked (from `ArenaPlan.md` / `Todo.md`):
 - bullets **stop at walls** (outer boundary in v1).
 
-Recommended v1 behavior (locked):
-- if a bullet’s next step would go outside the arena: remove bullet immediately and emit a replay event.
+Recommended behavior:
+- if a bullet’s motion segment would cross outside the arena bounds, compute the intersection point with the outer boundary, set `toPos = impactPos`, then remove the bullet and emit a replay event.
 
-### 3.6 Hit resolution
+### 3.6 Hit resolution (continuous collision)
 
-Locked:
-- bullets can hit **any bot** in the sector they enter (not only the intended target).
+Locked direction:
+- bullets can hit **any bot** they collide with (not only the intended target).
 
-Recommended v1 behavior:
-- after moving into a sector:
-  - for hit checks, a bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`)
-  - if one or more alive bots occupy that sector, the bullet hits **exactly one** bot
-  - victim tie-break: lowest bot id in that sector
-  - emit damage:
-    - `source = BOT`, `sourceBotId = ownerBotId`, `kind = BULLET`
-  - remove bullet after a hit
+Collision model:
+- each alive bot has a **32×32** axis-aligned hitbox (AABB) centered on its current world position (see `ArenaPlan.md` §3).
+- the bullet collides when its swept segment intersects a bot hitbox.
+- the bullet does **not** collide with its owner (`ownerBotId`) (prevents self-hits due to spawn overlap).
+
+Deterministic victim selection (if multiple bots would be hit in one tick):
+- choose the bot with the **earliest** time-of-impact along the segment
+- tie-break (exact same impact time): lowest bot id
+
+On hit:
+- emit damage:
+  - `source = BOT`, `sourceBotId = ownerBotId`, `kind = BULLET`
+- remove the bullet after a hit (typical `stopsOnFirstHit = true`)
 
 ### 3.7 TTL
 
@@ -186,7 +202,7 @@ Suggested TTL for a 3×3 arena: 6–10 ticks (tunable).
 
 ## 4) Future weapon archetypes (draft)
 
-This section introduces additional weapon modules **without changing any v1 locked core** (anchor-based movement, slow 1-sector/tick bullets, etc.).
+This section introduces additional weapon modules **without changing any v1 locked core** (tick-based deterministic simulation, continuous bot/bullet positions, etc.).
 
 ### 4.1 Sniper (hitscan)
 
@@ -240,17 +256,17 @@ Optional “wavy / unstable” bullet feel (future):
 
 ### 4.3 Rifle (single-shot fast projectile)
 
-Goal: a “non-hitscan” weapon that still feels fast by moving multiple sectors per tick.
+Goal: a “non-hitscan” weapon that still feels fast by moving many world units per tick.
 
 Recommended properties:
 - `delivery = PROJECTILE`
-- `speedSectorsPerTick > 1`
+- `speedUnitsPerTick` significantly higher than the default bullet (fast projectile)
 - `trajectory = LINEAR` (rifle rounds go straight; no wavy drift)
 - low/no spread
 - higher base damage and/or armor/shield interaction tweaks
 
 Deterministic collision requirement:
-- movement must be simulated using deterministic sub-steps (see §5.2) so the projectile cannot skip over walls or bots.
+- movement must use deterministic continuous collision (swept segment, or deterministic micro-segments for non-linear trajectories; see §5.2) so the projectile cannot tunnel through walls or bots.
 
 ### 4.4 Laser (beam / hitscan) that ignores shields
 
@@ -290,7 +306,7 @@ Mapping the continuous wave to grid steps (draft):
 - each movement sub-step:
   - if `currentLateralOffset != desiredLateralOffset(t)`, step 1 sector in `lateralDir` toward it.
   - else step 1 sector forward in `baseDir`.
-- if the projectile has `speedSectorsPerTick > 1`, apply the above per sub-step (see §5.2).
+- if the projectile has high `speedUnitsPerTick`, apply the above per deterministic micro-step (see §5.2).
 
 ---
 
@@ -327,23 +343,25 @@ Replay requirement:
   - **A) Recompute** spread/variance in the viewer using the same hash algorithm (requires the algorithm to be treated as part of the ruleset), or
   - **B) Emit** the derived result explicitly in replay events (more future-proof if the algorithm may change).
 
-### 5.2 Projectiles with speed > 1 sector per tick (deterministic collision)
+### 5.2 Fast projectiles (deterministic continuous collision)
 
-Any projectile with `speedSectorsPerTick = S > 1` must be simulated as `S` serial sub-steps of **1 sector each** inside the projectile-advance phase.
+Any projectile with high `speedUnitsPerTick` must not be able to “tunnel” through walls or bot hitboxes.
 
-Deterministic sub-step algorithm (draft):
-- for each projectile in ascending id order:
-  1) for `i = 1..S`:
-     - compute the next step direction/sector (trajectory may depend on `ageTicks` and/or `i`)
-     - if the step would go outside the arena: remove the projectile and emit a replay event
-     - else move into the next sector
-     - after each sub-step, check for bot hits in the entered sector
-       - victim tie-break: lowest bot id in that sector
-       - if the projectile is non-piercing (typical): apply damage, emit event, remove projectile, stop processing further sub-steps
+Baseline rule (linear projectiles; recommended):
+- treat each tick’s movement as a swept segment `fromPos → toPos`
+- resolve the **earliest** intersection along that segment against:
+  - outer walls
+  - bot hitboxes (32×32 AABB)
+- if an intersection occurs, clamp `toPos` to the impact point and resolve the hit/despawn deterministically
+
+Non-linear trajectories (wavy/curved):
+- if the trajectory cannot be expressed as a single segment per tick, approximate it using a fixed number of deterministic sub-steps per tick (micro-segments) and apply the same “earliest collision wins” rule.
+- the sub-step count must be a fixed rule (or a rule derived only from stable projectile parameters), not dependent on frame rate or viewer settings.
 
 Determinism notes:
-- this avoids “tunneling” (skipping over bots/walls) and makes high-speed weapons (rifles) well-defined.
+- process projectiles in ascending id order.
 - if multiple projectiles could hit the same bot in the same tick, projectile id order determines which damage applies first.
+- if a single projectile’s segment intersects multiple bots, choose the earliest time-of-impact; tie-break by lowest bot id (see §3.6).
 - projectile–projectile collisions are undefined/ignored unless explicitly introduced later.
 
 ---
@@ -446,26 +464,26 @@ Deterministic ordering:
 
 ## 8) Force effects (future; draft)
 
-This section outlines a deterministic way to add "forces" later (knockback, pull, recoil) while keeping the simulation replayable.
+This section outlines a deterministic way to add "forces" later (knockback, pull, recoil, slows) while keeping the simulation replayable.
 
 Design constraints:
-- no floating point physics in v1
-- forces must be expressible as **anchor moves** (`loc = {sector, zone}`)
+- no platform-dependent floating point physics (use integer/fixed-point)
+- forced motion must resolve using the same wall/bot collision rules as normal movement (see `Ruleset.md` §1.2)
 
 Recommended force primitives (add later if desired):
-- **Knockback**: move a bot 1 anchor-step away from a source location/sector.
-- **Pull**: move a bot 1 anchor-step toward a source location/sector.
-- **Stun/slow**: temporarily increase `moveCooldownRemaining` (ties into `Ruleset.md` §1.2).
-- **Recoil**: a weapon use applies a knockback to the shooter.
+- **Knockback**: translate a bot away from a source point by `forceUnits` (world units).
+- **Pull**: translate a bot toward a source point by `forceUnits`.
+- **Slow**: temporarily reduce a bot’s `speedUnitsPerTick` for `durationTicks`.
+- **Recoil**: apply knockback to the shooter when it fires.
 
 Deterministic ordering (recommended):
-- resolve forced moves in a dedicated phase after explosions but before pickups
+- resolve force effects in a dedicated phase after explosions but before pickups
 - apply in `BOT1..BOT4` order
-- if a forced move would hit the outer wall, treat as a wall bump (optional) or clamp/no-op (must be specified)
+- if a forced move would hit the outer wall: clamp at the wall and (optionally) apply `BUMP_WALL` damage; if it would overlap another bot: cancel the forced move (same as normal movement)
 
 Replay requirements:
 - add explicit events (so UI does not infer):
-  - `FORCE_APPLIED { botId, kind: KNOCKBACK|PULL|STUN, fromLoc, toLoc?, magnitude?, source }`
+  - `FORCE_APPLIED { botId, kind: KNOCKBACK|PULL|SLOW, fromPos, toPos, magnitudeUnits, sourceRef? }`
 
 ---
 

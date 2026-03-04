@@ -10,7 +10,7 @@ v1 goal: ship the smallest UI that proves the core loop:
 
 It builds on:
 - `BotInstructions.md` (bot language)
-- `ArenaPlan.md` (sectors/zones/anchors)
+- `ArenaPlan.md` (sectors/zones)
 - `Ruleset.md` (timing, powerups, damage)
 - `ReplayViewerPlan.md` (replay UX + schema)
 - `ArenaVisualPlan.md` (arena rendering visuals)
@@ -224,9 +224,9 @@ Detailed visual/UX spec (grid rendering, scaling, entity visuals, overlays): see
 
 ### 5.0 Smooth movement (rendering) with tick-based simulation (v1)
 
-Simulation remains **tick-based and discrete**:
-- bot positions change only at tick boundaries (end-of-tick snapshots)
-- movement is still “one anchor step when a move succeeds” (subject to cooldown)
+Simulation remains **tick-based**:
+- bot positions are continuous `pos` (world units) and change only at tick boundaries (end-of-tick snapshots)
+- movement updates a bot’s `pos` by up to `speedUnitsPerTick` per tick (then collision/bump rules may clamp/cancel it)
 
 Rendering must feel smooth while playing:
 - while playback is running, the viewer **interpolates** bot/projectile positions within each tick (linear interpolation is fine)

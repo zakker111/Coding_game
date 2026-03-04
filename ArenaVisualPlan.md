@@ -3,9 +3,9 @@
 This document specifies **how the arena preview should look and behave** in the Workshop (grid rendering, world→pixel scaling, entity visuals, overlays, and in-arena info).
 
 It is aligned with:
-- `ArenaPlan.md` (world units, sectors/zones, anchors)
+- `ArenaPlan.md` (world units, sectors/zones)
 - `UIPlan.md` (green grid requirements)
-- `ReplayViewerPlan.md` (events + location encoding)
+- `ReplayViewerPlan.md` (events + position encoding)
 - `ZonePowerupPlan.md` (powerups, anchors)
 
 ---
@@ -38,10 +38,10 @@ Use an integer `S` (“pixels per world unit”) for crisp scaling.
 - `sectorRenderPx = 64 * S`
 - `zoneRenderPx = 32 * S`
 
-### 2.3 Location anchors → world coordinates
+### 2.3 Anchor locations (`loc`) → world coordinates (powerups)
 
-Replay locations are:
-- `loc = { sector: 1..9, zone: 0..4 }` (per `ReplayViewerPlan.md`)
+Bots are rendered directly from their continuous `pos` (see `ReplayViewerPlan.md`), but **powerups** (and any other anchored entities) may be encoded using deterministic anchor locations:
+- `loc = { sector: 1..9, zone: 0..4 }`
   - `zone=0` => sector center
   - `zone=1..4` => zone center
 
@@ -69,17 +69,13 @@ Let `worldToPx(x) = round(x * S)` and same for `y`.
   - `px = worldToPx(wx)`
   - `py = worldToPx(wy)`
 
-Bots have a notional **32×32 world-unit collision box** in the rules (matching zone size), but v1 collision/occupancy is **anchor-based** (see `ArenaPlan.md`).
+Bots have a notional **32×32 world-unit hitbox** in the rules (matching zone size). The viewer can use this for hit/collision visuals, but should treat replay `pos` as authoritative.
 
 ### Bot visual sizing (v1 placeholder: circle tokens)
 
-In v1, bots are rendered as **filled circles**, centered on their anchor location.
+In v1, bots are rendered as **filled circles**, centered on their replay `pos`.
 
-Why not 32×32 world units?
-- Bots can occupy both zone centers *and* sector centers (`zone=0`).
-- Inside a sector, the distance from the sector center `(32,32)` to any zone center `(16,16)` / `(48,16)` / `(16,48)` / `(48,48)` is:
-  - `dWorld = sqrt(16^2 + 16^2) = 16*sqrt(2) ≈ 22.63`
-- To avoid visual overlap for “sector-center bot vs zone-center bot” in the same sector, we choose a smaller token.
+To keep tokens readable inside a 32×32 zone cell (and to leave room for labels/bars), use a smaller token than the full 32×32 hitbox.
 
 **Chosen size (v1):**
 - `botDiameterWorld = 16`
@@ -94,7 +90,7 @@ Placement:
 - `botCenterPx = (round(wx*S), round(wy*S))`
 - draw the circle at `botCenterPx` with radius `botRadiusPx`
 
-This is purely visual; gameplay remains anchor-based.
+This is purely visual; the viewer renders whatever positions the replay provides.
 
 ### 2.5 HiDPI / devicePixelRatio (recommended)
 
@@ -194,8 +190,8 @@ Canvas crispness note:
 ### 4.5 Hover affordances
 
 When hovering the arena:
-- highlight the hovered **anchor cell** (zone or sector center) with a subtle outline.
-- show a small tooltip: `S<sector> Z<zone>` (zone `0` for sector center).
+- highlight the hovered **zone region** (32×32 cell) with a subtle outline.
+- show a small tooltip: `S<sector> Z<zone>` (both derived from the cursor position).
 
 ---
 
@@ -225,9 +221,10 @@ Future (post-v1):
 
 To make shooting/movement readable:
 - draw a small triangle/notch/arrow on the bot pointing in its current facing or last action direction.
-- if facing is not available in v1 state, derive from:
-  - last `BOT_MOVED.dir` within the current tick window, else
-  - the first bullet motion direction in the current tick window (derive from the bot’s earliest `BULLET_MOVE.fromSector → toSector` for that tick).
+- if facing is not available in v1 state, derive from (in order):
+  - last `BOT_MOVED.dir` within the current tick window (if present), else
+  - last `BOT_MOVED.fromPos → toPos` vector within the tick window (if present), else
+  - the first bullet motion direction in the current tick window (derive from the bot’s earliest `BULLET_MOVE.fromPos → toPos` for that tick, or from `BULLET_SPAWN.vel` if needed).
 
 ### 5.3 Bot id label (required)
 
@@ -270,7 +267,7 @@ When a bot bumps a wall or another bot, show a minimal, deterministic “bounce�
 
 Goals:
 - make failed movement attempts visually legible ("hit wall" / "collided")
-- stay purely presentational (no gameplay physics; the authoritative anchor location does not change)
+- stay purely presentational (no gameplay physics; the authoritative replay position does not change)
 - remain deterministic and stable when paused/scrubbing
 
 Inputs (from replay events; see `ReplayViewerPlan.md` §4.3):
@@ -339,11 +336,9 @@ Projectiles should be drawn from replay events (`ReplayViewerPlan.md`), not infe
 ### 7.1 Bullets
 
 - `BULLET_SPAWN`: draw a brief muzzle flash at the owner bot + create bullet entity visual
-  - spawn position rule: if replay provides `pos`, use it; otherwise use the owner bot’s location at the moment of firing
-    - v1 tick loop note: instruction execution happens before movement (`ServerSimulationPlan.md`), so for tick `t` this is the bot location in `state[t-1]`.
-- `BULLET_MOVE`: animate bullet from `fromSector` → `toSector` over the tick duration
-  - If `pathSectors[]` exists (speed>1): animate along the path within the same tick.
-- `BULLET_HIT`: hit spark on victim
+  - spawn position rule: use `BULLET_SPAWN.pos`.
+- `BULLET_MOVE`: animate bullet from `fromPos` → `toPos` over the tick duration.
+- `BULLET_HIT`: hit spark on victim (use `hitPos` if present; otherwise assume it equals the tick’s `BULLET_MOVE.toPos`).
 - `BULLET_DESPAWN`: fade out quickly (or pop) at last position
 
 Visual style:
@@ -398,14 +393,14 @@ Provide a “Visual Overlays” toggle group (persisted in localStorage) for:
 ### 8.3 Selection-driven overlays
 
 When a bot is selected:
-- highlight its current anchor cell
-- highlight its last movement (a short arrow from previous anchor)
+- highlight its current **sector/zone region** (computed from the bot’s current `pos`)
+- highlight its last movement (a short arrow from previous tick position → current tick position)
 - if it fired this tick, draw a thin aim ray in the shot direction for readability (purely visual; damage still comes from events)
-  - derive direction from the first `BULLET_MOVE.fromSector → toSector` for that bot in `events[t]` (or from `BULLET_SPAWN.dir` if present)
+  - derive direction from the first `BULLET_MOVE.fromPos → toPos` for that bot in `events[t]` (or from `BULLET_SPAWN.vel` if present)
 
 ### 8.4 Hover tooltips
 
-- Hover anchor: show location `S<sector> Z<zone>`.
+- Hover zone region: show location `S<sector> Z<zone>`.
 - Hover bot: show bot id + exact HP/ammo/energy.
 - Hover powerup: show type.
 

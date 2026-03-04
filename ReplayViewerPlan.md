@@ -27,7 +27,7 @@ It complements:
   - show why an action happened / no-op happened
 - **Visual correctness**:
   - sector + zone grid visible
-  - bullets moving sector-to-sector
+  - bullets moving smoothly as continuous projectiles
   - grenade fuse + detonation
   - mine placement, arming, trigger, detonation
   - wall bumps + bot bumps
@@ -223,52 +223,76 @@ Canonical `reason` values (v1+; extend additively):
 - `INVALID_INSTR`
 - `NO_MODULE`
 - `COOLDOWN`
-- `MOVE_COOLDOWN`
+
 - `NO_AMMO`
 - `NO_ENERGY`
 - `INVALID_TARGET_KIND`
 - `INVALID_TARGET`
 - `INVALID_LOC`
 
-### 4.2 Locations (`loc`)
+### 4.2 Positions (`pos`) and anchor locations (`loc`)
 
-Bots and powerups live on deterministic **location anchors** (see `ArenaPlan.md`).
+**Bots are represented with continuous world positions**. Projectiles (bullets) are continuous and always use world positions.
 
-Encode every location as:
+Powerups may still use deterministic **anchor locations** (`loc`) for compact replay encoding (spawn/pickup points).
+
+#### Continuous positions (`pos`) (bots + projectiles)
+
+Encode a continuous position as:
+- `pos = { x, y }` in **arena world units** (see `ArenaPlan.md` / `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right outer wall.
+- Bounds convention:
+  - Outer wall is at `x=0`, `x=192`, `y=0`, `y=192`.
+  - **Bots** (32×32 hitbox centered at `pos`) should have centers clamped to `x ∈ [16,176]`, `y ∈ [16,176]` (see `ArenaPlan.md`).
+  - **Projectiles** may use the full `0..192` range and are removed on wall impact.
+
+Rendering conventions:
+- Bots should always have `pos` in `state[t]`.
+- When paused/scrubbing/stepping, render exactly `state[t].bots[].pos`.
+- For hit/collision visuals/explanations, treat each bot as having a **32×32** axis-aligned hitbox (AABB) centered at the bot’s world position.
+
+Derived region (for UI overlays/tooltips; not an authoritative gameplay position encoding):
+- Given `pos`, the viewer may compute `sector (1..9)` and `zone (1..4)` by grid partitioning:
+  - `sectorCol = clamp(floor(x / 64), 0, 2)`
+  - `sectorRow = clamp(floor(y / 64), 0, 2)`
+  - `sector = sectorRow * 3 + sectorCol + 1`
+  - `inSectorX = x - sectorCol * 64`, `inSectorY = y - sectorRow * 64`
+  - `zoneCol = clamp(floor(inSectorX / 32), 0, 1)`
+  - `zoneRow = clamp(floor(inSectorY / 32), 0, 1)`
+  - `zone = zoneRow * 2 + zoneCol + 1`
+
+#### Anchor locations (`loc`) (powerups)
+
+Encode an anchor location as:
 - `loc = { sector: 1..9, zone: 0..4 }`
   - `zone=0` means sector center
   - `zone=1..4` means zone center
 
-Sector membership convention (used by sector-based mechanics like bullet hits):
-- A bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`).
-
-Optional future extension: continuous positions (`pos`)
-- Some future weapons (variable-speed projectiles, wavy/curved paths, beams) are easier to render with continuous coordinates.
-- When needed, encode positions as:
-  - `pos = { x, y }` in **arena world units** (see `ArenaPlan.md` / `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right outer wall.
-  - Recommended bounds convention (v1): `x` and `y` are clamped to `0..192` (inclusive), with the outer wall rendered at `x=0`, `x=192`, `y=0`, `y=192`.
-- When both `loc`/`sector` and `pos` are present, the viewer should prefer `pos` for rendering.
+Rendering conventions:
+- If an entity includes both `loc` and `pos`, the viewer should prefer `pos` for rendering.
+- If an entity has only `loc`, the viewer should derive a render position by mapping the anchor to its world-space center (sector/zone center).
 
 ### 4.3 Movement + bumps
 
 - `BOT_MOVED`:
   - `botId`
-  - `fromLoc` (a `loc`; see §4.2)
-  - `toLoc` (a `loc`; see §4.2)
-  - `dir` (`UP|DOWN|LEFT|RIGHT`)
+  - `fromPos` (a `pos`; see §4.2)
+  - `toPos` (a `pos`; see §4.2)
+  - `dir` (optional; `UP|DOWN|LEFT|RIGHT`)
   - `tick` (optional; redundant; must match the container tick)
 
 Semantics:
-- Emit `BOT_MOVED` **only when movement succeeds**.
-- In tick `t`, `fromLoc` should match the bot location in `state[t-1]`, and `toLoc` should match the bot location in `state[t]`.
-- `dir` is the bot’s chosen move direction for the step (do not derive it from `fromLoc → toLoc`, because anchor steps can change both `x` and `y`).
+- Emit `BOT_MOVED` when the bot’s resolved position changes during the tick.
+- In tick `t`, `fromPos` should match the bot position in `state[t-1]`, and `toPos` should match the bot position in `state[t]`.
+- If `dir` is present it is the bot’s chosen move direction for the tick. If omitted, the viewer may derive a facing from `toPos - fromPos` for visualization.
 
 - `BUMP_WALL`: `botId`, `dir`, `damage`
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
+Semantics:
+- Bump events are the canonical signal for “collision / blocked movement” feedback.
+- A bump does not by itself define the bot’s final position; the authoritative end-of-tick position is still `state[t].bots[].pos` (and `BOT_MOVED.toPos` if present).
+
 Rendering note (required for v1):
-- Bump events are the canonical signal for “failed movement attempt” feedback.
-- They do **not** imply any gameplay position change beyond what `state[t]` already encodes (in v1 discrete-anchor rules, a bump means the bot stays at the same `loc`).
 - While playing, the viewer should apply a small deterministic “bounce” visual effect during tick `t` using the bump `dir` (see `ArenaVisualPlan.md` §5.7). When paused/scrubbing (render `p=1`), the bounce offset is `0`.
 
 Determinism note:
@@ -291,47 +315,49 @@ Timing note:
 - `RESOURCE_DELTA`: `botId`, `ammoDelta`, `energyDelta`, `healthDelta`, `cause`
   - include `cause` values like: `PICKUP_HEALTH|PICKUP_AMMO|PICKUP_ENERGY|DAMAGE|DRAIN|...`
 
-### 4.6 Projectiles (bullets; forward-compatible)
+### 4.6 Projectiles (bullets; continuous)
 
-v1 uses the `BULLET_*` events below.
+Bullets are continuous projectiles and must be represented with world positions.
 
 Optional fields (not required in v1) support future weapons/features:
 - burst fire sequences (group shots fired as a burst)
-- variable projectile speeds
 - non-linear trajectories (e.g., wavy)
 
 - `BULLET_SPAWN`:
-  - required: `bulletId`, `ownerBotId`, `sector`
-  - viewer spawn position rule:
-    - if `pos` is present → render bullet spawn at `pos`
-    - else → render bullet spawn at the **owner bot’s location at the moment of firing**
-      - v1 tick loop note: instruction execution happens before movement (`ServerSimulationPlan.md`), so for tick `t` this is the bot location in `state[t-1]`.
+  - required: `bulletId`, `ownerBotId`, `pos`, `vel`
+    - `pos`: `{ x, y }` (world units; see §4.2)
+    - `vel`: `{ x, y }` (world units per tick; integer/fixed-point)
   - optional:
-    - `dir` (the bullet’s initial movement direction; bullets may change direction over time, so the viewer must primarily rely on `BULLET_MOVE` events)
+    - `radiusUnits` (number >= 0; `0` means point projectile)
     - `targetBotId` (debug/metadata)
-    - `targetSector` (the resolved destination sector used for deterministic pathing; see `CombatPlan.md` §3)
+    - `targetPos` (debug/metadata; target bot world position at fire time)
     - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
     - `burst` (burst grouping; omitted for non-burst shots):
       - `burstId` (string)
       - `shotIndex` (0-based)
       - `shotsInBurst` (int)
-    - `speedSectorsPerTick` (number; default is `1`)
+    - `speedUnitsPerTick` (number > 0; informational; if present, should match `|vel|`)
     - `trajectory` (viewer hint; if omitted, treat as linear):
       - `kind`: `LINEAR | WAVY`
       - `amplitudeUnits` (number; for `WAVY`)
-      - `periodSectors` (number; for `WAVY`)
+      - `periodTicks` (number; for `WAVY`)
       - `phase` (number; for `WAVY`)
-    - `pos` (continuous spawn position; see §4.2)
 
 - `BULLET_MOVE`:
-  - required: `bulletId`, `fromSector`, `toSector`
-  - optional:
-    - `pathSectors` (array of sector ids in traversal order; includes `fromSector` and `toSector`)
-      - used when `speedSectorsPerTick > 1` so the viewer can render multi-sector motion in a single tick
-    - `fromPos`, `toPos` (continuous positions for rendering slow/fast/curved motion; see §4.2)
+  - required: `bulletId`, `fromPos`, `toPos`
+  - semantics:
+    - this describes the bullet’s resolved motion during the tick (after collision resolution)
+    - if the bullet hit a bot or wall during the tick, `toPos` should be the impact point
 
-- `BULLET_HIT`: `bulletId`, `victimBotId`, `damage`
-- `BULLET_DESPAWN`: `bulletId`, `reason` (`TTL|WALL|HIT`)
+- `BULLET_HIT`:
+  - required: `bulletId`, `victimBotId`, `damage`
+  - optional:
+    - `hitPos` (world position of impact; if omitted, viewers may assume it equals the tick’s `BULLET_MOVE.toPos`)
+
+- `BULLET_DESPAWN`:
+  - required: `bulletId`, `reason` (`TTL|WALL|HIT`)
+  - optional:
+    - `pos` (world position where it despawned; if omitted, viewers may assume it equals the most recent `toPos`)
 
 ### 4.6.1 Beams / lasers (future)
 
@@ -339,7 +365,7 @@ Beams are hitscan or short-duration line attacks. They are rendered as a line fo
 
 - `BEAM_FIRE`:
   - `beamId`, `ownerBotId`
-  - `fromLoc` (or `pos`), `dir`, `rangeSectors`
+  - `fromPos`, `dir`, `rangeSectors`
   - `durationTicks` (int; `0` or `1` for instantaneous)
   - `ignoresShield` (optional boolean; when true, the viewer should explain that shield mitigation was bypassed)
 

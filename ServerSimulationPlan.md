@@ -4,7 +4,7 @@ This document describes how the server should **simulate battles deterministical
 
 It complements:
 - `ServerPlan.md` (overall server responsibilities + entity model + endpoints)
-- `ArenaPlan.md` (arena topology + anchors)
+- `ArenaPlan.md` (arena topology + sectors/zones)
 - `Ruleset.md` (damage attribution, collisions, powerup spawning)
 - `BotInstructions.md` (bot VM semantics)
 - `CombatPlan.md` (weapons: cooldowns, bullets, grenades, mines)
@@ -121,27 +121,29 @@ Recommended tick phases:
 
 2) **Movement + collision resolution**
    - apply movement attempts
-   - positions are deterministic location anchors:
-     - `SECTOR s` (sector center)
-     - `SECTOR s ZONE z` (zone center)
-   - speed rule: a movement request only succeeds when `moveCooldownRemaining == 0` (see `Ruleset.md` §1.2)
-   - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps
+   - bot positions are continuous world positions (`pos = {x,y}` in arena world units)
+     - for any rules/DSL concepts that refer to sectors/zones, derive the bot’s current `sector (1..9)` and `zone (1..4)` from `pos` by grid partitioning (see `ReplayViewerPlan.md` §4.2)
+   - speed rule: each bot may move up to its `speedUnitsPerTick` this tick (derived from loadout; see `Ruleset.md` §1.2)
+   - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps deterministically (see `Ruleset.md` §1.2 and §4)
+   - emit replay events as needed (`ReplayViewerPlan.md`):
+     - `BOT_MOVED { botId, fromPos, toPos, dir? }`
+     - `BUMP_WALL { botId, dir, damage }` / `BUMP_BOT { botId, otherBotId, dir }`
 
 3) **Toggle drains**
    - apply energy drains for active toggles (saw/shield)
 
 4) **Projectile/deployable updates**
-   - advance bullets (1 sector/tick)
+   - advance bullets (continuous; swept collision per `Ruleset.md` §5.1)
    - (future modules) advance grenades + decrement fuse
    - (future modules) mines: decrement arming timer
 
 5) **Hit / explosion resolution**
-   - bullet hit resolution (sector-enter hit, lowest bot id)
+   - bullet hits are resolved during bullet advancement (collision), emitting `BULLET_HIT` / `DAMAGE` / `BULLET_DESPAWN`
    - (future modules) grenade detonation (AoE)
    - (future modules) mine detonation (AoE)
 
 6) **Pickups**
-   - powerup pickup: an **alive** bot occupies the same location anchor as a powerup
+   - powerup pickup: an **alive** bot’s position intersects the powerup pickup region (powerups may remain anchored; map `powerup.loc` to its world-space center and use a deterministic pickup radius/overlap test)
    - deterministic ordering: process bots in `BOT1..BOT4` order (see `Ruleset.md`)
 
 7) **Deaths + win checks**
@@ -153,7 +155,7 @@ Recommended tick phases:
      - `STALEMATE`
 
 8) **End-of-tick maintenance**
-   - decrement cooldowns, bot-local timers, and `moveCooldownRemaining` (see `Ruleset.md` §1.2 for movement cooldown semantics)
+   - decrement module cooldowns and bot-local timers
    - update match-level timers used for match termination (see `Ruleset.md`):
      - increment/reset the no-bot-vs-bot-damage timer
      - decrement/cancel the stalemate countdown
@@ -190,8 +192,8 @@ Minimum replay fields:
 - per tick:
   - executed instruction trace per bot
   - events (see `ReplayViewerPlan.md`):
-    - movement/bump events using `loc = { sector, zone }`
-    - powerup spawns/pickups
+    - movement/bump events using bot `fromPos/toPos` (continuous world positions)
+    - powerup spawns/pickups (powerups may use `loc` anchors)
     - damage + deaths
     - projectile events
 

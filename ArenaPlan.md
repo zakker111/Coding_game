@@ -19,6 +19,7 @@ It is aligned with:
 
 - Standard match format is **4 bots** (`BOT1..BOT4`).
 - Default spawn positions for 4-bot matches (locked): arena corners
+  - spawn points are specified using sector/zone anchors and initialized at the corresponding anchor **center position**
   - `BOT1 → SECTOR 1 ZONE 1` (top-left)
   - `BOT2 → SECTOR 3 ZONE 2` (top-right)
   - `BOT3 → SECTOR 7 ZONE 3` (bottom-left)
@@ -61,7 +62,7 @@ Therefore:
 
 ### 1.3 Anchor points (sector center + zone centers)
 
-We treat a "location" used by bot scripts and powerups as one of these deterministic anchors:
+We treat a "location" used by bot scripts and powerups as one of these deterministic reference points:
 
 - **Sector center** (`SECTOR s`):
   - `sectorCenter = sectorOrigin + (32, 32)`
@@ -69,7 +70,12 @@ We treat a "location" used by bot scripts and powerups as one of these determini
 - **Zone center** (`SECTOR s ZONE z`):
   - `zoneCenter = zoneOrigin + (16, 16)`
 
-This aligns with a notional **32×32 bot collision box** (matching zone size), but v1 collision/occupancy is **anchor-based** (see §3).
+These anchors are used for:
+- bot movement targets (`MOVE_TO_SECTOR …`, `MOVE_TO_ZONE …`)
+- powerup spawn points
+- UI labeling/sensing (deriving sector/zone regions from `pos`)
+
+Bots themselves are **continuous** (`pos = {x,y}`), so they are not restricted to sitting exactly on anchor points.
 
 ### 1.4 Powerup spawn anchors
 
@@ -103,7 +109,7 @@ You confirmed walls are part of gameplay:
 - bots can **bump into walls**
 - on bump:
   - bot takes a **small amount of damage**
-  - the bot does **not** move to a new anchor (discrete-anchor v1)
+  - the bot’s attempted movement for that tick is **clamped at the wall** (it does not pass through or reflect)
   - the UI/replay viewer should show a small **bounce** effect (purely rendering; see `ArenaVisualPlan.md` §5.7)
 
 ### 2.1 Wall layout
@@ -119,90 +125,69 @@ Future:
 
 ---
 
-## 3) Collision representation (zone-aware)
+## 3) Collision representation (continuous, zone-aware)
 
 Locked geometry:
 - each bot has a **32×32 collision box**
+  - treated as an axis-aligned bounding box (AABB)
+  - centered at the bot’s continuous position `pos = { x, y }`
 - each **zone** is **32×32**
 
-Recommended v1 semantics:
-- a bot’s authoritative location is a deterministic anchor (`SECTOR s` or `SECTOR s ZONE z`)
-- collision/occupancy in v1 is **anchor-based**:
-  - two bots cannot occupy the same anchor
-  - the 32×32 collision box is primarily for **visuals/intuition** (until a future physics migration)
+v1 semantics:
+- bots have a continuous `pos = {x,y}` in arena world units
+  - world coordinate system is defined in §1.2 (`(0,0)` top-left; `+x` right; `+y` down)
+  - positions are **deterministic numeric state** (recommended: integer fixed-point; see `Ruleset.md`)
+- sectors/zones are **regions** (not discrete occupancy cells)
+  - a bot is considered “in sector/zone” based on its **center position** `pos`
+  - `sectorCol = floor(x / 64)`, `sectorRow = floor(y / 64)`
+  - `zoneCol = floor((x % 64) / 32)`, `zoneRow = floor((y % 64) / 32)`
+  - zone id = `1 + zoneCol + 2*zoneRow`
+
+Outer wall constraints:
+- the arena bounds are `[0,192] × [0,192]`
+- to keep the full 32×32 bot hitbox inside the arena, bot center positions are clamped to:
+  - `x ∈ [16, 176]`
+  - `y ∈ [16, 176]`
 
 ---
 
-## 4) Movement model (locked for v1)
+## 4) Movement model (continuous positions; tick-based)
 
-v1 is locked to **Option A (discrete anchors)**.
+The simulation remains **tick-based**, but movement updates bot positions continuously.
 
-Rationale:
-- easiest determinism and debugging
-- matches the bot language (move to sector/zone)
-- supports a clean replay viewer
+Authoritative state:
+- each alive bot has `pos = {x,y}` (continuous)
+- sector/zone centers remain **deterministic reference points** for:
+  - bot movement targets (`MOVE_TO_SECTOR …` / `MOVE_TO_ZONE …`)
+  - powerup spawns
+  - UI labeling/sensing (“in sector”, “in zone”, “dist to wall”, etc.)
 
-### Option A — Discrete anchors (recommended)
+Per-tick movement resolution (high-level):
+- each tick, a bot may produce a movement request (from its instruction or persistent goal)
+- the request becomes a candidate translation by up to `speedUnitsPerTick` (see `Ruleset.md`)
+- the engine applies deterministic collision resolution:
+  - bot-vs-wall: clamp to arena bounds (hitbox-aware)
+  - bot-vs-bot: prevent overlap (stable resolution order `BOT1..BOT4`)
+- bump events (`BUMP_WALL`, `BUMP_BOT`) are emitted as part of this resolution (see `Ruleset.md`)
 
-Bots do **discrete movement** between anchors:
-- sector centers (`SECTOR s`)
-- zone centers (`SECTOR s ZONE z`)
-
-Rendering note (client/viewer): movement **must** be shown as smooth while playing by interpolating between anchors over the tick duration, but gameplay remains tick-based and discrete (tick semantics + interpolation policy: `ReplayViewerPlan.md` §3.3, `ArenaVisualPlan.md` §7.2).
-
-Rules:
-- movement is 1 anchor-step per tick (when a move occurs)
-  - simulation is tick-based; the authoritative location changes only on tick boundaries
-  - the client/replay viewer renders movement smoothly by interpolating from `fromLoc` → `toLoc` within the tick (presentation-only)
-- collisions are grid-like:
-  - attempting to step outside the outer boundary → wall bump (no movement + bump damage)
-  - attempting to step into an occupied anchor → bot bump (no movement + bump event)
-
-Anchor adjacency (v1; defines distance + pathfinding):
-- Each **sector center** connects to its 4 **zone centers** (`ZONE 1..4`) within that sector.
-- Zone centers connect across sector borders (orthogonal neighbors):
-  - Right edge: `(sector s, zone 2)` connects to `(sector s+1, zone 1)` if `s` is not in column 3.
-  - Right edge: `(sector s, zone 4)` connects to `(sector s+1, zone 3)` if `s` is not in column 3.
-  - Left edge is symmetric.
-  - Bottom edge: `(sector s, zone 3)` connects to `(sector s+3, zone 1)` if `s` is not in row 3.
-  - Bottom edge: `(sector s, zone 4)` connects to `(sector s+3, zone 2)` if `s` is not in row 3.
-  - Top edge is symmetric.
-
-Directional moves (`MOVE <DIR>`) select among adjacent anchors whose destination is in that direction (destination has smaller `y` for `UP`, larger `y` for `DOWN`, smaller `x` for `LEFT`, larger `x` for `RIGHT`), then apply deterministic tie-breakers.
-
-Pros:
-- deterministic, easy to replay/debug
-- matches the language (“move to sector/zone”) without introducing physics
-
-Cons:
-- bounce is mostly visual feedback
-
-### Option B — Continuous positions (true physics)
-
-- bots have continuous `(x,y)` positions
-- movement is velocity/heading based
-- walls reflect velocity
-- collision uses the 32×32 box against geometry
-
-Pros:
-- richer movement and true bounce
-
-Cons:
-- significantly more complex
-- determinism requires strict integer/fixed-point rules
+Rendering note (client/viewer):
+- gameplay remains tick-based and deterministic
+- the UI/replay viewer may interpolate `pos` between tick snapshots for readability while playing
 
 ---
 
 ## 5) Recommended next step
 
-Given the current design goals (determinism + easy replays), prefer:
-- **Option A (discrete anchors)**
+Commit to continuous positions in v1, but keep the movement/collision rules intentionally simple:
+- cardinal movement (no diagonal velocity accumulation)
+- deterministic fixed-point arithmetic (no platform floats)
+- stable, documented collision resolution order (`BOT1..BOT4`)
 
-If later you want physics-style bounce and more granular positioning, you can migrate to Option B (but it will be a major ruleset/version change).
+If later you want richer “physics” (swept collision, elastic bounce, pushing), that can be a major ruleset change without changing the sector/zone reference system.
 
 ---
 
-## 6) Open parameters (regardless of option)
+## 6) Open parameters
 
 - `wallBumpDamage` (small integer; ruleset parameter, see `Ruleset.md`)
 - **Bullets vs walls (locked v1):** bullets **stop at walls** and are **removed immediately** (emit replay event `BULLET_DESPAWN reason=WALL`).

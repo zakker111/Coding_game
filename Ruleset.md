@@ -95,7 +95,7 @@ Initial values (v1 recommended defaults; may become ruleset parameters later):
 New (locked direction): bots also have:
 - `botBaseArmor` (integer or small fixed-point; exact reduction math is defined elsewhere)
   - v1 recommended default: `0`
-- `baseSpeed` (implemented as a deterministic movement cooldown model; see §1.2)
+- `baseSpeedUnitsPerTick` (integer or fixed-point; world units per tick; see §1.2)
 
 Loadout constraints (v1 validation rules):
 - bots have 3 slot positions; slots may be empty
@@ -105,34 +105,47 @@ Loadout constraints (v1 validation rules):
 
 > Note: we keep the exact armor reduction formula intentionally simple in v1 and tune it later.
 
-### 1.2 Speed model (movement cooldown; loadout affects speed)
+### 1.2 Speed model (continuous movement; loadout affects `speedUnitsPerTick`)
 
 Bots execute **1 instruction per tick** (see `BotInstructions.md`).
 
-Movement speed is represented as a deterministic cooldown so bots can be “faster” or “slower” without changing tick length:
+Bot movement is **continuous** in arena world units (see `ArenaPlan.md`): each bot has a world position `pos = { x, y }` and a **32×32** axis-aligned hitbox (AABB) centered at `pos`.
 
-Ruleset parameters (v1):
-- `baseMoveCooldownOnMoveTicks` (recommended default: `0`)
-- `perEquippedSlotMoveCooldownPenaltyTicks` (recommended default: `1`)
+Ruleset parameters (v1 recommended defaults):
+- `baseSpeedUnitsPerTick = 16` (world units per tick)
+- `perEquippedSlotSpeedPenaltyUnitsPerTick = 4` (world units per tick)
+- `minSpeedUnitsPerTick = 4` (world units per tick)
+
+So with 0/1/2/3 equipped slots, `speedUnitsPerTick` is `16/12/8/4` respectively.
+
+UI note: if the viewer uses `S` pixels per world unit (`ArenaVisualPlan.md`), this corresponds to `16*S` pixels per tick at base speed.
 
 Derived per bot each tick:
 - `equippedSlotCount` = number of non-empty slots in the bot’s 3-slot loadout
-- `moveCooldownOnMoveTicks = baseMoveCooldownOnMoveTicks + equippedSlotCount * perEquippedSlotMoveCooldownPenaltyTicks`
+- `speedUnitsPerTick = max(minSpeedUnitsPerTick, baseSpeedUnitsPerTick - equippedSlotCount * perEquippedSlotSpeedPenaltyUnitsPerTick)`
 
-Runtime state per bot:
-- `moveCooldownRemaining` (integer >= 0)
+Rules (movement + collision; v1):
+- Each tick, the engine derives at most one `moveRequest` per bot (from an immediate move instruction or an active move goal).
+- A `moveRequest` deterministically produces a **candidate displacement** `delta = {dx, dy}` where:
+  - `dx, dy ∈ {-speedUnitsPerTick, 0, +speedUnitsPerTick}`
+  - at most one of `dx,dy` is non-zero (i.e. **cardinal movement** only)
+  - the exact mapping from instructions/goals → `delta` is defined in `BotInstructions.md`.
+- Movement is resolved in `BOT1..BOT4` order using stable, implementable rules:
+  1) Let `fromPos` be the bot’s start-of-movement position for the tick.
+  2) Compute `candidateToPos = fromPos + delta`.
+  3) **Wall clamp**: clamp `candidateToPos` so the entire 32×32 bot hitbox stays inside the arena.
+     - using `ArenaPlan.md` bounds, this is equivalent to clamping bot centers to `x ∈ [16,176]`, `y ∈ [16,176]`.
+     - if clamping changed `candidateToPos`, emit `BUMP_WALL` and apply `wallBumpDamage`.
+  4) **Bot–bot collision**: if moving to `candidateToPos` would make this bot’s hitbox overlap any other alive bot’s hitbox, the movement is canceled:
+     - set `toPos = fromPos` (no movement)
+     - choose the collided bot deterministically:
+       - lowest `otherBotId` among the overlapping bots
+     - emit `BUMP_BOT` for **both** bots (`dir` and `OPPOSITE(dir)`), with `dir` being the bot’s requested move direction for the tick.
+  5) Otherwise, movement succeeds: set `toPos = candidateToPos` and emit `BOT_MOVED { fromPos, toPos, dir? }`.
 
-Rules:
-- a movement attempt (from an immediate move instruction or an auto-move goal) **only succeeds** when `moveCooldownRemaining == 0`.
-- if a move succeeds, set:
-  - `moveCooldownRemaining = moveCooldownOnMoveTicks + 1`
-  - (this ensures that a cooldown of `1` blocks movement for the *next* tick)
-- at end-of-tick maintenance, decrement `moveCooldownRemaining` down to `0`.
-
-Example timeline (with `moveCooldownOnMoveTicks = 1`):
-- tick 10: move succeeds ⇒ set remaining to 2 ⇒ end-of-tick decrement ⇒ remaining = 1
-- tick 11: remaining > 0 ⇒ move blocked ⇒ end-of-tick decrement ⇒ remaining = 0
-- tick 12: remaining == 0 ⇒ move allowed again
+Notes:
+- This “cancel on overlap” rule is intentionally simple; future rulesets can add sliding/pushing without changing the DSL.
+- If a bot both hits a wall and would overlap another bot after wall-clamp, the bot–bot collision rule wins (movement canceled), but the wall bump/damage still applies if the request attempted to cross the wall.
 
 Effect (intended gameplay):
 - empty slots ⇒ smaller `equippedSlotCount` ⇒ **faster movement**
@@ -207,7 +220,7 @@ The victim receives:
 
 Walls are gameplay:
 - if a bot bumps a wall it takes a small amount of damage (`BUMP_WALL`)
-- in v1 (discrete anchors), a wall bump means **no location change** (the bot stays at the same anchor)
+- on a wall bump, the bot’s movement for that tick is clamped at the wall impact point (it does not pass through or reflect)
 - wall damage is `source == ENV`
 - wall damage **can cause death**
 - if wall damage causes death, kill credit still goes to `lastDamageByBotId` (if present)
@@ -259,25 +272,36 @@ Recommendation (v1):
   - process bots in `BOT1..BOT4` order
   - process entities in stable creation order (e.g., bullet id ascending)
 
-### 5.1 Bullet projectile movement (v1)
+### 5.1 Bullet projectiles (continuous)
 
 Bots have **no directional weapons**: bullet weapons do not require or use a bot-facing direction.
 
 When a bullet is fired (see `CombatPlan.md` §3):
 - resolve the `<TARGET>` to a concrete `targetBotId`
-- record `targetSector` as that target bot’s **current** sector at the moment of firing
+- compute:
+  - `spawnPos` = shooter bot’s current world position
+  - `targetPos` = target bot’s current world position **at the moment of firing**
+- set bullet velocity toward the target position:
+  - `vel = Normalize(targetPos - spawnPos) * bulletSpeedUnitsPerTick`
+  - where `bulletSpeedUnitsPerTick` is the bullet module’s projectile speed parameter (named `speedUnitsPerTick` in `CombatPlan.md`).
+
+`Normalize(...)` must be deterministic (integer/fixed-point; no platform-dependent floats).
 
 Each tick during projectile advancement:
-- the bullet moves **exactly 1 sector**
-- before moving, choose its step direction deterministically as a shortest path toward `targetSector`:
-  - if the bullet’s row differs from the target’s row: step vertically toward it
-  - else if the column differs: step horizontally toward it
-  - else (already at `targetSector`): keep moving in its previous direction (or use a fixed priority if it has no previous direction)
+- treat the bullet’s motion as the swept segment `fromPos → candidateToPos`, where:
+  - `fromPos = bullet.pos`
+  - `candidateToPos = bullet.pos + bullet.vel`
+- resolve the **earliest** collision along that segment against:
+  - the outer wall (arena bounds)
+  - any alive bot hitbox (32×32 AABB centered at the bot’s current world position), excluding the bullet owner
+- if a collision occurs, clamp `toPos` to the impact point and resolve deterministically:
+  - bot impact: apply bullet damage (`source = BOT`, `kind = BULLET`), then remove the bullet
+  - wall impact: remove the bullet
+- if no collision occurs: set `bullet.pos = candidateToPos`
 
 Determinism-critical tie-break (bullets):
-- For bullet hit checks, a bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`).
-- when a bullet enters a sector that contains multiple alive bots, it hits **exactly one** victim:
-  - victim = lowest bot id in that sector (`BOT1` before `BOT2` ...)
+- if the swept segment would intersect multiple bots in one tick, the victim is the bot with the **earliest** time-of-impact along the segment
+- tie-break (exact same impact time): lowest bot id (`BOT1` before `BOT2` ...)
 
 Kill credit in multi-hit ticks:
 - because `lastDamageByBotId` is updated as damage is applied, the credited killer is whichever bot delivered the **final BOT-sourced damage event** that occurred before death (in the deterministic order above).
@@ -318,7 +342,7 @@ Zone numbering (per `ArenaPlan.md` / `UIPlan.md`):
 - `ZONE 3` = bottom-left
 - `ZONE 4` = bottom-right
 
-In replays/events, encode anchors as `loc = { sector, zone }` (see `ReplayViewerPlan.md`):
+In replays/events, encode anchors as `loc = { sector: s, zone: z }` (see `ReplayViewerPlan.md`):
 - `SECTOR s` → `{ sector: s, zone: 0 }`
 - `SECTOR s ZONE z` → `{ sector: s, zone: z }`
 
@@ -334,8 +358,9 @@ Ruleset parameters (must be stored with `rulesetVersion`):
 - `ticksPerSecond` (integer; v1 fixed to `1`)
   - `1 tick = 1 second` of simulated time
 - Movement speed parameters (see §1.2):
-  - `baseMoveCooldownOnMoveTicks` (v1 recommended: `0`)
-  - `perEquippedSlotMoveCooldownPenaltyTicks` (v1 recommended: `1`)
+  - `baseSpeedUnitsPerTick` (v1 recommended: `16`)
+  - `perEquippedSlotSpeedPenaltyUnitsPerTick` (v1 recommended: `4`)
+  - `minSpeedUnitsPerTick` (v1 recommended: `4`)
 - Wall bump damage:
   - `wallBumpDamage` (int; v1 TBD)
 - `powerupSpawnIntervalMinTicks` (v1: `10`)
@@ -383,7 +408,9 @@ Recommended v1 policy:
 ### 7.4 Pickup semantics (collision)
 
 Pickup phase (see tick ordering in `ServerSimulationPlan.md`):
-- If an **alive** bot’s location anchor equals a powerup’s location anchor, the bot **collides** with the powerup and automatically picks it up.
+- If an **alive** bot’s hitbox overlaps a powerup’s position, the bot **collides** with the powerup and automatically picks it up.
+  - In v1, powerups live at fixed sector/zone centers; treat a powerup as a point at that center.
+  - Equivalently (with a 32×32 bot AABB centered at `bot.pos`): pickup occurs when `abs(bot.pos.x - powerup.pos.x) <= 16` and `abs(bot.pos.y - powerup.pos.y) <= 16`.
   - Bots that reached `health <= 0` earlier in the tick do not pick up powerups later in the tick.
 - Apply a **fixed amount** per powerup type (this principle should hold for any future powerup too):
   - `HEALTH`: `health = min(100, health + powerupHealthDelta)`
@@ -399,7 +426,5 @@ Ruleset parameters:
 Deterministic ordering:
 - If multiple pickups would occur in the same tick (different bots at different powerups), process bots in `BOT1..BOT4` order.
 
-Future (physics migration):
-- if/when the simulation moves to continuous positions, “collision” becomes 32×32 AABB overlap.
-- the pickup semantics above remain the same; only collision detection changes.
+
 
