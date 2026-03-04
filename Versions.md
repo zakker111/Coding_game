@@ -34,6 +34,28 @@ Naming convention note:
 
 ---
 
+## 0.0.3 — 2026-03-04T00:00:00Z
+
+### Added
+- Workshop starter template: `examples/bot0.md` ("Powerup Seeker").
+- Workshop UI layout spec updates:
+  - top bot selector (choose 1 of 3 server-stored bots for `BOT1`)
+  - right-side instruction reference/help panel alongside bot inspector
+  - bottom equipment/loadout selector (v1: local-preview only)
+
+### Changed
+- Server planning simplified for v1 bot persistence:
+  - server stores `{owner_username, bot_name, source_text}` (plus `source_hash` for determinism)
+  - server ensures each user has exactly **3 bots** (auto-created from the starter template when missing)
+  - server-run matches use a fixed default loadout (`SLOT1=BULLET`) so simulation can run without storing per-bot loadouts
+- Server API plan expanded to support replay lookup by bot:
+  - `GET /api/matches?botId=...` (and related filters)
+- Replay viewer schema clarified:
+  - replay header `loadout` is optional (viewers may assume a server default if omitted)
+
+### Fixed
+- Cross-doc consistency between `UIPlan.md`, `ServerPlan.md`, `BotModelPlan.md`, and `ReplayViewerPlan.md` for bot selection and replay lookup.
+
 ## 0.0.2 — 2026-03-02T00:00:00Z
 
 ### Added

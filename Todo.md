@@ -257,21 +257,26 @@ Bot identity/version planning note:
 
 ### 8) Client UI (v1)
 - **Route `/`**: minimal landing with one primary action: **Start Game** → `/workshop`.
-- **Route `/workshop`**: the main “coding page”:
-  - bot code editor (with inline parse/validation errors)
-  - local simulation preview + replay controls
-  - always a **4-bot match**: `BOT1=Your Bot` + three built-in opponents
-  - read-only code viewer for the built-in opponents
+- **Route `/workshop`**: the main “coding page” (see `UIPlan.md`):
+  - top area: **bot selection** (choose one of your 3 server-stored bots; this bot occupies `BOT1`)
+  - left: bot code editor (with inline parse/validation errors)
+  - center: local simulation preview + replay controls (tick scrubber)
+  - right: instruction reference/help + bot inspector (stats + code view with `pc` highlight)
+  - bottom: equipment/loadout selection (v1: affects **local preview** only; server-run matches use a fixed default loadout)
+  - always a **4-bot match**: `BOT1 = selected bot` + three built-in opponents (`BOT2..BOT4`)
+  - built-in opponents’ code is read-only
 - **Built-in opponents (v1)**: ship 3 bundled scripts under `examples/`:
   - `examples/bot2.md` (Chaser Shooter)
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)
+- **Starter template (v1)**:
+  - `examples/bot0.md` (Powerup Seeker) is the default script used when a bot has no saved draft yet.
 - **Persistence/memory (v1)**:
-  - persist the user’s bot draft across refresh (guest/local)
+  - persist per-bot code drafts + per-bot loadout drafts locally (so switching bots and refreshing is safe)
   - persist minimal run config: seed (optional), tick cap (optional), opponent selection (if configurable), UI layout
   - suggested storage: `localStorage` for small settings + `IndexedDB` for drafts if we support multiple drafts/large text
 
-Defer (post-v1): auth/login, cloud saving, replay library, sharing links.
+Defer (post-v1): full auth/login UX polish, immutable bot versions, replay library, sharing links.
 
 ---
 

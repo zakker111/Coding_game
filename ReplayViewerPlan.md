@@ -61,7 +61,7 @@ List item fields (minimum):
 
 Core regions (align with `UIPlan.md`):
 - arena viewport (3×3 sectors, each with 2×2 zones)
-- right inspection panel (bot list + code)
+- right inspection panel (bot list + code, with optional instruction reference/help)
 - bottom timeline (ticks)
 - optional event log
 
@@ -109,7 +109,7 @@ A replay should support 2 independent requirements:
 - `matchSeed`
 - `tickCap`
 - `bots[]`:
-  - `botId` (`BOT1..BOT4`)
+  - `slotId` (`BOT1..BOT4`)
     - **Important:** this is the **match slot id** (deterministic engine identifier), not a user bot identity.
     - Future-proofing: stable bot identity/version live in `botRef` fields below.
   - `displayName`
@@ -123,9 +123,10 @@ A replay should support 2 independent requirements:
         - content-addressed storage (`contentHash`)
         - or a direct URL (`url`) when appropriate
     - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
-  - `loadout` (3 slot positions; each entry is a module id or `null`)
-    - v1 validation: no duplicate modules among equipped slots
-    - v1 validation: at most one weapon module equipped (`BULLET` or `SAW`)
+  - `loadout` (optional; 3 slot positions; each entry is a module id or `null`)
+    - if omitted, viewers may assume a v1 server default (e.g. `SLOT1=BULLET`, others empty)
+    - v1 validation (when present): no duplicate modules among equipped slots
+    - v1 validation (when present): at most one weapon module equipped (`BULLET` or `SAW`)
   - `sourceText` (or `sourceHash` + URL)
   - future (server / library):
     - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`
@@ -283,14 +284,14 @@ Rendering conventions:
 Semantics:
 - Emit `BOT_MOVED` when the bot’s resolved position changes during the tick.
 - In tick `t`, `fromPos` should match the bot position in `state[t-1]`, and `toPos` should match the bot position in `state[t]`.
-- If `dir` is present it is the bot’s chosen move direction for the tick. If omitted, the viewer may derive a facing from `toPos - fromPos` for visualization.
+- If `dir` is present it is the bot’s chosen move direction for the tick.
 
 - `BUMP_WALL`: `botId`, `dir`, `damage`
 - `BUMP_BOT`: `botId`, `otherBotId`, `dir`
 
 Semantics:
 - Bump events are the canonical signal for “collision / blocked movement” feedback.
-- A bump does not by itself define the bot’s final position; the authoritative end-of-tick position is still `state[t].bots[].pos` (and `BOT_MOVED.toPos` if present).
+- A bump does not by itself define the bot’s final position; the authoritative end-of-tick position is still `state[t].bots[].pos`.
 
 Rendering note (required for v1):
 - While playing, the viewer should apply a small deterministic “bounce” visual effect during tick `t` using the bump `dir` (see `ArenaVisualPlan.md` §5.7). When paused/scrubbing (render `p=1`), the bounce offset is `0`.
@@ -436,15 +437,20 @@ Recommended local persistence UX:
 
 ## 6) Minimal server API (future-ready)
 
-These endpoints are enough to power the browser replay UX:
+These endpoints are enough to power the browser replay UX (including “show me replays for a specific bot”):
 
-- `GET /api/matches` (for current user)
-  - returns match list summaries
+- `GET /api/matches`
+  - returns match list summaries visible to the current user (or public matches, depending on auth policy)
+  - supports optional filters (server may support either/both):
+    - `botId=<botId>` (preferred; stable server bot id)
+    - `owner=<username>&botName=<name>` (human-friendly identifier)
+  - pagination (recommended, forward-compatible): `limit`, `cursor`
 
 - `GET /api/matches/:matchId`
   - returns metadata + participants + result
 
 - `GET /api/matches/:matchId/replay`
+  - fetch replay by match id
   - returns replay JSON (small v1)
   - or returns `{ url }` for object storage
 

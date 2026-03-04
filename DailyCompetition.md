@@ -134,13 +134,13 @@ When a bot drops below threshold:
 You described a manual “verify intent” action to allow a bot back into daily runs.
 
 Server-side interpretation (no UI details):
-- a user can set `active_for_next_run = true` for a bot version
+- a user can set `active_for_next_run = true` for a bot
 - eligibility still requires meeting the threshold rules (or you may optionally allow a “rejoin grace” mechanic)
 
 This should be recorded as an auditable event:
 - who re-enabled
 - when
-- which bot version/loadout was active
+- which bot `source_hash` was active at the time (v1 server stores “latest source” only)
 
 ---
 
@@ -150,8 +150,11 @@ For a given daily run, results must be reproducible from stored artifacts:
 - `season_id`
 - `run_seed`
 - per-match `match_seed` derived from (`run_seed`, round index, match index)
-- exact bot versions (source hashes + loadouts)
+- exact bot code snapshots (at least `source_hash`, ideally also stored `source_text` in replays)
 - exact ruleset version
+
+Note on loadouts:
+- v1 server-run matches use a fixed default loadout for all bots (see `ServerPlan.md`). Client-side loadout/equipment does not affect daily competition results in v1.
 
 ---
 
@@ -163,7 +166,7 @@ Per match:
 - replay reference
 
 Per daily run:
-- list of participating bot versions
+- list of participating bots (botIds + source hashes; v1 may also store source_text snapshots in replays)
 - updated season points table
 - daily leaderboard snapshot
 

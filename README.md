@@ -27,6 +27,7 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 7. `ServerSimulationPlan.md` / `ServerPlan.md` — deterministic server runner + storage/API
 
 Supporting docs:
+- `examples/bot0.md` — Workshop starter template (beginner): Powerup Seeker
 - `examples/bot1.md` — sample beginner-friendly combat bots (BULLET/SAW + SHIELD)
 - `CombatPlan.md` — weapons/projectiles planning
 - `FutureProofing.md` / `BotLanguageDesign.md` — extensibility direction (modules, targeting, future DSL)

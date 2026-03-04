@@ -16,12 +16,13 @@ It complements:
 
 The server must:
 
-1) **Accept bot submissions** (source text + loadout) and validate/compile them.
+1) **Accept bot submissions** (source text) and validate/compile them.
+   - v1 server uses a fixed default loadout for all bots (see `ServerPlan.md`).
 2) **Run headless simulations** for daily matches with a deterministic match runner.
 3) **Store match artifacts**:
    - results (placements, stats)
    - replay payloads (events + optional checkpoints)
-   - version references (ruleset version + bot version hashes)
+   - version references (ruleset version + bot code hashes)
 4) **Serve results and replays** to clients.
 
 Non-goals for v1:
@@ -39,7 +40,9 @@ A match outcome must be reproducible from stored inputs.
 A match is fully determined by:
 - `ruleset_version`
 - `match_seed`
-- the 4 immutable `bot_version_id`s (or their `source_hash` + compiled IR hash)
+- the 4 participants’ bot code snapshots
+  - v1: `{ botId, source_hash, source_text }`
+  - future: `{ botVersionId }` (or `{ botId, botVersion, source_hash, compiledIrHash }`)
 - spawn placement (derived from seed or explicitly stored)
 
 ### 2.2 Banned sources of nondeterminism
@@ -68,7 +71,9 @@ At the start of each day:
    - `ruleset_version`
    - `run_seed`
    - `status = planned`
-2) Snapshot the participating `BotVersion` ids for that run.
+2) Snapshot the participating bots for that run.
+   - v1: snapshot `{ botId, source_hash, source_text }` so mid-day edits can’t affect the run.
+   - future: snapshot immutable `BotVersion` ids.
 
 ### 3.2 Match generation
 
@@ -82,7 +87,7 @@ Store each `Match` row with `status = queued`.
 ### 3.3 Match execution
 
 A match worker:
-1) loads the `Match` row + referenced bot versions
+1) loads the `Match` row + referenced bot code snapshots (v1) or bot versions (future)
 2) loads the ruleset implementation pinned to `ruleset_version`
 3) executes the simulation to completion (last bot alive) or to a rules-driven end (`tickCap` / `STALEMATE`)
 4) writes results + replay
@@ -123,7 +128,9 @@ Recommended tick phases:
    - apply movement attempts
    - bot positions are continuous world positions (`pos = {x,y}` in arena world units)
      - for any rules/DSL concepts that refer to sectors/zones, derive the bot’s current `sector (1..9)` and `zone (1..4)` from `pos` by grid partitioning (see `ReplayViewerPlan.md` §4.2)
-   - speed rule: each bot may move up to its `speedUnitsPerTick` this tick (derived from loadout; see `Ruleset.md` §1.2)
+   - speed rule: each bot may move up to its `speedUnitsPerTick` this tick
+     - v1: derived from the fixed default loadout (see `ServerPlan.md`)
+     - future: derived from the bot’s equipped loadout (see `Ruleset.md` §1.2)
    - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps deterministically (see `Ruleset.md` §1.2 and §4)
    - emit replay events as needed (`ReplayViewerPlan.md`):
      - `BOT_MOVED { botId, fromPos, toPos, dir? }`
@@ -188,7 +195,7 @@ Resource + cooldown enforcement:
 Replays are critical to user trust.
 
 Minimum replay fields:
-- replay header: `ruleset_version`, `match_seed`, bot version hashes, spawn assignments
+- replay header: `ruleset_version`, `match_seed`, per-slot `{ botId, source_hash }` (and v1: `source_text` snapshot), spawn assignments
 - per tick:
   - executed instruction trace per bot
   - events (see `ReplayViewerPlan.md`):
