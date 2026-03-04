@@ -135,20 +135,21 @@ Bots should be treated like pure decision functions:
 - The bot returns an **action** (what it wants to do).
 - The bot can have **private memory** but only through explicitly supported mechanisms.
 
-### 5.1 Suggested bot function shape (example)
+### 5.1 Bot language (v1)
 
-```js
-// Bot code should not reach into engine internals.
-export function act(observation, memory) {
-  // return: { action, memory }
-}
-```
+In v1, bots are authored in the **Bot Instruction DSL** defined in `BotInstructions.md`.
 
-Bot API rules:
+- A bot submission is `source_text` containing DSL instructions (not JavaScript/Python).
+- At runtime, each bot executes **exactly one** compiled instruction per tick at its current `pc`.
+- If we later support higher-level languages (JS/Lua/etc.), they must either:
+  - compile down to the same deterministic instruction/IR model, or
+  - run in a sandboxed runtime that preserves the same “one deterministic decision per tick” contract.
+
+Bot API rules (applies to any current/future bot authoring language):
 
 - Observations should be **explicit and bounded** (no leaking hidden opponent state).
 - Actions should be **validated** before applying them to the simulation.
-- Invalid actions should be handled consistently (e.g., “no-op” + penalty, or disqualify).
+- Invalid actions should be handled consistently (and must not crash the match).
 
 ---
 
@@ -170,6 +171,7 @@ Minimum requirements before running user-provided bots:
 Security rules:
 
 - Never `eval` bot code in the main simulation thread.
+  - In v1 this is achieved by not running a general-purpose language at all: bot submissions are parsed and executed as the Bot Instruction DSL (`BotInstructions.md`).
 - Never pass engine objects by reference into bot code.
 - Prefer structured cloning / serialization boundaries.
 

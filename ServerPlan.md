@@ -124,6 +124,8 @@ A replay should minimally include:
 
 Bot submissions are data. The server should never `eval` them.
 
+In v1, `source_text` is the **Bot Instruction DSL** defined in `BotInstructions.md` (parsed/compiled to deterministic IR; no general-purpose code execution).
+
 - Normalize line endings.
 - Enforce size limits (max lines, max chars per line).
 - Validate each instruction against the allowed set (from `BotInstructions.md`).
@@ -155,6 +157,7 @@ For each match:
 - use `match_seed`
 - use a single seeded RNG stream
 - update bots in stable order `BOT1..BOT4`
+- each bot executes exactly one instruction per tick at its current `pc` (per `BotInstructions.md`)
 - follow the tick loop defined in `ServerSimulationPlan.md`
 
 ### 5.2 Powerup spawning (random, but replayable)
