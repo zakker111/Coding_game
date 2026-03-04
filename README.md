@@ -13,6 +13,7 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 - Arena is a **3×3 grid of sectors** (1–9). Each sector has **4 zones** (2×2). Movement is **anchor-based** (sector centers + zone centers).
 - Bots equip up to **3 module slots** (slots may be empty). **More equipped slots = slower movement**.
 - Powerups (`HEALTH|AMMO|ENERGY`) spawn deterministically (seeded RNG) every **10–20 ticks** and are picked up by occupying the same anchor.
+- Matches end by rules: last bot alive, or `tickCap`, or `STALEMATE` (no bot-vs-bot damage for a configured window) — see `Ruleset.md`.
 - Matches are fully replayable from `(rulesetVersion, matchSeed, bot sources + loadouts)`.
 
 ## Where to look (recommended reading order)

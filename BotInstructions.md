@@ -23,7 +23,7 @@ This is a **single-line-per-tick** language:
 >   - `SECTOR <SECTOR>` (sector center)
 >   - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
 > - `<TARGET>`: `<BOT_TARGET>|<LOC>|SELF|NONE`
->   - note: an aim-direction target form (`DIR ...`) is planned for vNext (beams/cones), but is **not** part of the stable v1 language; see `BotLanguageDesign.md`.
+  - note: an aim-direction target form (`DIR ...`) is **deferred** (only needed if/when directional weapons are introduced), and is **not** part of the stable v1 language; see `BotLanguageDesign.md`.
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 > - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >
@@ -398,7 +398,7 @@ Rationale:
 - These are intended to be **compile-time aliases** (the parser can rewrite `FIRE_SLOTn` to `USE_SLOTn`). They are deterministic because they do not introduce new runtime behavior.
 
 Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
-- If slot contains **BULLET**: fires at `<BOT_TARGET>` (location targets are ignored in v1).
+- If slot contains **BULLET**: fires only at bot targets (`<BOT_TARGET>`). If the provided `<TARGET>` is not a bot target, it is a deterministic no-op (`INVALID_TARGET_KIND`).
 - If slot contains **SAW**: same as `SAW ON` (target ignored).
 - If slot contains **SHIELD**: same as `SHIELD ON` (target ignored).
 - If slot contains **ARMOR**: no-op (passive).

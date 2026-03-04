@@ -66,6 +66,7 @@ This prevents mid-run edits from affecting the run.
 
 ### 4.1 Match format (locked)
 - Daily run matches are **4-player matches** (four bots total in one arena).
+- Match end conditions are defined in `Ruleset.md` (last bot alive OR `tickCap` OR `STALEMATE`).
 - Spawn rule (locked): bots spawn in the **four corners** of the arena:
   - `BOT1 → SECTOR 1 ZONE 1` (top-left)
   - `BOT2 → SECTOR 3 ZONE 2` (top-right)
@@ -105,6 +106,12 @@ Common v1 approach (simple):
   - 2nd: +Y
   - 3rd: +Z
   - 4th: +W
+
+Tie handling (time-limit / stalemate):
+- If a match ends with multiple bots still alive (`endReason ∈ {TICK_CAP, STALEMATE}`), the surviving bots **tie**.
+- Placement points for tied bots are split **evenly** across the tied group by averaging the points for the occupied ranks.
+  - Example (2 bots alive at end): if placement points are `{1st: X, 2nd: Y, 3rd: Z, 4th: W}` then each survivor gets `(X + Y) / 2`.
+  - Example (3 bots alive at end): each survivor gets `(X + Y + Z) / 3`.
 
 Optional add-ons (later):
 - damage dealt bonus

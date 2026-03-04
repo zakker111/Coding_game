@@ -124,24 +124,34 @@ On a successful fire:
 
 - `bulletId` (monotonic, deterministic)
 - `ownerBotId`
-- `targetBotId` (optional, for metadata/debug)
+- `targetBotId` (optional; for metadata/debug)
+- `targetSector` (1..9; the target bot’s sector at the moment of firing)
 - `sector` (current sector)
-- `dir` (UP/DOWN/LEFT/RIGHT)
+- `dir` (UP/DOWN/LEFT/RIGHT; updated as the bullet paths toward `targetSector`)
 - `ttlRemaining` (ticks)
 
-### 3.3 Choosing projectile direction (decision needed)
+### 3.3 Bullet pathing / step direction (locked v1)
 
-On spawn, the bullet must pick an initial direction deterministically.
+This is an **engine-internal** rule (not a bot language feature). It is unrelated to vNext `DIR ...` targets.
 
-Choose one:
-- **A) Vertical-first shortest path**: if target row differs, fire vertically toward it; else horizontally.
-- **B) Larger-axis-first**: fire along the axis with larger absolute delta; tie-break fixed.
-- **C) Fixed direction priority**: choose the first direction (e.g., UP, RIGHT, DOWN, LEFT) that reduces Manhattan distance.
+When a bullet is fired:
+- resolve `<TARGET>` to a concrete `targetBotId`
+- record `targetSector` as that target bot’s **current** sector at the moment of firing
+
+Each tick during projectile advancement:
+- the bullet moves **exactly 1 sector**
+- before moving, choose its step direction deterministically as a shortest path toward `targetSector`:
+  - if the bullet’s row differs from the target’s row: step vertically toward it
+  - else if the column differs: step horizontally toward it
+  - else (already at `targetSector`): keep moving in its previous direction (or use a fixed priority if it has no previous direction)
+
+(Authoritative wording lives in `Ruleset.md` §5.1.)
 
 ### 3.4 Projectile motion
 
-- Bullets are “slow”: move **1 sector per tick** in `dir`.
-- Bullets do **not** retarget in v1 (direction is locked at spawn).
+- Bullets are “slow”: move **1 sector per tick**.
+- Bullets path toward `targetSector` recorded at fire time; they do **not** “home” onto a moving target bot.
+- As they path, bullets may change direction deterministically (see §3.3).
 
 ### 3.5 Walls
 
@@ -158,6 +168,7 @@ Locked:
 
 Recommended v1 behavior:
 - after moving into a sector:
+  - for hit checks, a bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`)
   - if one or more alive bots occupy that sector, the bullet hits **exactly one** bot
   - victim tie-break: lowest bot id in that sector
   - emit damage:
@@ -460,33 +471,31 @@ Replay requirements:
 
 ## 9) Decisions to lock next
 
-1) Bullet direction selection: **A / B / C** (see §3.3)
-
-2) Bullet default numbers for v1 (placeholders are fine):
+1) Bullet default numbers for v1 (placeholders are fine):
 - `costAmmo` per shot: 1 / 2 / 5
 - `cooldownOnUseTicks`: 0 / 1 / 3 / 5
 - `ttlRemaining`: 6 / 8 / 10
 
-3) Mine placement model: **A / B / C** (see §7.1)
+2) Mine placement model: **A / B / C** (see §7.1)
 
-4) Mine trigger targeting: **A / B** (see §7.3)
+3) Mine trigger targeting: **A / B** (see §7.3)
 
-5) Damage event kinds:
+4) Damage event kinds:
 - keep using `OTHER` for explosions, or
 - add explicit kinds like `EXPLOSION` and `MINE`
 
-6) Deterministic RNG scheme for spread/variance (see §5.1):
+5) Deterministic RNG scheme for spread/variance (see §5.1):
 - stateless hash per event (recommended), vs
 - global PRNG stream with a strictly specified consumption order
 
-7) High-speed projectile semantics (see §5.2):
+6) High-speed projectile semantics (see §5.2):
 - confirm “sub-step then hit-check” is the rule
 - decide whether the replay must emit every sub-step move, or only spawn + final hit/outcome
 
-8) Wavy projectile wave function (see §4.5):
+7) Wavy projectile wave function (see §4.5):
 - integer sine LUT vs triangle wave
 - how to choose `lateralDir` at spawn (fixed rule vs deterministic RNG derived from stable ids)
 
-9) Laser ignore-shields flag (see §4.4):
+8) Laser ignore-shields flag (see §4.4):
 - field name (`ignoresShield` vs `damageFlags`)
 - whether it ignores only shields or also other defenses

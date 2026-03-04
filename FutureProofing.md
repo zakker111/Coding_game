@@ -59,7 +59,7 @@ These are the “shape” of a module. New modules should primarily be expressib
   - `BEAM`: sustained effect while active (damage/drain per tick)
 
 - `targetKinds`: set of supported target kinds (see §4)
-  - `BOT`, `LOCATION`, `DIRECTION`, `NONE`
+  - `BOT`, `LOCATION`, `NONE` (and optionally `DIRECTION` later if directional weapons are introduced)
 
 - defensive interaction flags (examples):
   - `ignoresShield`
@@ -151,12 +151,14 @@ Recommended target kinds (stable):
 - `LOCATION`: a board location
   - tokens: `SECTOR 1..9`, `SECTOR 1..9 ZONE 1..4`
   - (later, if ever needed: `POS x y`)
-- `DIRECTION`: an aim direction independent of a bot/location
-  - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT`
-  - **vNext only:** `DIR ...` targets are not part of the stable v1 language (see `BotInstructions.md` notation).
-  - future: can extend to diagonals if movement ever supports them
 - `NONE`: explicit “no target”
   - token: `NONE`
+
+Deferred extension (optional; only needed if/when directional weapons are introduced):
+- `DIRECTION`: an aim direction independent of a bot/location
+  - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT`
+  - `DIR ...` targets are not part of the stable v1 language (see `BotInstructions.md` notation).
+  - future: can extend to diagonals if movement ever supports them
 
 Rules:
 - each module declares `targetKinds` it supports (see §2.2) and the engine validates/normalizes the provided target

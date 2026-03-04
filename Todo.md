@@ -23,6 +23,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - seeded RNG per match
   - stable processing order (`BOT1..BOT4`)
   - deterministic tie-breakers
+- Match end conditions are defined in `Ruleset.md` (§0.1): last bot alive, `tickCap`, and `STALEMATE` (ties for surviving bots when a match ends without a single winner).
 
 ### Arena model
 - **9 sectors (1..9)** arranged as a 3×3 grid.
@@ -40,7 +41,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
-  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are planned for vNext only.
+  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are deferred (only needed if/when directional weapons are introduced).
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
@@ -82,6 +83,7 @@ Speed/weight (locked direction):
 
 ### Projectiles / explosives
 - Bullets are **slow-moving projectiles** updated each tick (not instant hits).
+- Bullet pathing (locked v1): on fire, record `targetSector` (the target bot’s sector at that moment), then step along a deterministic shortest path toward it each tick (vertical-first). (See `Ruleset.md` §5.1 / `CombatPlan.md` §3.3.)
 - Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
 - **Bullets stop at walls** (locked).
   - v1: bullets are removed immediately on wall contact (see `ArenaPlan.md`, `CombatPlan.md`).
@@ -114,17 +116,11 @@ Speed/weight (locked direction):
 - Movement semantics for `MOVE_TO_*`:
   - v1 uses the **anchor adjacency graph** defined in `ArenaPlan.md`
   - still to finalize: deterministic tie-break rules when multiple shortest paths exist (if any remain after adjacency definition)
-- Bullet pathing:
-  - whether bullet locks a path at fire time vs re-targets dynamically.
+
 - Bullet/wall interaction (future): do bullets collide/bounce/stop on walls?
 
 ### Match rules
-- Match tick cap.
-- Win condition (last alive vs score).
-- How ties are handled.
-- **Death + kill credit rule (new, desired):**
-  - when `health` reaches 0 the bot dies and is removed from the arena.
-  - kill credit goes to the bot that dealt the **last non-environment damage** to the victim, even if the final damage was from a wall bump (self/environment).
+- Tune match end parameters (`tickCap`, stalemate grace/countdown). (Defaults are defined in `Ruleset.md` §0.1.)
 
 ### Powerup spawning
 - Locked: powerups spawn **randomly (seeded)**.

@@ -84,7 +84,7 @@ Store each `Match` row with `status = queued`.
 A match worker:
 1) loads the `Match` row + referenced bot versions
 2) loads the ruleset implementation pinned to `ruleset_version`
-3) executes the simulation to completion or tick-cap
+3) executes the simulation to completion (last bot alive) or to a rules-driven end (`tickCap` / `STALEMATE`)
 4) writes results + replay
 5) marks match as `complete` (or `failed` with error metadata)
 
@@ -106,6 +106,7 @@ A minimal engine interface:
 - `initMatch({ rulesetVersion, matchSeed, bots[] }) -> state`
 - `step(state) -> { state, events[] }` (one tick)
 - `runToEnd(state, tickCap) -> { finalState, events[], stats }`
+  - `runToEnd` must stop early if the match ends by rules (`Ruleset.md`: last bot alive / `tickCap` / `STALEMATE`).
 
 ---
 
@@ -146,9 +147,16 @@ Recommended tick phases:
 7) **Deaths + win checks**
    - bots become **dead immediately** when `health <= 0` during earlier phases (per `Ruleset.md`) and should be skipped by subsequent phase logic in the same tick
    - in this phase, emit `BOT_DIED` and remove dead bots from the arena (so the replay/stat updates happen at a stable point)
+   - evaluate match end conditions (`Ruleset.md`):
+     - last bot alive
+     - `tickCap`
+     - `STALEMATE`
 
 8) **End-of-tick maintenance**
    - decrement cooldowns, bot-local timers, and `moveCooldownRemaining` (see `Ruleset.md` §1.2 for movement cooldown semantics)
+   - update match-level timers used for match termination (see `Ruleset.md`):
+     - increment/reset the no-bot-vs-bot-damage timer
+     - decrement/cancel the stalemate countdown
    - decrement the global powerup spawn timer; if it reaches `0`, attempt to spawn one powerup and reset the timer (see `Ruleset.md`)
    - because spawn happens after pickups, newly spawned powerups cannot be picked up until the next tick
 

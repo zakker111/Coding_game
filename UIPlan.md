@@ -130,6 +130,8 @@ Mobile/narrow:
 #### Preview (right)
 - Arena viewport
 - Playback controls (play/pause, step +1, restart, jump to end, speed)
+  - show current tick and tick cap (e.g. `Tick 120 / 600`)
+  - when stalemate countdown is active, show the remaining countdown (e.g. `Stalemate in 18s`)
 - Bot list + inspector (select BOT1..BOT4 → show appearance token + stats + code with pc highlight)
   - v1: appearance is a colored circle (placeholder)
   - future: allow images/GIFs clipped into the same circle (see `ReplayViewerPlan.md` `bots[].appearance`)
@@ -159,7 +161,7 @@ v1 built-in examples:
 - **Run / Preview** (primary)
   - compiles/validates your bot
   - runs a local match (live) and records a replay
-  - stops when the simulation ends (e.g. last bot alive) or when it reaches a tick cap (default cap is a UI setting until match rules are fully locked)
+  - stops when the simulation ends (last bot alive) or when it reaches an end condition (`tickCap` / `STALEMATE`; see `Ruleset.md`)
 - **Reset match** (secondary)
   - resets the current local run to tick 0
 

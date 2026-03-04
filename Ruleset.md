@@ -21,6 +21,61 @@ It complements:
 
 ---
 
+## 0.1) Match end conditions (tick cap + stalemate)
+
+A match ends when the earliest of the following occurs:
+
+1) **Last bot alive**
+   - If exactly 1 bot is alive, that bot wins and the match ends immediately.
+
+2) **Tick cap reached**
+   - If the match reaches `tickCap`, end the match with `endReason = TICK_CAP`.
+
+3) **Stalemate (no bot-vs-bot damage) rule triggers**
+   - If the stalemate countdown reaches 0 with no **bot-vs-bot damage** dealt during the countdown window, end the match with `endReason = STALEMATE`.
+
+Outcome when the match ends without a single winner:
+- If `endReason ∈ {TICK_CAP, STALEMATE}` and **multiple bots are alive**, all surviving bots **tie**.
+- If the match ends with **0 bots alive** (possible via same-tick mutual deaths), the result is a draw with **no survivors**.
+
+Ruleset / match parameters (v1 recommended defaults; may become “locked” later):
+- `tickCap` (int): maximum ticks to simulate before ending with `TICK_CAP`.
+  - v1 recommended default: `600` (10 minutes at `ticksPerSecond = 1`)
+- `stalemateNoDamageGraceTicks` (int): no **bot-vs-bot damage** duration required before starting the stalemate countdown.
+  - v1 recommended default: `120` (2 minutes)
+- `stalemateCountdownTicks` (int): countdown duration after the grace period.
+  - v1 recommended default: `30` (30 seconds)
+
+### 0.1.1) Stalemate timer semantics (no bot-vs-bot damage)
+
+Definitions:
+- “Damage dealt” (for the stalemate system) means any `DAMAGE` event with `amount > 0` where `source == BOT` (i.e., bots damaging each other).
+  - Damage from the environment (e.g., wall bump damage with `source == ENV`) does **not** count and does not prevent a stalemate.
+- The stalemate system is only considered when `aliveBotCount >= 2`.
+
+Match-level state (conceptual; exact representation is up to the engine):
+- `ticksSinceLastBotDamage` (int >= 0)
+- `stalemateCountdownRemainingTicks` (int | null)
+
+Rules:
+- On any tick where at least one **bot-vs-bot** damage event occurs (`source == BOT`):
+  - set `ticksSinceLastBotDamage = 0`
+  - set `stalemateCountdownRemainingTicks = null` (cancel/reset any countdown)
+- Otherwise (no bot-vs-bot damage this tick):
+  - increment `ticksSinceLastBotDamage`
+  - if `aliveBotCount >= 2`:
+    - if `stalemateCountdownRemainingTicks == null` and `ticksSinceLastBotDamage == stalemateNoDamageGraceTicks`:
+      - start the countdown: set `stalemateCountdownRemainingTicks = stalemateCountdownTicks`
+    - else if `stalemateCountdownRemainingTicks != null`:
+      - decrement `stalemateCountdownRemainingTicks`
+      - if it reaches `0` (and no bot-vs-bot damage has occurred since countdown start): end match with `endReason = STALEMATE`
+
+Notes:
+- If bot count drops to `aliveBotCount <= 1`, the match ends by “last bot alive” (stalemate countdown is irrelevant).
+- UI/replay viewers may display the countdown when `stalemateCountdownRemainingTicks != null` (see `UIPlan.md`).
+
+---
+
 ## 1) Bot base stats + life/death
 
 ### 1.1 Base stats (v1)
@@ -204,7 +259,23 @@ Recommendation (v1):
   - process bots in `BOT1..BOT4` order
   - process entities in stable creation order (e.g., bullet id ascending)
 
+### 5.1 Bullet projectile movement (v1)
+
+Bots have **no directional weapons**: bullet weapons do not require or use a bot-facing direction.
+
+When a bullet is fired (see `CombatPlan.md` §3):
+- resolve the `<TARGET>` to a concrete `targetBotId`
+- record `targetSector` as that target bot’s **current** sector at the moment of firing
+
+Each tick during projectile advancement:
+- the bullet moves **exactly 1 sector**
+- before moving, choose its step direction deterministically as a shortest path toward `targetSector`:
+  - if the bullet’s row differs from the target’s row: step vertically toward it
+  - else if the column differs: step horizontally toward it
+  - else (already at `targetSector`): keep moving in its previous direction (or use a fixed priority if it has no previous direction)
+
 Determinism-critical tie-break (bullets):
+- For bullet hit checks, a bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`).
 - when a bullet enters a sector that contains multiple alive bots, it hits **exactly one** victim:
   - victim = lowest bot id in that sector (`BOT1` before `BOT2` ...)
 
@@ -216,7 +287,7 @@ Kill credit in multi-hit ticks:
 ## 6) Match stats vs season points
 
 Match stats should include (at minimum):
-- placement (1st–4th)
+- placement (1st–4th; ties possible when matches end by `TICK_CAP` / `STALEMATE`)
 - survival ticks
 - kills / deaths
 - damage dealt / damage taken

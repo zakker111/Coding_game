@@ -239,6 +239,9 @@ Encode every location as:
   - `zone=0` means sector center
   - `zone=1..4` means zone center
 
+Sector membership convention (used by sector-based mechanics like bullet hits):
+- A bot is considered “in sector S” whenever `bot.loc.sector == S` (regardless of `bot.loc.zone`).
+
 Optional future extension: continuous positions (`pos`)
 - Some future weapons (variable-speed projectiles, wavy/curved paths, beams) are easier to render with continuous coordinates.
 - When needed, encode positions as:
@@ -298,12 +301,15 @@ Optional fields (not required in v1) support future weapons/features:
 - non-linear trajectories (e.g., wavy)
 
 - `BULLET_SPAWN`:
-  - required: `bulletId`, `ownerBotId`, `sector`, `dir`
+  - required: `bulletId`, `ownerBotId`, `sector`
   - viewer spawn position rule:
     - if `pos` is present → render bullet spawn at `pos`
     - else → render bullet spawn at the **owner bot’s location at the moment of firing**
       - v1 tick loop note: instruction execution happens before movement (`ServerSimulationPlan.md`), so for tick `t` this is the bot location in `state[t-1]`.
   - optional:
+    - `dir` (the bullet’s initial movement direction; bullets may change direction over time, so the viewer must primarily rely on `BULLET_MOVE` events)
+    - `targetBotId` (debug/metadata)
+    - `targetSector` (the resolved destination sector used for deterministic pathing; see `CombatPlan.md` §3)
     - `weaponId` (module id or weapon name, e.g. `BULLET_MK1`)
     - `burst` (burst grouping; omitted for non-burst shots):
       - `burstId` (string)

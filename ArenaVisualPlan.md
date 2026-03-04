@@ -227,7 +227,7 @@ To make shooting/movement readable:
 - draw a small triangle/notch/arrow on the bot pointing in its current facing or last action direction.
 - if facing is not available in v1 state, derive from:
   - last `BOT_MOVED.dir` within the current tick window, else
-  - last `BULLET_SPAWN.dir`.
+  - the first bullet motion direction in the current tick window (derive from the bot’s earliest `BULLET_MOVE.fromSector → toSector` for that tick).
 
 ### 5.3 Bot id label (required)
 
@@ -400,7 +400,8 @@ Provide a “Visual Overlays” toggle group (persisted in localStorage) for:
 When a bot is selected:
 - highlight its current anchor cell
 - highlight its last movement (a short arrow from previous anchor)
-- if it fired this tick, draw a thin aim ray in the shot `dir` (purely visual; damage still comes from events)
+- if it fired this tick, draw a thin aim ray in the shot direction for readability (purely visual; damage still comes from events)
+  - derive direction from the first `BULLET_MOVE.fromSector → toSector` for that bot in `events[t]` (or from `BULLET_SPAWN.dir` if present)
 
 ### 8.4 Hover tooltips
 
