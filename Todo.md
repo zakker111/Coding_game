@@ -10,6 +10,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Client + server from day 1**:
   - **Client**: bot editor + local test runs + replay viewer (UI details later)
   - **Server**: headless match runner for **daily simulations**
+- **TypeScript everywhere (v1)**: client + server implementation, plus a shared deterministic simulation library.
 - Bots have user-facing presentation:
   - **display name**
   - **appearance** (v1: color token; future: avatar image/GIF)
@@ -31,7 +32,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - zone center: `SECTOR s ZONE z`
 
 ### Bot language
-- JS-like **line-based instruction language** (see `BotInstructions.md`).
+- **Bot Instruction DSL** (JS-like line-based syntax; not executable JS) (see `BotInstructions.md`).
 - Scripts compile/validate to a safe internal form (no `eval`).
 - Slot targeting supports a generalized `<TARGET>` union:
   - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`/`NEAREST_BOT`, `LOWEST_HEALTH_BOT`/`WEAKEST_BOT`)

@@ -76,6 +76,12 @@ Non-goals (until explicitly requested):
 
 ## 3. Repository Layout & Module Boundaries
 
+**Implementation language (v1): TypeScript everywhere.**
+
+- Client and server are implemented in **TypeScript**.
+- The deterministic simulation core is a **shared TypeScript library** used by both client and server.
+- On the client, run the simulation in a **Web Worker** (UI communicates via structured-clone messages).
+
 The repo is currently minimal. As code is introduced, keep a clean separation by **domain**:
 
 - **Simulation**
@@ -111,8 +117,11 @@ Rule of thumb:
 Determinism is a core requirement.
 
 - **One seeded RNG per match**, stored in match context/state.
-- All randomness must be sourced from that RNG.
-- No time-based behavior in simulation (`Date.now`, timers) except as external orchestration.
+- All randomness must be sourced from that RNG (**no `Math.random()`**).
+- No time-based behavior in simulation (no wall clock: `Date.now`, timers) except as external orchestration.
+- Avoid floating point drift in gameplay/simulation math:
+  - prefer **integers** (ticks, grid coords, resource values)
+  - if fractions are needed, use a **fixed-point** representation
 
 ### 4.1 Replay invariants
 
@@ -159,7 +168,9 @@ Bot code is untrusted.
 
 Minimum requirements before running user-provided bots:
 
-- **Isolation**: execute bots in a sandbox (e.g., Web Worker, Node `vm`, WASM runtime).
+- **Isolation**:
+  - v1: execute bots via the **Bot Instruction DSL VM** and run matches in an isolated worker/process for timeouts + crash containment.
+  - if we later add general-purpose languages (JS/Lua/etc.), use an explicit language sandbox/runtime boundary.
 - **Resource limits**:
   - CPU budget per tick (hard timeout)
   - Memory ceiling
