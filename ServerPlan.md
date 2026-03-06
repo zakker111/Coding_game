@@ -72,8 +72,18 @@ Notes:
 - v1 server does **not** store equipment/loadout for simulation.
 - (Optional, post-v1) store presentation metadata like `display_name` / `appearance`.
 
-Future upgrade path:
-- Add immutable `BotVersion` records later (keyed by `source_hash` or an integer version) and keep v1 endpoints working by treating "latest" as a convenience alias.
+- **BotVersion** (immutable snapshots; supports Workshop “load older saved code”)
+  - `id` (internal PK)
+  - `bot_id` (FK to Bot)
+  - `created_at`
+  - `source_text` (canonicalized Bot Instruction DSL)
+  - `source_hash`
+  - `save_message` (optional)
+
+v1+ behavior (minimal and consistent with `BotModelPlan.md`):
+- `Bot.source_text` remains the mutable “latest saved” source.
+- On each successful bot save (`PUT /api/bots/:owner/:name`), insert a `BotVersion` row (dedupe by `source_hash`).
+- Matches/replays still snapshot `source_text` for reproducibility; `BotVersion` is primarily for UI convenience until the full immutable-version model lands.
 
 ### 2.3 v1 starter bots (3 bots per user)
 
@@ -95,7 +105,10 @@ This keeps v1 simple: there is always something to select/edit, and the server s
   - `status` (planned/running/complete/failed)
 
 - **Match**
-  - `id`, `daily_run_id`, `created_at`
+  - `id`, `created_at`
+  - `kind`: `daily | sandbox`
+  - `daily_run_id` (nullable; set only when `kind = daily`)
+  - `requested_by_user_id` (nullable; set only when `kind = sandbox`)
   - `match_seed` (deterministic per match)
   - `status` (`queued|running|complete|failed`)
   - `participants`: list of:
@@ -133,7 +146,7 @@ A replay should minimally include:
 - `POST /api/auth/logout` (optional)
 - `GET /api/me`
 
-### 3.2 Bots (v1: mutable bots, no server-side versions)
+### 3.2 Bots (v1: mutable bots + optional version history)
 
 #### List bots (including built-ins)
 
@@ -155,16 +168,29 @@ A replay should minimally include:
 - `GET /api/bots/:owner/:name/source`
   - response: `{ botId, source_text }`
 
-#### Create/update bot code
+#### Create/update bot code (Save)
 
 - `PUT /api/bots/:owner/:name`
   - auth: owner must equal the logged-in username (except `builtin/*` which is server-managed)
-  - body: `{ source_text }`
+  - body: `{ source_text, save_message?: string }`
   - server:
     - validates and canonicalizes `source_text`
     - computes and stores `source_hash`
+    - updates `Bot.source_text` (mutable latest)
+    - inserts a `BotVersion` row (dedupe by `source_hash`)
+  - response (recommended):
+    - `{ botId, updated_at, source_hash }`
 
-(If you prefer `POST /api/bots` with a body `{ name, source_text }`, that’s fine too; the key is that v1 is “latest source” only.)
+#### List bot versions (Load older saved code)
+
+- `GET /api/bots/:owner/:name/versions`
+  - response:
+    - `{ botId, versions: [{ source_hash, created_at, save_message? }] }`
+
+- `GET /api/bots/:owner/:name/versions/:sourceHash/source`
+  - response: `{ botId, source_hash, source_text }`
+
+(If you prefer `POST /api/bots` with a body `{ name, source_text }`, that’s fine too; the key is that v1 remains “latest source” for matches, with optional version history for UX.)
 
 ### 3.3 Runs + results
 
@@ -174,14 +200,56 @@ A replay should minimally include:
 
 - `GET /api/matches`
   - list match summaries visible to the current user (or public matches, depending on auth policy)
+  - includes both:
+    - `kind = daily` (from DailyRun), and
+    - `kind = sandbox` (one-off Workshop simulations)
   - supports optional filters:
     - `runId=<runId>` (equivalent to `/api/runs/:runId/matches`)
     - `botId=<botId>` (stable server bot id, e.g. `alice/bot1`)
     - `owner=<username>&botName=<name>` (human-friendly identifier)
+    - `kind=daily|sandbox`
   - pagination (recommended): `limit`, `cursor`
 
 - `GET /api/matches/:matchId`
 - `GET /api/matches/:matchId/replay`
+
+### 3.4 One-off simulations (Workshop “Run on Server”)
+
+- `POST /api/simulations`
+  - auth: required (session cookie or guest session); rate-limit aggressively
+  - body (minimal, v1):
+
+    ```json
+    {
+      "tick_cap": 600,
+      "seed_mode": "random",
+      "seed": 123,
+      "participants": [
+        {"slot": "BOT1", "botId": "alice/bot1"},
+        {"slot": "BOT2", "botId": "builtin/chaser-shooter"},
+        {"slot": "BOT3", "botId": "builtin/corner-bunker"},
+        {"slot": "BOT4", "botId": "builtin/saw-rusher"}
+      ]
+    }
+    ```
+
+    Notes:
+    - The server always uses the **latest saved** `Bot.source_text` for each `botId`.
+    - Workshop UX should require an explicit **Save** before “Run on Server” if the editor has unsaved changes.
+
+  - response (async):
+
+    ```json
+    {
+      "matchId": "m_123",
+      "kind": "sandbox",
+      "status": "queued",
+      "replay_url": "/api/matches/m_123/replay"
+    }
+    ```
+
+- Replay retrieval reuses the standard match endpoint:
+  - `GET /api/matches/:matchId/replay` (available once `status=complete`)
 
 ---
 

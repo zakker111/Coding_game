@@ -35,7 +35,8 @@ It builds on:
      - selection controls which bot occupies **BOT1** in the preview match
    - **Edit your bot** (the selected BOT1)
      - multiline code editor with inline validation errors
-     - local draft persistence across refresh (and optional server save)
+     - local draft persistence across refresh
+     - **Save** button persists the current draft to the server as the bot’s latest saved source
    - **Choose equipment / loadout** (BOT1)
      - bottom area loadout selector (3 slots)
      - validates rules (no duplicates; at most 1 weapon slot in v1)
@@ -150,12 +151,29 @@ Mobile/narrow:
 - Editor and right panel become tabs/drawers.
 - Bottom loadout becomes a collapsible sheet.
 
-#### Top area: bot selection (BOT1)
-- Selector UI (dropdown or list) showing the 3 server-stored bots.
-- Changing the selected bot updates:
-  - the editor contents
-  - the bottom loadout selector
-  - the next preview run’s BOT1 (and should reset the current run/replay to avoid confusion)
+#### Top area: bot selection (BOT1) + server actions
+- **Bot selector** (dropdown or list) showing the 3 server-stored bots.
+  - Changing the selected bot updates:
+    - the editor contents
+    - the bottom loadout selector
+    - the next preview run’s BOT1 (and should reset the current run/replay to avoid confusion)
+
+- **Save** (server)
+  - Saves the current editor contents for the selected bot to the server.
+  - After save, the server returns an updated `source_hash`.
+  - UX note: if the editor has unsaved changes, show a small “Unsaved” indicator near the bot selector.
+
+- **Load from server** (optional but concrete)
+  - Replaces the current editor contents with the server’s latest saved `source_text` for the selected bot.
+  - This is the escape hatch when local drafts diverge or are corrupted.
+
+- **Run on Server**
+  - Launches a one-off server simulation using the selected bot as `BOT1` and the same built-in opponents as the local preview.
+  - Uses the **latest server-saved source** for the selected bot.
+    - If the editor has unsaved changes, require **Save** first (or provide an explicit “Run last saved” confirm).
+  - API (minimal): `POST /api/simulations` → `{matchId}` → poll `GET /api/matches/:matchId` until `complete` → load `GET /api/matches/:matchId/replay`.
+  - On completion, the Workshop fetches the replay JSON and displays it in the same replay viewer.
+  - Minimal UX: treat it as an async job (show `queued/running` state; allow cancel later).
 
 #### Left: coding area (editor)
 - Bot code editor (multiline, line numbers)
@@ -232,10 +250,14 @@ v1 built-in opponent examples:
 (Identity/version planning: see `BotModelPlan.md`.)
 
 #### Primary actions
-- **Run / Preview** (primary)
+- **Save** (server)
+  - persists the selected bot’s current editor text to the server (`source_text` → `source_hash`)
+- **Run / Preview** (local) (primary)
   - compiles/validates your bot
   - runs a local match (live) and records a replay
   - stops when the simulation ends (last bot alive) or when it reaches an end condition (`tickCap` / `STALEMATE`; see `Ruleset.md`)
+- **Run on Server**
+  - launches a one-off server match and then loads its replay into the viewer
 - **Reset match** (secondary)
   - resets the current local run to tick 0
 
@@ -252,6 +274,9 @@ v1 goal: don’t lose your work when you refresh.
 - Persist your per-bot code/loadout drafts locally (so switching bots and refreshing is safe).
 - Persist minimal run config: seed (optional), tick cap (optional), last selected opponent set.
 - Server remains the source of truth for the 3 bots; local persistence is a draft/cache layer.
+- The Workshop distinguishes between:
+  - **local draft** (what’s currently in the editor, persisted locally), and
+  - **server-saved source** (what `Save` writes; what `Load from server` restores).
 
 Recommended storage:
 - `localStorage` for small settings (seed, tick cap, selected bot ids, UI layout)

@@ -577,6 +577,15 @@ IF (BUMPED_WALL()) DO MOVE RIGHT
 
 ## 7) Example scripts
 
+For longer, "real bot" scripts (used as built-in examples / Workshop defaults), see:
+- `examples/bot0.md` — Powerup Seeker (starter)
+- `examples/bot1.md` — Zone Patrol Shooter (BULLET)
+- `examples/bot2.md` — Chaser Shooter (BULLET)
+- `examples/bot3.md` — Corner Bunker (BULLET+ARMOR)
+- `examples/bot4.md` — Saw Rusher (SAW+SHIELD)
+
+These example scripts intentionally use only the v1 instructions and expression functions defined in this document.
+
 ### Example A — If low health, go to health powerup
 
 ```text
@@ -670,14 +679,17 @@ GOTO LOOP
 
 ### Example H — Zone-to-zone movement inside the current sector
 
+Because movement is cardinal-only in v1, diagonal zone-to-zone moves (e.g. 2→3) will pass through another zone.
+The simplest reliable "patrol" pattern is an axis-aligned loop:
+
 ```text
 LABEL LOOP
 
-; if we are in zone 1, step toward zone 2 (same sector)
-IF (IN_ZONE(1)) DO MOVE_TO_ZONE 2
-
-; if we are in zone 2, step toward zone 3 (same sector)
-IF (IN_ZONE(2)) DO MOVE_TO_ZONE 3
+; patrol zones 1→2→4→3→1 inside the current sector
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
 
 GOTO LOOP
 ```

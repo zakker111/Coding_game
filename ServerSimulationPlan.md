@@ -93,6 +93,13 @@ A match worker:
 4) writes results + replay
 5) marks match as `complete` (or `failed` with error metadata)
 
+### 3.4 One-off (Workshop) simulations
+
+In addition to daily scheduled matches, the same runner supports ad-hoc “sandbox” matches launched from the Workshop UI:
+- `POST /api/simulations` creates a `Match` with `kind = sandbox` and enqueues it.
+- The runner executes it using the same determinism contract and replay schema as daily matches.
+- The client then loads the replay via `GET /api/matches/:matchId/replay`.
+
 ---
 
 ## 4) Worker architecture (recommended)

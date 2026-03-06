@@ -34,6 +34,22 @@ Naming convention note:
 
 ---
 
+## 0.0.4 — 2026-03-06T00:00:00Z
+
+### Changed
+- Example bot docs updated for variety and to ensure all example bots move:
+  - `examples/bot1.md` is now **Zone Patrol Shooter** (zone patrol loop + shooting).
+  - `examples/bot2.md` updated to demonstrate explicit `BOT_ALIVE(...)` + `SET_TARGET` targeting.
+  - `examples/bot3.md` updated to demonstrate powerup goal selection + brief `WAIT` commitment.
+  - `examples/bot4.md` updated to demonstrate toggle modules + timers.
+
+### Added
+- Workshop planning now includes server interactions:
+  - **Save to server**, **Load from server**, and **Run on Server** (`UIPlan.md`).
+- Server planning expanded to support the above:
+  - optional `BotVersion` history to support “load older saved code” (`ServerPlan.md`).
+  - sandbox matches via `POST /api/simulations` (`ServerPlan.md`, `ServerSimulationPlan.md`).
+
 ## 0.0.3 — 2026-03-04T00:00:00Z
 
 ### Added
@@ -74,7 +90,7 @@ Naming convention note:
   - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)
 - New arena visual spec: `ArenaVisualPlan.md` (workshop arena preview rendering + scaling + overlays).
 - New sample scripts:
-  - `examples/bot1.md` (combat bot variants)
+  - `examples/bot1.md` (Zone Patrol Shooter)
   - `examples/bot2.md` (Chaser Shooter)
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)
