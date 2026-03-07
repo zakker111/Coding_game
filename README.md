@@ -85,6 +85,8 @@ Supporting docs:
 - `examples/bot2.md` — bot2: Chaser Shooter
 - `examples/bot3.md` — bot3: Corner Bunker
 - `examples/bot4.md` — bot4: Saw Rusher
+- `examples/bot5.md` — bot5: Burst Hunter
+- `examples/bot6.md` — bot6: Energy Saw Skirmisher
 - `CombatPlan.md` — weapons/projectiles planning
 - `FutureProofing.md` / `BotLanguageDesign.md` — extensibility direction (modules, targeting, future DSL)
 - `DailyCompetition.md` — daily/season competition format

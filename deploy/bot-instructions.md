@@ -597,6 +597,8 @@ For longer, "real bot" scripts (used as built-in examples / Workshop defaults), 
 - `examples/bot2.md` — Chaser Shooter (BULLET)
 - `examples/bot3.md` — Corner Bunker (BULLET+ARMOR)
 - `examples/bot4.md` — Saw Rusher (SAW+SHIELD)
+- `examples/bot5.md` — Burst Hunter (BULLET+ARMOR)
+- `examples/bot6.md` — Energy Saw Skirmisher (SAW+SHIELD)
 
 These example scripts intentionally use only the v1 instructions and expression functions defined in this document.
 
