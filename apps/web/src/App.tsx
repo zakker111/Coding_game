@@ -19,6 +19,9 @@ export default function App() {
           >
             Workshop
           </NavLink>
+          <NavLink className={({ isActive }) => (isActive ? 'active' : undefined)} to="/docs">
+            Docs
+          </NavLink>
         </nav>
       </header>
 

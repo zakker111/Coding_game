@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 
 import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
@@ -839,8 +840,10 @@ export function WorkshopPage() {
 
           <div style={{ marginTop: 18 }}>
             <div className="panel-title">Instruction reference</div>
-            <div className="muted" style={{ marginTop: 8 }}>
-              See <code>BotInstructions.md</code> for the full DSL.
+            <div style={{ marginTop: 10 }}>
+              <Link className="ui-button ui-button-secondary" to="/docs">
+                Open bot instruction docs
+              </Link>
             </div>
           </div>
         </section>

@@ -10,3 +10,12 @@ it('renders the landing page', () => {
 
   expect(screen.getByRole('heading', { name: 'Nowt' })).toBeInTheDocument()
 })
+
+it('renders the docs page', () => {
+  const router = createMemoryRouter(routes, { initialEntries: ['/docs'] })
+
+  render(<RouterProvider router={router} />)
+
+  expect(screen.getByRole('heading', { name: 'Bot instruction docs' })).toBeInTheDocument()
+  expect(screen.getByText(/Full reference for the DSL used in the Workshop\./)).toBeInTheDocument()
+})
