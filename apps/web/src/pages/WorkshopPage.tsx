@@ -1,6 +1,10 @@
 import React from 'react'
 
-import type { Replay, SlotId } from '@coding-game/replay'
+import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
+
+import { EXAMPLE_BOTS } from '../exampleBots'
+import { selectOpponents } from '../opponents'
+import { fnv1a32 } from '../worker/seed'
 
 import { initialPlaybackState, playbackReducer } from '../replay/playbackReducer'
 import { getAppearanceColorMap, getBotsForPlayback, SLOT_IDS } from '../replay/interpolate'
@@ -8,12 +12,45 @@ import { ArenaCanvas, type ArenaRenderState } from '../ui/arena'
 import { runLocalInWorker } from '../worker/runLocalInWorker'
 
 const STORAGE_KEY = 'nowt:workshop:drafts:v1'
+const OPPONENT_NONCE_KEY = 'nowt:workshop:opponentNonce:v1'
 
 const DEFAULT_SOURCES: Record<SlotId, string> = {
-  BOT1: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-  BOT2: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-  BOT3: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-  BOT4: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
+  BOT1: EXAMPLE_BOTS.bot0.sourceText,
+  BOT2: EXAMPLE_BOTS.bot2.sourceText,
+  BOT3: EXAMPLE_BOTS.bot3.sourceText,
+  BOT4: EXAMPLE_BOTS.bot4.sourceText,
+}
+
+function readOpponentNonce(): number {
+  try {
+    const raw = localStorage.getItem(OPPONENT_NONCE_KEY)
+    const n = raw == null ? 0 : Number(raw)
+    return Number.isFinite(n) ? (n >>> 0) : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeOpponentNonce(n: number) {
+  try {
+    localStorage.setItem(OPPONENT_NONCE_KEY, String(n >>> 0))
+  } catch {
+    // ignore
+  }
+}
+
+function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
+  switch (e.type) {
+    case 'BOT_EXEC':
+    case 'RESOURCE_DELTA':
+      return e.botId === botId
+    case 'DAMAGE':
+      return e.victimBotId === botId || e.sourceBotId === botId
+    case 'BOT_DIED':
+      return e.victimBotId === botId || e.creditedBotId === botId
+    default:
+      return false
+  }
 }
 
 export function WorkshopPage() {
@@ -149,6 +186,33 @@ export function WorkshopPage() {
 
   const selectedBotSnapshot = botsForRender.find((b) => b.botId === selectedBotId)
 
+  const selectedTickEvents = React.useMemo(() => {
+    if (!replay) return []
+    const t = clamp(playback.tick, 0, replay.tickCap)
+    return (replay.events[t] ?? []).filter((e) => isRelevantEvent(e, selectedBotId))
+  }, [playback.tick, replay, selectedBotId])
+
+  function loadStarter() {
+    setSources((prev) => ({ ...prev, BOT1: EXAMPLE_BOTS.bot0.sourceText }))
+    setEditingBotId('BOT1')
+  }
+
+  function randomizeOpponents() {
+    const nonce = readOpponentNonce()
+    const randomizeSeed = (seed >>> 0) ^ fnv1a32(sources.BOT1 ?? '') ^ nonce
+
+    const ids = selectOpponents(randomizeSeed, 3)
+
+    setSources((prev) => ({
+      ...prev,
+      BOT2: EXAMPLE_BOTS[ids[0]].sourceText,
+      BOT3: EXAMPLE_BOTS[ids[1]].sourceText,
+      BOT4: EXAMPLE_BOTS[ids[2]].sourceText,
+    }))
+
+    writeOpponentNonce((nonce + 1) >>> 0)
+  }
+
   async function handleRun() {
     setRunning(true)
     setRunError(null)
@@ -178,22 +242,12 @@ export function WorkshopPage() {
         <div className="workshop-header-actions">
           <label className="mini-field">
             <div className="mini-label">Seed</div>
-            <input
-              className="mini-input"
-              type="number"
-              value={seed}
-              onChange={(e) => setSeed(Number(e.target.value))}
-            />
+            <input className="mini-input" type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} />
           </label>
 
           <label className="mini-field">
             <div className="mini-label">Tick cap</div>
-            <input
-              className="mini-input"
-              type="number"
-              value={tickCap}
-              onChange={(e) => setTickCap(Math.max(1, Number(e.target.value)))}
-            />
+            <input className="mini-input" type="number" value={tickCap} onChange={(e) => setTickCap(Math.max(1, Number(e.target.value)))} />
           </label>
 
           <button className="ui-button" onClick={handleRun} disabled={running}>
@@ -208,9 +262,7 @@ export function WorkshopPage() {
       {runError ? (
         <div className="panel" style={{ marginTop: 16, borderColor: 'rgba(239, 68, 68, 0.4)' }}>
           <strong style={{ color: '#fecaca' }}>Run failed</strong>
-          <div className="muted" style={{ marginTop: 8 }}>
-            {runError}
-          </div>
+          <div className="muted" style={{ marginTop: 8 }}>{runError}</div>
         </div>
       ) : null}
 
@@ -221,14 +273,19 @@ export function WorkshopPage() {
 
           <div className="tab-row" style={{ marginTop: 10 }}>
             {SLOT_IDS.map((id) => (
-              <button
-                key={id}
-                className={['tab', id === editingBotId ? 'active' : ''].join(' ')}
-                onClick={() => setEditingBotId(id)}
-              >
+              <button key={id} className={['tab', id === editingBotId ? 'active' : ''].join(' ')} onClick={() => setEditingBotId(id)}>
                 {id}
               </button>
             ))}
+          </div>
+
+          <div className="controls" style={{ marginTop: 10 }}>
+            <button className="ui-button ui-button-secondary" type="button" onClick={loadStarter}>
+              Load starter
+            </button>
+            <button className="ui-button ui-button-secondary" type="button" onClick={randomizeOpponents}>
+              Randomize opponents
+            </button>
           </div>
 
           <textarea
@@ -239,7 +296,7 @@ export function WorkshopPage() {
           />
 
           <div className="muted" style={{ marginTop: 10 }}>
-            DSL compilation isn’t wired yet. For now, bot source affects the replay seed.
+            Tip: mentioning <code>SAW</code> in a bot source enables the sample melee behavior.
           </div>
         </section>
 
@@ -252,27 +309,15 @@ export function WorkshopPage() {
           </div>
 
           <div className="controls" style={{ marginTop: 12 }}>
-            <button
-              className="ui-button ui-button-secondary"
-              onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}
-              disabled={!replay}
-            >
+            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })} disabled={!replay}>
               {playback.playing ? 'Pause' : 'Play'}
             </button>
 
-            <button
-              className="ui-button ui-button-secondary"
-              onClick={() => dispatch({ type: 'STEP', delta: 1 })}
-              disabled={!replay || playback.playing}
-            >
+            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'STEP', delta: 1 })} disabled={!replay || playback.playing}>
               Step
             </button>
 
-            <button
-              className="ui-button ui-button-secondary"
-              onClick={() => dispatch({ type: 'RESTART' })}
-              disabled={!replay}
-            >
+            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'RESTART' })} disabled={!replay}>
               Restart
             </button>
 
@@ -313,11 +358,7 @@ export function WorkshopPage() {
 
           <div className="tab-row" style={{ marginTop: 10 }}>
             {SLOT_IDS.map((id) => (
-              <button
-                key={id}
-                className={['tab', id === selectedBotId ? 'active' : ''].join(' ')}
-                onClick={() => setSelectedBotId(id)}
-              >
+              <button key={id} className={['tab', id === selectedBotId ? 'active' : ''].join(' ')} onClick={() => setSelectedBotId(id)}>
                 {id}
               </button>
             ))}
@@ -337,6 +378,13 @@ export function WorkshopPage() {
             ) : (
               'Run a replay to inspect bots.'
             )}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div className="panel-title">Tick events</div>
+            <pre style={{ marginTop: 8, padding: 10, borderRadius: 10, background: 'rgba(0,0,0,0.35)', overflow: 'auto', maxHeight: 240 }}>
+              {replay ? (selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)') : 'Run a match to see events.'}
+            </pre>
           </div>
 
           <div style={{ marginTop: 18 }}>

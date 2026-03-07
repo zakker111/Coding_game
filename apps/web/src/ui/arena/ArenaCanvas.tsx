@@ -21,8 +21,23 @@ export type ArenaRenderBot = {
   appearanceColor?: string
 }
 
+export type ArenaRenderBullet = {
+  bulletId: string
+  ownerBotId?: SlotId
+  pos: { x: number; y: number }
+  vel?: { x: number; y: number }
+}
+
+export type ArenaRenderPowerup = {
+  powerupId: string
+  kind: 'HEALTH' | 'AMMO' | 'ENERGY'
+  pos: { x: number; y: number }
+}
+
 export type ArenaRenderState = {
   bots: ArenaRenderBot[]
+  bullets?: ArenaRenderBullet[]
+  powerups?: ArenaRenderPowerup[]
 }
 
 export type ArenaCanvasProps = {

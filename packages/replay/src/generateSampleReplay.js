@@ -13,6 +13,16 @@ const BULLET_TTL = 18
 const BULLET_DAMAGE = 10
 const SHOOT_COOLDOWN_TICKS = 7
 
+const SAW_ON_RANGE = BOT_HALF_SIZE * 2 + 6
+const SAW_OFF_RANGE = SAW_ON_RANGE + 4
+const SAW_ATTACK_RANGE = BOT_HALF_SIZE * 2 + 2
+const SAW_DAMAGE = 6
+const SAW_ENERGY_DRAIN = 1
+
+const SHIELD_THREAT_RANGE = 44
+const SHIELD_ENERGY_DRAIN = 1
+const SHIELD_ABSORB_FRACTION = 0.5
+
 const DIRS = /** @type {const} */ ([
   'UP',
   'DOWN',
@@ -23,6 +33,40 @@ const DIRS = /** @type {const} */ ([
   'DOWN_LEFT',
   'DOWN_RIGHT',
 ])
+
+const SLOT_IDS = /** @type {const} */ (['BOT1', 'BOT2', 'BOT3', 'BOT4'])
+
+function botSourceHasSaw(sourceText) {
+  if (!sourceText) return false
+  // Stub heuristic: if the bot source mentions SAW anywhere (including comments/loadout),
+  // enable the sample melee behavior.
+  return /\bSAW\b/i.test(sourceText)
+}
+
+function botSourceHasShield(sourceText) {
+  if (!sourceText) return false
+  // Stub heuristic: if the bot source mentions SHIELD anywhere, enable sample shield behavior.
+  return /\bSHIELD\b/i.test(sourceText)
+}
+
+/** @returns {import('./index.d.ts').MoveDir} */
+function dirToward(from, to) {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+
+  const sx = dx === 0 ? 0 : dx > 0 ? 1 : -1
+  const sy = dy === 0 ? 0 : dy > 0 ? 1 : -1
+
+  if (sx === 0 && sy === 0) return 'UP'
+  if (sx === 0 && sy < 0) return 'UP'
+  if (sx === 0 && sy > 0) return 'DOWN'
+  if (sy === 0 && sx < 0) return 'LEFT'
+  if (sy === 0 && sx > 0) return 'RIGHT'
+  if (sx < 0 && sy < 0) return 'UP_LEFT'
+  if (sx > 0 && sy < 0) return 'UP_RIGHT'
+  if (sx < 0 && sy > 0) return 'DOWN_LEFT'
+  return 'DOWN_RIGHT'
+}
 
 function round3(n) {
   return Math.round(n * 1000) / 1000
@@ -164,6 +208,44 @@ function stepPc(pc) {
   return next > 24 ? 1 : next
 }
 
+function defaultAppearanceForSlot(slotId) {
+  switch (slotId) {
+    case 'BOT1':
+      return { kind: 'COLOR', color: '#4ade80' }
+    case 'BOT2':
+      return { kind: 'COLOR', color: '#60a5fa' }
+    case 'BOT3':
+      return { kind: 'COLOR', color: '#f472b6' }
+    case 'BOT4':
+      return { kind: 'COLOR', color: '#fbbf24' }
+    default:
+      return { kind: 'COLOR', color: '#e2e8f0' }
+  }
+}
+
+/**
+ * @param {unknown} input
+ * @param {any[]} fallback
+ */
+function normalizeHeaderBots(input, fallback) {
+  if (!Array.isArray(input)) return fallback
+
+  const byId = new Map(input.map((b) => [b?.slotId, b]))
+  if (!SLOT_IDS.every((id) => byId.has(id))) return fallback
+
+  return SLOT_IDS.map((slotId) => {
+    const b = byId.get(slotId)
+    const appearance = b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
+
+    return {
+      slotId,
+      displayName: typeof b?.displayName === 'string' ? b.displayName : slotId,
+      appearance: appearance ?? defaultAppearanceForSlot(slotId),
+      sourceText: typeof b?.sourceText === 'string' ? b.sourceText : '',
+    }
+  })
+}
+
 /**
  * @typedef {import('./index.d.ts').Replay} Replay
  */
@@ -179,18 +261,19 @@ export function generateSampleReplay(seed, opts = {}) {
   const tickCap = opts.tickCap ?? 200
   const rng = createRng(seed)
 
-  const headerBots = /** @type {Replay['bots']} */ ([
+  const defaultHeaderBots = /** @type {Replay['bots']} */ ([
     {
       slotId: 'BOT1',
       displayName: 'Powerup Seeker',
       appearance: { kind: 'COLOR', color: '#4ade80' },
-      sourceText: 'LABEL LOOP\nTARGET_CLOSEST\nMOVE_DIR\nGOTO LOOP\n',
+      sourceText: 'LABEL LOOP\nTARGET_POWERUP HEALTH\nMOVE_TO_TARGET\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT2',
-      displayName: 'Zone Patrol Shooter',
+      displayName: 'Chaser Shooter',
       appearance: { kind: 'COLOR', color: '#60a5fa' },
-      sourceText: 'LABEL LOOP\nPATROL\nSHOOT\nGOTO LOOP\n',
+      sourceText:
+        'LABEL LOOP\nSET_TARGET BOT1\nSET_MOVE_TO_TARGET\nUSE_SLOT1 TARGET\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT3',
@@ -200,59 +283,64 @@ export function generateSampleReplay(seed, opts = {}) {
     },
     {
       slotId: 'BOT4',
-      displayName: 'Chaser Shooter',
+      displayName: 'Saw Rusher',
       appearance: { kind: 'COLOR', color: '#fbbf24' },
-      sourceText: 'LABEL LOOP\nCHASE\nSHOOT\nGOTO LOOP\n',
+      sourceText: 'LABEL LOOP\nSAW ON\nSHIELD ON\nGOTO LOOP\n',
     },
   ])
 
-  /** @type {Array<{botId: import('./index.d.ts').SlotId, pos: {x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, pc:number, moveDir: import('./index.d.ts').MoveDir, shootCd:number}>} */
-  const bots = [
-    {
-      botId: 'BOT1',
-      pos: { x: 32, y: 32 },
-      hp: 100,
-      ammo: 40,
-      energy: 100,
-      alive: true,
-      pc: rngInt(rng, 1, 8),
-      moveDir: rngChoice(rng, DIRS),
-      shootCd: 0,
-    },
-    {
-      botId: 'BOT2',
-      pos: { x: 160, y: 32 },
-      hp: 100,
-      ammo: 40,
-      energy: 100,
-      alive: true,
-      pc: rngInt(rng, 1, 8),
-      moveDir: rngChoice(rng, DIRS),
-      shootCd: 0,
-    },
-    {
-      botId: 'BOT3',
-      pos: { x: 32, y: 160 },
-      hp: 100,
-      ammo: 40,
-      energy: 100,
-      alive: true,
-      pc: rngInt(rng, 1, 8),
-      moveDir: rngChoice(rng, DIRS),
-      shootCd: 0,
-    },
-    {
-      botId: 'BOT4',
-      pos: { x: 160, y: 160 },
-      hp: 100,
-      ammo: 40,
-      energy: 100,
-      alive: true,
-      pc: rngInt(rng, 1, 8),
-      moveDir: rngChoice(rng, DIRS),
-      shootCd: 0,
-    },
-  ]
+  const headerBots = normalizeHeaderBots(opts.bots, defaultHeaderBots)
+
+  const headerById = /** @type {Record<import('./index.d.ts').SlotId, any>} */ ({
+    BOT1: headerBots.find((b) => b.slotId === 'BOT1'),
+    BOT2: headerBots.find((b) => b.slotId === 'BOT2'),
+    BOT3: headerBots.find((b) => b.slotId === 'BOT3'),
+    BOT4: headerBots.find((b) => b.slotId === 'BOT4'),
+  })
+
+  const sawCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
+    BOT1: botSourceHasSaw(headerById.BOT1?.sourceText),
+    BOT2: botSourceHasSaw(headerById.BOT2?.sourceText),
+    BOT3: botSourceHasSaw(headerById.BOT3?.sourceText),
+    BOT4: botSourceHasSaw(headerById.BOT4?.sourceText),
+  })
+
+  const shieldCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
+    BOT1: botSourceHasShield(headerById.BOT1?.sourceText),
+    BOT2: botSourceHasShield(headerById.BOT2?.sourceText),
+    BOT3: botSourceHasShield(headerById.BOT3?.sourceText),
+    BOT4: botSourceHasShield(headerById.BOT4?.sourceText),
+  })
+
+  const primarySawBotId = SLOT_IDS.find((id) => sawCapableByBotId[id]) ?? 'BOT4'
+
+  const spawnPosById = {
+    BOT1: { x: 112, y: 96 },
+    BOT2: { x: 160, y: 32 },
+    BOT3: { x: 32, y: 160 },
+    BOT4: { x: 160, y: 160 },
+  }
+
+  if (primarySawBotId && primarySawBotId !== 'BOT1') {
+    spawnPosById[primarySawBotId] = { x: 96, y: 96 }
+  }
+
+  /** @type {Array<{botId: import('./index.d.ts').SlotId, pos: {x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, pc:number, moveDir: import('./index.d.ts').MoveDir, shootCd:number, sawCapable:boolean, sawActive:boolean, shieldCapable:boolean, shieldActive:boolean}>} */
+  const bots = SLOT_IDS.map((botId) => ({
+    botId,
+    pos: clonePos(spawnPosById[botId]),
+    hp: 100,
+    ammo: 40,
+    energy: 100,
+    alive: true,
+    pc: rngInt(rng, 1, 8),
+    moveDir: rngChoice(rng, DIRS),
+    shootCd: 0,
+    sawCapable: sawCapableByBotId[botId],
+    sawActive: false,
+    shieldCapable: shieldCapableByBotId[botId],
+    shieldActive: false,
+  }))
 
   /** @type {Array<{bulletId:string, ownerBotId: import('./index.d.ts').SlotId, pos:{x:number,y:number}, vel:{x:number,y:number}, ttl:number}>} */
   let bullets = []
@@ -277,6 +365,10 @@ export function generateSampleReplay(seed, opts = {}) {
   })
   events.push([])
 
+  const sawOnRange2 = SAW_ON_RANGE * SAW_ON_RANGE
+  const sawOffRange2 = SAW_OFF_RANGE * SAW_OFF_RANGE
+  const sawAttackRange2 = SAW_ATTACK_RANGE * SAW_ATTACK_RANGE
+
   for (let t = 1; t <= tickCap; t++) {
     /** @type {Replay['events'][number]} */
     const tickEvents = []
@@ -290,8 +382,61 @@ export function generateSampleReplay(seed, opts = {}) {
       const pcBefore = bot.pc
       let pcAfter = stepPc(pcBefore)
 
+      const nearest = findNearestLivingBot(bots, bot.botId, bot.pos)
+      const nearestD2 = nearest ? dist2(bot.pos, nearest.pos) : Number.POSITIVE_INFINITY
+
+      if (bot.sawCapable) {
+        let nextSawActive = bot.sawActive
+
+        if (!nearest || bot.energy <= 0) {
+          nextSawActive = false
+        } else if (!bot.sawActive && nearestD2 <= sawOnRange2) {
+          nextSawActive = true
+        } else if (bot.sawActive && nearestD2 >= sawOffRange2) {
+          nextSawActive = false
+        }
+
+        if (nextSawActive !== bot.sawActive) {
+          bot.sawActive = nextSawActive
+          tickEvents.push({
+            type: 'BOT_EXEC',
+            botId: bot.botId,
+            pcBefore,
+            pcAfter: pcBefore,
+            instrText: bot.sawActive ? 'SAW ON' : 'SAW OFF',
+            result: 'EXECUTED',
+          })
+        }
+
+        if (bot.sawActive && bot.energy > 0) {
+          const drain = Math.min(SAW_ENERGY_DRAIN, bot.energy)
+          bot.energy -= drain
+
+          tickEvents.push({
+            type: 'RESOURCE_DELTA',
+            botId: bot.botId,
+            ammoDelta: 0,
+            energyDelta: -drain,
+            healthDelta: 0,
+            cause: 'SAW_DRAIN',
+          })
+
+          if (bot.energy <= 0) {
+            bot.sawActive = false
+            tickEvents.push({
+              type: 'BOT_EXEC',
+              botId: bot.botId,
+              pcBefore,
+              pcAfter: pcBefore,
+              instrText: 'SAW OFF',
+              result: 'EXECUTED',
+            })
+          }
+        }
+      }
+
       const actionRoll = rng()
-      const doShoot = actionRoll < 0.18
+      const doShoot = !bot.sawCapable && actionRoll < 0.18
 
       if (doShoot) {
         const target = findNearestLivingBot(bots, bot.botId, bot.pos)
@@ -380,6 +525,10 @@ export function generateSampleReplay(seed, opts = {}) {
         // occasionally retarget movement direction
         if (rng() < 0.14) bot.moveDir = rngChoice(rng, DIRS)
 
+        if (bot.sawCapable && nearest) {
+          bot.moveDir = dirToward(bot.pos, nearest.pos)
+        }
+
         const dirVec = vecForDir(bot.moveDir)
         const fromPos = clonePos(bot.pos)
 
@@ -453,6 +602,32 @@ export function generateSampleReplay(seed, opts = {}) {
               break
             default:
               break
+          }
+        }
+      }
+
+      if (bot.sawActive && bot.energy > 0) {
+        const victim = findNearestLivingBot(bots, bot.botId, bot.pos)
+        if (victim && dist2(bot.pos, victim.pos) <= sawAttackRange2) {
+          victim.hp = Math.max(0, victim.hp - SAW_DAMAGE)
+
+          tickEvents.push({
+            type: 'DAMAGE',
+            victimBotId: victim.botId,
+            amount: SAW_DAMAGE,
+            source: 'SAW',
+            sourceBotId: bot.botId,
+            kind: 'DIRECT',
+            sourceRef: { type: 'SAW', id: bot.botId },
+          })
+
+          if (victim.hp <= 0 && victim.alive) {
+            victim.alive = false
+            tickEvents.push({
+              type: 'BOT_DIED',
+              victimBotId: victim.botId,
+              creditedBotId: bot.botId,
+            })
           }
         }
       }

@@ -8,7 +8,12 @@ self.addEventListener('message', (event: MessageEvent<unknown>) => {
   const { requestId, seed, tickCap, bots } = event.data
   const mixedSeed = mixSeed(seed, bots)
 
-  const replay = generateSampleReplay(mixedSeed, { tickCap })
+  // Pass bot sources into the sample generator so features like SAW are enabled
+  // when the user bot source contains those instructions.
+  const replay = generateSampleReplay(mixedSeed, {
+    tickCap,
+    bots: bots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText })),
+  })
 
   self.postMessage({
     type: 'RUN_RESULT',

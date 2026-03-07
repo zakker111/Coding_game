@@ -190,6 +190,15 @@ export type Replay = {
 
 export type GenerateSampleReplayOptions = {
   tickCap?: number
+
+  /**
+   * Optional overrides for the replay header bots.
+   *
+   * This is primarily for client stubs/tests; the sample generator is not a full DSL runner.
+   */
+  bots?: Array<
+    { slotId: SlotId } & Partial<Omit<ReplayHeaderBot, 'slotId'>>
+  >
 }
 
 export declare function generateSampleReplay(

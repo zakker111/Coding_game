@@ -1,9 +1,18 @@
 import { generateSampleReplay } from '../replay/generateSampleReplay.js'
 import { attachArenaRenderer } from './arena.js'
+import { EXAMPLE_BOTS, OPPONENT_EXAMPLE_POOL_IDS } from './exampleBots.js'
 
 const SLOT_IDS = ['BOT1', 'BOT2', 'BOT3', 'BOT4']
 
 const STORAGE_KEY = 'nowt:deploy:drafts:v1'
+const OPPONENT_NONCE_KEY = 'nowt:deploy:opponentNonce:v1'
+
+const SLOT_APPEARANCE = {
+  BOT1: { kind: 'COLOR', color: '#4ade80' },
+  BOT2: { kind: 'COLOR', color: '#60a5fa' },
+  BOT3: { kind: 'COLOR', color: '#f472b6' },
+  BOT4: { kind: 'COLOR', color: '#fbbf24' },
+}
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
@@ -65,16 +74,67 @@ function writeDrafts(drafts) {
 
 function defaultSources() {
   return {
-    BOT1: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-    BOT2: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-    BOT3: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
-    BOT4: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
+    BOT1: EXAMPLE_BOTS.bot0.sourceText,
+    BOT2: EXAMPLE_BOTS.bot2.sourceText,
+    BOT3: EXAMPLE_BOTS.bot3.sourceText,
+    BOT4: EXAMPLE_BOTS.bot4.sourceText,
   }
+}
+
+function readOpponentNonce() {
+  try {
+    const raw = localStorage.getItem(OPPONENT_NONCE_KEY)
+    const n = raw == null ? 0 : Number(raw)
+    return Number.isFinite(n) ? (n >>> 0) : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeOpponentNonce(nonce) {
+  try {
+    localStorage.setItem(OPPONENT_NONCE_KEY, String(nonce >>> 0))
+  } catch {
+    // ignore
+  }
+}
+
+function xorshift32(seed) {
+  let x = seed >>> 0
+  if (x === 0) x = 0x6d2b79f5
+
+  return () => {
+    x ^= x << 13
+    x >>>= 0
+    x ^= x >>> 17
+    x >>>= 0
+    x ^= x << 5
+    x >>>= 0
+    return x >>> 0
+  }
+}
+
+function shuffleInPlaceDeterministic(arr, nextU32) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = nextU32() % (i + 1)
+    const tmp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = tmp
+  }
+  return arr
+}
+
+function displayNameForSource(sourceText) {
+  for (const ex of Object.values(EXAMPLE_BOTS)) {
+    if (ex.sourceText === sourceText) return ex.displayName
+  }
+  return null
 }
 
 // DOM
 const seedInput = document.getElementById('seedInput')
 const tickCapInput = document.getElementById('tickCapInput')
+const randomizeOpponentsBtn = document.getElementById('randomizeOpponentsBtn')
 const runBtn = document.getElementById('runBtn')
 
 const botTabs = document.getElementById('botTabs')
@@ -304,8 +364,15 @@ async function run() {
   const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sources[slotId] ?? '' }))
   const mixed = mixSeed(seed, bots)
 
+  const headerBots = SLOT_IDS.map((slotId) => ({
+    slotId,
+    displayName: displayNameForSource(sources[slotId] ?? '') ?? slotId,
+    appearance: SLOT_APPEARANCE[slotId],
+    sourceText: sources[slotId] ?? '',
+  }))
+
   // Build replay.
-  replay = generateSampleReplay(mixed, { tickCap })
+  replay = generateSampleReplay(mixed, { tickCap, bots: headerBots })
 
   tick = 0
   alpha = 1
@@ -328,6 +395,40 @@ renderTabs(inspectTabs, selectedBotId, (id) => {
 botEditor.addEventListener('input', () => {
   sources[editingBotId] = botEditor.value
   writeDrafts(sources)
+})
+
+function randomizeOpponents() {
+  const nonce = readOpponentNonce()
+
+  const seed =
+    (Number(seedInput.value) >>> 0) ^
+    fnv1a32(sources.BOT1 ?? '') ^
+    nonce
+
+  const nextU32 = xorshift32(seed)
+  const ids = shuffleInPlaceDeterministic([...OPPONENT_EXAMPLE_POOL_IDS], nextU32).slice(0, 3)
+
+  sources.BOT2 = EXAMPLE_BOTS[ids[0]].sourceText
+  sources.BOT3 = EXAMPLE_BOTS[ids[1]].sourceText
+  sources.BOT4 = EXAMPLE_BOTS[ids[2]].sourceText
+
+  writeOpponentNonce((nonce + 1) >>> 0)
+
+  writeDrafts(sources)
+  updateEditor()
+}
+
+randomizeOpponentsBtn.addEventListener('click', () => {
+  randomizeOpponentsBtn.disabled = true
+  randomizeOpponentsBtn.textContent = 'Randomizing…'
+
+  Promise.resolve()
+    .then(() => randomizeOpponents())
+    .then(run)
+    .finally(() => {
+      randomizeOpponentsBtn.disabled = false
+      randomizeOpponentsBtn.textContent = 'Randomize opponents'
+    })
 })
 
 runBtn.addEventListener('click', () => {
