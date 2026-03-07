@@ -1,6 +1,12 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 
+function formatMarketingVersion(version: string) {
+  const m = /^0\.0\.(\d+)$/.exec(version)
+  if (!m) return version
+  return `0.0${m[1]}`
+}
+
 export function LandingPage() {
   const nav = useNavigate()
   const startRef = React.useRef<HTMLButtonElement | null>(null)
@@ -15,6 +21,9 @@ export function LandingPage() {
         <h1 className="title">Nowt</h1>
         <p className="subtitle">
           A deterministic bot-fighting coding game. Write bots, run matches, and inspect replays tick-by-tick.
+        </p>
+        <p className="muted" style={{ marginTop: 6 }}>
+          v{formatMarketingVersion(__APP_VERSION__)}
         </p>
 
         <div className="actions">
