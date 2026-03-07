@@ -34,25 +34,63 @@ Naming convention note:
 
 ---
 
+## 0.0.4 — 2026-03-06T00:00:00Z
+
+### Changed
+- Example bot docs updated for variety and to ensure all example bots move:
+  - `examples/bot1.md` is now **Zone Patrol Shooter** (zone patrol loop + shooting).
+  - `examples/bot2.md` updated to demonstrate explicit `BOT_ALIVE(...)` + `SET_TARGET` targeting.
+  - `examples/bot3.md` updated to demonstrate powerup goal selection + brief `WAIT` commitment.
+  - `examples/bot4.md` updated to demonstrate toggle modules + timers.
+
+### Added
+- Workshop planning now includes server interactions:
+  - **Save to server**, **Load from server**, and **Run on Server** (`UIPlan.md`).
+- Server planning expanded to support the above:
+  - optional `BotVersion` history to support “load older saved code” (`ServerPlan.md`).
+  - sandbox matches via `POST /api/simulations` (`ServerPlan.md`, `ServerSimulationPlan.md`).
+
+## 0.0.3 — 2026-03-04T00:00:00Z
+
+### Added
+- Workshop starter template: `examples/bot0.md` ("Powerup Seeker").
+- Workshop UI layout spec updates:
+  - top bot selector (choose 1 of 3 server-stored bots for `BOT1`)
+  - right-side instruction reference/help panel alongside bot inspector
+  - bottom equipment/loadout selector (v1: local-preview only)
+
+### Changed
+- Server planning simplified for v1 bot persistence:
+  - server stores `{owner_username, bot_name, source_text}` (plus `source_hash` for determinism)
+  - server ensures each user has exactly **3 bots** (auto-created from the starter template when missing)
+  - server-run matches use a fixed default loadout (`SLOT1=BULLET`) so simulation can run without storing per-bot loadouts
+- Server API plan expanded to support replay lookup by bot:
+  - `GET /api/matches?botId=...` (and related filters)
+- Replay viewer schema clarified:
+  - replay header `loadout` is optional (viewers may assume a server default if omitted)
+
+### Fixed
+- Cross-doc consistency between `UIPlan.md`, `ServerPlan.md`, `BotModelPlan.md`, and `ReplayViewerPlan.md` for bot selection and replay lookup.
+
 ## 0.0.2 — 2026-03-02T00:00:00Z
 
 ### Added
 - Project documentation scaffolding: `Prompt.md`, `Versions.md`, `Bugs.md`, `Todo.md`.
 - Bot identity/version planning: `BotModelPlan.md` (future-proof built-ins → user-submitted bots).
-- New rules documentation for v1 bot speed model (movement cooldown affected by equipped slot count).
+- New rules documentation for v1 bot speed model (`speedUnitsPerTick` reduced by equipped slot count).
 - Beginner-friendly zone convenience in the bot language:
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
   - `IN_ZONE(<ZONE>)`
 - Readability-only instruction aliases in the bot language:
   - `TARGET_CLOSEST` (aliases: `TARGET_CLOSEST_BOT`, `TARGET_NEAREST`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
-  - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
+  - `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` / `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` (aliases of `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT` / `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)`)
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>`
   - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`)
   - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)
 - New arena visual spec: `ArenaVisualPlan.md` (workshop arena preview rendering + scaling + overlays).
 - New sample scripts:
-  - `examples/bot1.md` (combat bot variants)
+  - `examples/bot1.md` (Zone Patrol Shooter)
   - `examples/bot2.md` (Chaser Shooter)
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)

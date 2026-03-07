@@ -10,6 +10,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - **Client + server from day 1**:
   - **Client**: bot editor + local test runs + replay viewer (UI details later)
   - **Server**: headless match runner for **daily simulations**
+- **TypeScript everywhere (v1)**: client + server implementation, plus a shared deterministic simulation library.
 - Bots have user-facing presentation:
   - **display name**
   - **appearance** (v1: color token; future: avatar image/GIF)
@@ -22,16 +23,19 @@ This file is the **single source of truth** for near-term engineering tasks and 
   - seeded RNG per match
   - stable processing order (`BOT1..BOT4`)
   - deterministic tie-breakers
+- Match end conditions are defined in `Ruleset.md` (§0.1): last bot alive, `tickCap`, and `STALEMATE` (ties for surviving bots when a match ends without a single winner).
 
 ### Arena model
 - **9 sectors (1..9)** arranged as a 3×3 grid.
 - Each sector contains **4 zones (1..4)** arranged as a 2×2 grid.
-- Bots and powerups are placed on deterministic **location anchors**:
+- **Bots** have continuous world positions `pos = {x,y}` (16×16 hitbox) and can move freely inside the outer wall.
+  - Spawns are still specified via sector/zone anchors, and are initialized at the corresponding anchor center point.
+- **Powerups** spawn at deterministic **location anchors**:
   - sector center: `SECTOR s`
   - zone center: `SECTOR s ZONE z`
 
 ### Bot language
-- JS-like **line-based instruction language** (see `BotInstructions.md`).
+- **Bot Instruction DSL** (JS-like line-based syntax; not executable JS) (see `BotInstructions.md`).
 - Scripts compile/validate to a safe internal form (no `eval`).
 - Slot targeting supports a generalized `<TARGET>` union:
   - bot targets (`BOTn`, `TARGET`, `CLOSEST_BOT`/`NEAREST_BOT`, `LOWEST_HEALTH_BOT`/`WEAKEST_BOT`)
@@ -39,7 +43,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
-  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are planned for vNext only.
+  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` are deferred (only needed if/when directional weapons are introduced).
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
@@ -47,7 +51,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Beginner-friendly shorthand aliases (readability only):
   - `TARGET_CLOSEST` (aliases: `TARGET_NEAREST`, `TARGET_CLOSEST_BOT`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
-  - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
+  - `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` / `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` (aliases of `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT` / `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)`)
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>` (aliases of `TARGET_POWERUP <TYPE>` / `MOVE_TO_POWERUP <TYPE>`)
 
 ### Loadout / modules
@@ -65,9 +69,9 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - If bot code calls an instruction for a module/slot it doesn’t have equipped → **no-op**.
 
 Speed/weight (locked direction):
-- Bots have a base movement speed, and **each equipped slot reduces speed**.
+- Bots have a base movement speed (`baseSpeedUnitsPerTick`), and **each equipped slot reduces speed**.
 - Empty slots make a bot **faster**.
-- The speed system is defined in `Ruleset.md` as a deterministic **movement cooldown** model.
+- The speed system is defined in `Ruleset.md` as a deterministic `speedUnitsPerTick` model (world units per tick).
 
 **Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
 
@@ -80,10 +84,11 @@ Speed/weight (locked direction):
 - Resource failure behavior (locked): bots may attempt actions, but if out of ammo/energy the action **does nothing**.
 
 ### Projectiles / explosives
-- Bullets are **slow-moving projectiles** updated each tick (not instant hits).
-- Bullet collision model (locked): a bullet can hit **any bot** in the sector it enters (supports future reflection mechanics).
+- Bullets are **continuous projectiles** updated each tick (not instant hits).
+- Bullet direction (locked direction): on fire, resolve a target bot id, compute a velocity vector toward the target bot’s **position at fire time**, and keep that direction (no homing). (See `Ruleset.md` §5.1 / `CombatPlan.md` §3.3.)
+- Bullet collision model (locked direction): bullets can hit **any bot** they collide with (16×16 bot hitbox), not only the intended target.
 - **Bullets stop at walls** (locked).
-  - v1: bullets are removed immediately on wall contact (see `ArenaPlan.md`, `CombatPlan.md`).
+  - v1: bullets are removed immediately on wall contact and emit `BULLET_DESPAWN reason=WALL`.
 - Explosives (grenades/mines) (planned future modules):
   - when introduced, AoE shape is pre-locked:
     - radius = **1 sector** (center + adjacent)
@@ -107,23 +112,15 @@ Speed/weight (locked direction):
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).
 - **Walls are gameplay** (locked v1):
-  - when a bot bumps into the outer wall: no movement + `BUMP_WALL` damage
-  - v1 collision is **anchor-based** (bounce is primarily visual feedback)
-  - future: continuous physics/velocity is a major ruleset change (see `ArenaPlan.md`)
+  - when a bot’s movement request would cross the outer wall: clamp at the wall and apply `BUMP_WALL` damage (see `Ruleset.md`)
 - Movement semantics for `MOVE_TO_*`:
-  - v1 uses the **anchor adjacency graph** defined in `ArenaPlan.md`
-  - still to finalize: deterministic tie-break rules when multiple shortest paths exist (if any remain after adjacency definition)
-- Bullet pathing:
-  - whether bullet locks a path at fire time vs re-targets dynamically.
-- Bullet/wall interaction (future): do bullets collide/bounce/stop on walls?
+  - movement is continuous, resolved as straight-line motion toward a target point, capped to `speedUnitsPerTick`
+  - deterministic fixed-point mapping + tie-breaks are defined in `BotInstructions.md`
+
+- Bullet/wall interaction (future): do bullets bounce/penetrate? (v1 is stop+despawn)
 
 ### Match rules
-- Match tick cap.
-- Win condition (last alive vs score).
-- How ties are handled.
-- **Death + kill credit rule (new, desired):**
-  - when `health` reaches 0 the bot dies and is removed from the arena.
-  - kill credit goes to the bot that dealt the **last non-environment damage** to the victim, even if the final damage was from a wall bump (self/environment).
+- Tune match end parameters (`tickCap`, stalemate grace/countdown). (Defaults are defined in `Ruleset.md` §0.1.)
 
 ### Powerup spawning
 - Locked: powerups spawn **randomly (seeded)**.
@@ -260,21 +257,26 @@ Bot identity/version planning note:
 
 ### 8) Client UI (v1)
 - **Route `/`**: minimal landing with one primary action: **Start Game** → `/workshop`.
-- **Route `/workshop`**: the main “coding page”:
-  - bot code editor (with inline parse/validation errors)
-  - local simulation preview + replay controls
-  - always a **4-bot match**: `BOT1=Your Bot` + three built-in opponents
-  - read-only code viewer for the built-in opponents
+- **Route `/workshop`**: the main “coding page” (see `UIPlan.md`):
+  - top area: **bot selection** (choose one of your 3 server-stored bots; this bot occupies `BOT1`)
+  - left: bot code editor (with inline parse/validation errors)
+  - center: local simulation preview + replay controls (tick scrubber)
+  - right: instruction reference/help + bot inspector (stats + code view with `pc` highlight)
+  - bottom: equipment/loadout selection (v1: affects **local preview** only; server-run matches use a fixed default loadout)
+  - always a **4-bot match**: `BOT1 = selected bot` + three built-in opponents (`BOT2..BOT4`)
+  - built-in opponents’ code is read-only
 - **Built-in opponents (v1)**: ship 3 bundled scripts under `examples/`:
   - `examples/bot2.md` (Chaser Shooter)
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)
+- **Starter template (v1)**:
+  - `examples/bot0.md` (Powerup Seeker) is the default script used when a bot has no saved draft yet.
 - **Persistence/memory (v1)**:
-  - persist the user’s bot draft across refresh (guest/local)
+  - persist per-bot code drafts + per-bot loadout drafts locally (so switching bots and refreshing is safe)
   - persist minimal run config: seed (optional), tick cap (optional), opponent selection (if configurable), UI layout
   - suggested storage: `localStorage` for small settings + `IndexedDB` for drafts if we support multiple drafts/large text
 
-Defer (post-v1): auth/login, cloud saving, replay library, sharing links.
+Defer (post-v1): full auth/login UX polish, immutable bot versions, replay library, sharing links.
 
 ---
 

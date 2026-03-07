@@ -16,14 +16,14 @@ This is a **single-line-per-tick** language:
 >   - `NEAREST_BOT` is an alias of `CLOSEST_BOT`.
 >   - `WEAKEST_BOT` is an alias of `LOWEST_HEALTH_BOT`.
 >   - Contrast: `TARGET_CLOSEST` / `TARGET_LOWEST_HEALTH` are instructions that **write** the target register; `CLOSEST_BOT` / `LOWEST_HEALTH_BOT` are argument tokens that do **not** write any state.
-> - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
+> - `<DIR>`: `UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..4`
 > - `<LOC>`:
 >   - `SECTOR <SECTOR>` (sector center)
 >   - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
 > - `<TARGET>`: `<BOT_TARGET>|<LOC>|SELF|NONE`
->   - note: an aim-direction target form (`DIR ...`) is planned for vNext (beams/cones), but is **not** part of the stable v1 language; see `BotLanguageDesign.md`.
+>   - note: an aim-direction target form (`DIR ...`) is **deferred** (only needed if/when directional weapons are introduced), and is **not** part of the stable v1 language; see `BotLanguageDesign.md`.
 > - `<SLOT>`: `SLOT1|SLOT2|SLOT3`
 > - `<TIMER>`: `T1|T2|T3` (bot-local non-blocking timers)
 >
@@ -200,76 +200,77 @@ Priority rule:
 
 ## 3) Movement
 
-Movement is **zone-aware** and operates on deterministic location anchors from `ArenaPlan.md`:
-- `SECTOR <SECTOR>` (sector center)
-- `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
+Movement is **continuous** in arena world units (see `ArenaPlan.md`).
 
-### 3.0 One-step movement (immediate)
+Per tick, a bot may attempt at most **one** movement (either from the executed instruction, or from an active move goal). The maximum straight-line travel distance per tick is the bot’s `speedUnitsPerTick` (derived from loadout; see `Ruleset.md` §1.2).
 
-These instructions attempt **exactly one** movement step (one **location-anchor** step) during the movement phase of the current tick.
+Bots still refer to **named locations** via sectors/zones:
+- `SECTOR <SECTOR>` means the **sector center point**.
+- `SECTOR <SECTOR> ZONE <ZONE>` means the **zone center point**.
 
-#### Zone-only convenience (current sector)
+### 3.0 Immediate movement (this tick)
 
-For beginners, you can move to a zone **without** spelling out the sector. These are pure syntactic sugar aliases; they do not change v1 movement semantics.
+#### Directional movement
 
+- `MOVE <DIR>`
+  - Requests movement in one of 8 directions.
+  - Convert `<DIR>` into a direction vector with components in `{-1,0,+1}`:
+    - `UP         => ( 0, -1)`
+    - `DOWN       => ( 0,  1)`
+    - `LEFT       => (-1,  0)`
+    - `RIGHT      => ( 1,  0)`
+    - `UP_LEFT    => (-1, -1)`
+    - `UP_RIGHT   => ( 1, -1)`
+    - `DOWN_LEFT  => (-1,  1)`
+    - `DOWN_RIGHT => ( 1,  1)`
+  - Then compute the intended displacement for the tick:
+    - `delta = Normalize(dirVec) * speedUnitsPerTick`
+  - `Normalize(...)` must be deterministic fixed-point math (no platform floats). This ensures `|delta| <= speedUnitsPerTick` even for diagonal directions.
+
+#### Move toward a location point
+
+These instructions request movement toward a target point. The engine converts this to a deterministic straight-line displacement of length `<= speedUnitsPerTick` (so it may be diagonal) using the rule below.
+
+- `MOVE_TO_SECTOR <SECTOR>`
+  - target point = center of `SECTOR <SECTOR>`.
+
+- `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
+  - target point = center of `SECTOR <SECTOR> ZONE <ZONE>`.
+
+Zone-only convenience (current sector; compile-time sugar):
 - `MOVE_TO_ZONE <ZONE>`
   - Alias semantics:
     - let `S = SECTOR()` (evaluated once when the instruction executes)
     - behave as if the script had written: `MOVE_TO_SECTOR S ZONE <ZONE>`
-  - Moves one step toward the center of zone `<ZONE>` **in your current sector**.
-  - This never changes your sector (because `S` is your current sector).
 
-> If you want to move to a specific sector+zone, use `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`.
+#### Move toward a bot / powerup
 
-Speed note (important):
-- Movement attempts can be blocked by the bot’s **movement cooldown** (see `Ruleset.md` §1.2).
-- If `moveCooldownRemaining > 0`, any movement request for that tick results in **no movement**.
-
-Anchor/direction semantics:
-- The anchor graph and adjacency rules are defined in `ArenaPlan.md` (v1 = discrete anchors).
-- `MOVE <DIR>` selects among adjacent anchors whose destination is in that direction (`UP`: smaller `y`, `DOWN`: larger `y`, `LEFT`: smaller `x`, `RIGHT`: larger `x`), then applies deterministic tie-breakers.
-
-- `MOVE <DIR>`
-  - Moves to a neighboring location anchor in direction `<DIR>` if one exists.
-  - Tie-breaks (deterministic):
-    1) lowest destination sector id
-    2) sector center before zones
-    3) lowest destination zone id
-
-- `MOVE_TO_SECTOR <SECTOR>`
-  - Moves one step toward `SECTOR <SECTOR>` (the destination **sector center**), along a shortest path.
-
-- `MOVE_TO_SECTOR <SECTOR> ZONE <ZONE>`
-  - Moves one step toward `SECTOR <SECTOR> ZONE <ZONE>` (the destination **zone center**), along a shortest path.
-
-Bot chasing:
 - `MOVE_TO_BOT <BOT>`
-  - Moves one step toward that bot’s current location.
+  - Requests movement toward that bot’s current position.
   - If the bot is dead, this is a no-op.
 
-Powerups:
 - `MOVE_TO_POWERUP <TYPE>`
-  - Moves one step toward the **closest currently-existing** powerup of that type.
+  - Requests movement toward the **closest currently-existing** powerup of that type.
   - Tie-breaks (deterministic):
-    1) shortest distance (anchor steps)
+    1) shortest Manhattan distance in world units (see §6.3)
     2) lowest sector id
     3) sector center before zones
     4) lowest zone id
+
+Aliases:
 - `MOVE_TO_CLOSEST_POWERUP <TYPE>` (alias of `MOVE_TO_POWERUP <TYPE>`)
 
 Enemy convenience:
 - `MOVE_TO_CLOSEST_BOT`
-  - Moves one step toward the closest **alive** bot.
-  - Ties: lowest bot id.
+  - Requests movement toward the closest alive bot (ties: lowest bot id).
 - `MOVE_TO_LOWEST_HEALTH_BOT`
-  - Moves one step toward the alive bot with the lowest health.
-  - Ties: lowest bot id.
+  - Requests movement toward the alive bot with the lowest health (ties: lowest bot id).
 
-Walls / arena edge (v1 = outer boundary only):
-- `MOVE_TO_ARENA_EDGE <DIR>`
-  - Moves one step toward the outer boundary in that direction.
-  - If already at the edge in that direction, no-op.
-- `MOVE_TO_WALL <DIR>` (alias of `MOVE_TO_ARENA_EDGE <DIR>`)
+Walls / arena edge (outer boundary in v1):
+- `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT`
+  - Requests movement toward the outer boundary in that direction.
+  - If already touching the edge in that direction, this is a no-op.
+- `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` (alias of `MOVE_TO_ARENA_EDGE ...`)
 
 Target-driven movement:
 - `MOVE_TO_TARGET`
@@ -277,9 +278,28 @@ Target-driven movement:
   - Else if `targetPowerupType` is set and such a powerup exists: behaves like `MOVE_TO_POWERUP <targetPowerupType>`
   - Else: no-op
 
+#### Deterministic “move toward point” rule (v1)
+
+Given current bot position `p = (x,y)` and target point `t = (tx,ty)`:
+- Let `v = (vx, vy) = (tx - x, ty - y)`.
+- If `vx == 0 && vy == 0`: no movement.
+- Otherwise compute a straight-line displacement toward the target using deterministic fixed-point math:
+  - Let `dist2 = vx*vx + vy*vy`.
+  - If `dist2 <= speedUnitsPerTick^2`: move exactly to the target (`delta = (vx, vy)`).
+  - Else:
+    - Let `dist = sqrt(dist2)` (deterministic; no platform floats).
+    - `delta = (vx, vy) * speedUnitsPerTick / dist`
+
+Direction token (`dir`) used by `BUMP_*_DIR(...)` and replay events:
+- For `MOVE <DIR>`, `dir` is the requested `<DIR>`.
+- For point/goal movement, derive a discrete `<DIR>` from the intended vector `(vx,vy)` deterministically:
+  - if `vy == 0`: `LEFT|RIGHT`
+  - else if `vx == 0`: `UP|DOWN`
+  - else: one of `UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` by the signs of `(vx,vy)`.
+
 ### 3.1 Persistent navigation goals (move while doing other actions)
 
-These instructions set a **movement goal** in bot state. When a goal is set, the bot will attempt to move **1 step per tick** toward that goal **even on ticks where its instruction is something else** (shooting, targeting, timers, etc.).
+These instructions set a **movement goal** in bot state. When a goal is set, the bot will attempt to move toward that goal **every tick**, including ticks where its instruction is something else (shooting, targeting, timers, etc.).
 
 Instructions:
 - `SET_MOVE_TO_SECTOR <SECTOR>`
@@ -288,14 +308,10 @@ Instructions:
   - Alias semantics:
     - let `S = SECTOR()` (evaluated once when the instruction executes)
     - behave as if the script had written: `SET_MOVE_TO_SECTOR S ZONE <ZONE>`
-  - Sets a navigation goal to zone `<ZONE>` **in your current sector**.
 - `SET_MOVE_TO_BOT <BOT_TARGET>`
   - If `<BOT_TARGET>` is a dynamic selector (`CLOSEST_BOT`/`NEAREST_BOT`/`LOWEST_HEALTH_BOT`/`WEAKEST_BOT`), it is re-resolved each tick.
   - If `<BOT_TARGET>` is `TARGET`, it follows your current `targetBotId`.
   - If `<BOT_TARGET>` is a specific bot id (`BOT1..BOT4`), it follows that bot until it dies.
-  - When to use which:
-    - use `SET_MOVE_TO_BOT TARGET` after a `TARGET_*` instruction when you want to commit to one chosen bot until you retarget.
-    - use `SET_MOVE_TO_BOT CLOSEST_BOT` when you always want to chase “whoever is closest right now” (deterministically re-evaluated each tick).
 - `SET_MOVE_TO_POWERUP <TYPE>`
 - `SET_MOVE_TO_TARGET`
 - `CLEAR_MOVE`
@@ -303,21 +319,20 @@ Instructions:
 Resolution rules (recommended):
 - Each tick, the engine determines one `moveRequest` per bot:
   - if the bot executed an **immediate movement** instruction this tick (§3.0), use that movement
-  - else if the bot has a **movement goal** active, derive a movement step from the goal
+  - else if the bot has a **movement goal** active, derive a movement request from the goal
   - else: no movement
-- Speed rule (from `Ruleset.md` §1.2): the `moveRequest` only results in movement if `moveCooldownRemaining == 0`.
 
 Goal completion:
-- `SET_MOVE_TO_SECTOR`: clears automatically when the bot reaches the **sector center**.
-- `SET_MOVE_TO_SECTOR ... ZONE ...`: clears automatically when the bot reaches the **zone center**.
+- For goals with a fixed point target (sector center / zone center): clear when the bot reaches the point.
+  - recommended engine behavior: if the remaining straight-line distance to the goal point is `<= speedUnitsPerTick`, the engine may snap the bot to the exact target point and clear the goal.
 - `SET_MOVE_TO_POWERUP`:
-  - each tick, the goal re-resolves to the **closest currently-existing** powerup of that type
+  - each tick, the goal re-resolves to the closest currently-existing powerup of that type
   - clears when the bot picks up a powerup of that type
   - clears if no such powerup exists (the goal becomes invalid)
 - `SET_MOVE_TO_BOT` / `SET_MOVE_TO_TARGET`: clears when the resolved target bot is dead/missing.
 
-Notes:
-- `CLEAR_MOVE` stops automatic movement.
+Collision note:
+- Movement requests can be clamped/canceled by walls or other bots (see `Ruleset.md` §1.2).
 - Bump events (`BUMPED_WALL*`, `BUMPED_BOT*`) apply regardless of whether movement came from an immediate move or a movement goal.
 
 ---
@@ -338,7 +353,7 @@ Future-proofing note (planning):
     - `TARGET` (your current `targetBotId`; if invalid/dead, no-op)
     - `CLOSEST_BOT` / `NEAREST_BOT` (closest alive bot; ties: lowest bot id)
     - `LOWEST_HEALTH_BOT` / `WEAKEST_BOT` (lowest-health alive bot; ties: lowest bot id)
-  - Bullets are slow projectiles; bullets can hit **any bot** in the sector they enter (not only the chosen target).
+  - Bullets are continuous projectiles; bullets can hit **any bot** they collide with (16×16 bot hitbox), not only the chosen target.
 
 - `SAW ON`
 - `SAW OFF`
@@ -368,8 +383,8 @@ Semantics:
 - Target is passed to the module:
   - bot targets: `BOT1..BOT4`, `TARGET`, `CLOSEST_BOT`/`NEAREST_BOT`, `LOWEST_HEALTH_BOT`/`WEAKEST_BOT`
   - location targets:
-    - `SECTOR <SECTOR>` (sector center)
-    - `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
+    - `SECTOR <SECTOR>` (sector center point)
+    - `SECTOR <SECTOR> ZONE <ZONE>` (zone center point)
   - `SELF` / `NONE`
 - Inline selector targets (`CLOSEST_BOT`, `WEAKEST_BOT`, etc.) are resolved deterministically when `USE_SLOTn` executes; they do not modify the target register.
 - Modules may ignore targets that are not relevant.
@@ -398,7 +413,7 @@ Rationale:
 - These are intended to be **compile-time aliases** (the parser can rewrite `FIRE_SLOTn` to `USE_SLOTn`). They are deterministic because they do not introduce new runtime behavior.
 
 Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
-- If slot contains **BULLET**: fires at `<BOT_TARGET>` (location targets are ignored in v1).
+- If slot contains **BULLET**: fires only at bot targets (`<BOT_TARGET>`). If the provided `<TARGET>` is not a bot target, it is a deterministic no-op (`INVALID_TARGET_KIND`).
 - If slot contains **SAW**: same as `SAW ON` (target ignored).
 - If slot contains **SHIELD**: same as `SHIELD ON` (target ignored).
 - If slot contains **ARMOR**: no-op (passive).
@@ -446,21 +461,29 @@ Bot / target state:
   - true iff `targetBotId` is set and the target bot is alive
 - `BOT_ALIVE(<BOT>)` → bool
 
-Location:
+Location (derived from continuous position):
 - `SECTOR()` → int
-  - current sector id (1..9)
+  - current sector id (1..9), derived from the bot’s current `(x, y)`
+  - sector regions are defined in `ArenaPlan.md`
+  - if the bot lies exactly on a boundary, ties must be broken deterministically (recommended: lowest sector id)
 - `ZONE()` → int
-  - current zone id (1..4) if at a zone anchor
-  - returns `0` if currently at the sector center anchor
+  - current zone id (1..4), derived from the bot’s current `(x, y)` within its current sector
+  - zone regions are defined in `ArenaPlan.md` (each sector is a 2×2 partition into zones)
+  - if the bot lies exactly on a boundary, ties must be broken deterministically (recommended: lowest zone id)
 - `IN_ZONE(<ZONE>)` → bool
   - Alias of: `ZONE() == <ZONE>`
-  - true iff you are currently standing on the zone-center anchor for that zone
 
 Sector proximity:
 - `BOT_IN_SAME_SECTOR(<BOT>)` → bool
 - `BOT_IN_ADJ_SECTOR(<BOT>)` → bool
 
-Distances (anchor steps)
+Distances (world units; Manhattan)
+
+All `DIST_TO_*` functions return an integer Manhattan distance in world units:
+- `MANHATTAN(a, b) = abs(ax - bx) + abs(ay - by)`
+
+Unless otherwise stated, distances are measured between entity **centers** (bots/powerups) or between the bot center and a named target point (sector/zone centers).
+
 - `DIST_TO_BOT(<BOT>)` → int
 - `DIST_TO_TARGET_BOT()` → int
   - if no valid target bot exists, returns `999`
@@ -469,9 +492,9 @@ Distances (anchor steps)
 
 Location distances:
 - `DIST_TO_SECTOR(<SECTOR>)` → int
-  - distance to `SECTOR <SECTOR>` (sector center)
+  - Manhattan distance to the sector center point
 - `DIST_TO_SECTOR_ZONE(<SECTOR>, <ZONE>)` → int
-  - distance to `SECTOR <SECTOR> ZONE <ZONE>` (zone center)
+  - Manhattan distance to the zone center point
 
 Powerups (global knowledge):
 - `POWERUP_EXISTS(<TYPE>)` → bool
@@ -498,17 +521,17 @@ Bullets/projectiles:
 
 Arena edges / walls (outer boundary in v1):
 - `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)` → int
-  - returns how many **anchor steps** to the outer wall in that direction
-  - `0` means you are currently at the edge
+  - returns the distance in **world units** from the bot’s collision box to the outer wall in that direction
+  - `0` means you are currently touching the edge
 - `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` → int (alias of `DIST_TO_ARENA_EDGE`)
 
 Bumps (read last tick result):
 - `BUMPED_WALL()` → bool
-- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+- `BUMPED_WALL_DIR(<DIR>)` → bool
 
 - `BUMPED_BOT()` → bool
 - `BUMPED_BOT_IS(<BOT>)` → bool
-- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+- `BUMPED_BOT_DIR(<DIR>)` → bool
 
 Bump semantics:
 - Bump flags represent the bot’s **most recent bump event**.
@@ -544,10 +567,11 @@ Slot/module state:
 ### 6.4 Common patterns
 
 "Powerup close" should be expressed using distance:
-- close = **same anchor or 1 anchor-step away**
+- close = within some small number of **world units** (pick a threshold based on `speedUnitsPerTick`)
 
 ```text
-IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) GOTO GET_HP
+; example threshold assuming speedUnitsPerTick = 16
+IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 16) GOTO GET_HP
 ```
 
 "If a specific zone has a specific powerup, go there":
@@ -567,6 +591,15 @@ IF (BUMPED_WALL()) DO MOVE RIGHT
 
 ## 7) Example scripts
 
+For longer, "real bot" scripts (used as built-in examples / Workshop defaults), see:
+- `examples/bot0.md` — Powerup Seeker (starter)
+- `examples/bot1.md` — Zone Patrol Shooter (BULLET)
+- `examples/bot2.md` — Chaser Shooter (BULLET)
+- `examples/bot3.md` — Corner Bunker (BULLET+ARMOR)
+- `examples/bot4.md` — Saw Rusher (SAW+SHIELD)
+
+These example scripts intentionally use only the v1 instructions and expression functions defined in this document.
+
 ### Example A — If low health, go to health powerup
 
 ```text
@@ -584,7 +617,8 @@ GOTO LOOP
 
 ```text
 LABEL LOOP
-IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 1) DO MOVE_TO_POWERUP HEALTH
+; example threshold assuming speedUnitsPerTick = 16
+IF (POWERUP_EXISTS(HEALTH) && DIST_TO_CLOSEST_POWERUP(HEALTH) <= 16) DO MOVE_TO_POWERUP HEALTH
 GOTO LOOP
 ```
 
@@ -592,7 +626,8 @@ GOTO LOOP
 
 ```text
 LABEL LOOP
-IF (DIST_TO_CLOSEST_BOT() <= 1) DO MOVE_TO_CLOSEST_BOT
+; example threshold assuming speedUnitsPerTick = 16
+IF (DIST_TO_CLOSEST_BOT() <= 16) DO MOVE_TO_CLOSEST_BOT
 GOTO LOOP
 ```
 
@@ -658,14 +693,16 @@ GOTO LOOP
 
 ### Example H — Zone-to-zone movement inside the current sector
 
+Even with diagonal movement, the simplest reliable "patrol" pattern (no extra state; avoids edge/boundary ambiguity) is an axis-aligned loop:
+
 ```text
 LABEL LOOP
 
-; if we are in zone 1, step toward zone 2 (same sector)
-IF (IN_ZONE(1)) DO MOVE_TO_ZONE 2
-
-; if we are in zone 2, step toward zone 3 (same sector)
-IF (IN_ZONE(2)) DO MOVE_TO_ZONE 3
+; patrol zones 1→2→4→3→1 inside the current sector
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
 
 GOTO LOOP
 ```

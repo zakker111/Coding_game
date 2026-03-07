@@ -48,7 +48,7 @@ Non-goals (until explicitly requested):
 - **Prefer modular, composable code.**
   - Keep modules focused; avoid “god modules”.
   - Extract helpers when logic is reused in 2+ places.
-  - **Keep files small**: if a source file grows beyond ~**600 lines**, refactor by splitting into smaller modules (new files are encouraged when it improves clarity).
+  - **Keep files small**: refactor large files by splitting into smaller modules when it improves clarity.
   - Keep the directory structure orderly: group by domain (Simulation, Bot API, Sandbox, Data, UI, Server) and name files by responsibility.
 
 - **Be explicit, deterministic, and data-driven.**
@@ -76,6 +76,12 @@ Non-goals (until explicitly requested):
 
 ## 3. Repository Layout & Module Boundaries
 
+**Implementation language (v1): TypeScript everywhere.**
+
+- Client and server are implemented in **TypeScript**.
+- The deterministic simulation core is a **shared TypeScript library** used by both client and server.
+- On the client, run the simulation in a **Web Worker** (UI communicates via structured-clone messages).
+
 The repo is currently minimal. As code is introduced, keep a clean separation by **domain**:
 
 - **Simulation**
@@ -102,7 +108,7 @@ Rule of thumb:
 
 - Add new modules only when they reduce coupling or clarify ownership.
 - Avoid adding new top-level directories unless the domain will contain multiple modules.
-- Prefer consistent naming (e.g. `lower_snake_case`) unless the repo establishes another convention.
+- Prefer consistent naming; follow established conventions in the surrounding codebase.
 
 ---
 
@@ -111,8 +117,11 @@ Rule of thumb:
 Determinism is a core requirement.
 
 - **One seeded RNG per match**, stored in match context/state.
-- All randomness must be sourced from that RNG.
-- No time-based behavior in simulation (`Date.now`, timers) except as external orchestration.
+- All randomness must be sourced from that RNG (**no `Math.random()`**).
+- No time-based behavior in simulation (no wall clock: `Date.now`, timers) except as external orchestration.
+- Avoid floating point drift in gameplay/simulation math:
+  - prefer **integers** (ticks, grid coords, resource values)
+  - if fractions are needed, use a **fixed-point** representation
 
 ### 4.1 Replay invariants
 
@@ -135,20 +144,21 @@ Bots should be treated like pure decision functions:
 - The bot returns an **action** (what it wants to do).
 - The bot can have **private memory** but only through explicitly supported mechanisms.
 
-### 5.1 Suggested bot function shape (example)
+### 5.1 Bot language (v1)
 
-```js
-// Bot code should not reach into engine internals.
-export function act(observation, memory) {
-  // return: { action, memory }
-}
-```
+In v1, bots are authored in the **Bot Instruction DSL** defined in `BotInstructions.md`.
 
-Bot API rules:
+- A bot submission is `source_text` containing DSL instructions (not JavaScript/Python).
+- At runtime, each bot executes **exactly one** compiled instruction per tick at its current `pc`.
+- If we later support higher-level languages (JS/Lua/etc.), they must either:
+  - compile down to the same deterministic instruction/IR model, or
+  - run in a sandboxed runtime that preserves the same “one deterministic decision per tick” contract.
+
+Bot API rules (applies to any current/future bot authoring language):
 
 - Observations should be **explicit and bounded** (no leaking hidden opponent state).
 - Actions should be **validated** before applying them to the simulation.
-- Invalid actions should be handled consistently (e.g., “no-op” + penalty, or disqualify).
+- Invalid actions should be handled consistently (and must not crash the match).
 
 ---
 
@@ -158,7 +168,9 @@ Bot code is untrusted.
 
 Minimum requirements before running user-provided bots:
 
-- **Isolation**: execute bots in a sandbox (e.g., Web Worker, Node `vm`, WASM runtime).
+- **Isolation**:
+  - v1: execute bots via the **Bot Instruction DSL VM** and run matches in an isolated worker/process for timeouts + crash containment.
+  - if we later add general-purpose languages (JS/Lua/etc.), use an explicit language sandbox/runtime boundary.
 - **Resource limits**:
   - CPU budget per tick (hard timeout)
   - Memory ceiling
@@ -170,6 +182,7 @@ Minimum requirements before running user-provided bots:
 Security rules:
 
 - Never `eval` bot code in the main simulation thread.
+  - In v1 this is achieved by not running a general-purpose language at all: bot submissions are parsed and executed as the Bot Instruction DSL (`BotInstructions.md`).
 - Never pass engine objects by reference into bot code.
 - Prefer structured cloning / serialization boundaries.
 
@@ -198,10 +211,24 @@ Code implements mechanics; data defines *what exists* and *with what numbers*.
   - prefer creating new files over adding more nested conditionals in a single file
   - keep exports narrow and intentional (small public surface area)
   - keep related helpers colocated with the code they support
-- Use comments when needed:
-  - explain *why* (tradeoffs, invariants, determinism constraints)
-  - avoid redundant comments that restate the code
-- Add JSDoc on public modules and any tricky functions.
+- Maintain good coding practices:
+  - keep side effects explicit and localized (especially in simulation)
+  - avoid “quick hacks” that undermine determinism/security/readability
+  - prefer precise types over `any` (use `unknown` + narrowing when needed)
+
+### 8.1 Commenting guidelines
+
+- Use comments to explain *why*: invariants, determinism constraints, and security tradeoffs.
+- Document tricky math, rounding, tie-breakers, and order-dependent logic.
+- Avoid redundant comments that restate the code.
+- Keep comments accurate: update them when behavior changes; delete stale comments.
+
+### 8.2 Clarity checklist
+
+- Prefer clear, maintainable code over cleverness; small, well-named functions/modules.
+- Add comments for *why*, invariants, and tricky edge cases; avoid redundant comments that restate code.
+- In TypeScript, use TSDoc/JSDoc (`/** ... */`) for exported/public APIs and non-obvious logic; include examples where helpful.
+- Track larger TODOs in `Todo.md` rather than leaving many inline TODO comments.
 
 ---
 
@@ -231,7 +258,6 @@ The simulation tick loop is a hot path.
 
 - Update `Versions.md` for user-visible features and meaningful bug fixes.
 - Track unfixed, reproducible issues in `Bugs.md` with repro steps.
-- Track future work in `Todo.md` instead of leaving many inline TODOs.
 
 ---
 

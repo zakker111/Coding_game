@@ -67,7 +67,7 @@ A module definition includes:
 - cooldown: `cooldownOnUseTicks`
 - delivery: `PROJECTILE | HITSCAN | BEAM` (plus simulation-side behaviors like deployables/spawns)
 - capability flags (examples): `ignoresShield`, `piercesArmor`, `hasSplash`, `isBurst`, `hasSpread`
-- supported `targetKinds`: `BOT | LOCATION | DIRECTION | NONE`
+- supported `targetKinds`: `BOT | LOCATION | NONE` (and optionally `DIRECTION` later)
 - damage/effect numbers
 
 This keeps the language stable while gameplay grows.
@@ -79,9 +79,9 @@ This keeps the language stable while gameplay grows.
 In **v1** (see `BotInstructions.md`), slot activation is already:
 - `USE_SLOTn <TARGET>` where `<TARGET>` includes bot targets + location targets + `SELF|NONE`
 
-The main vNext extension is adding an **aim-direction target** form (`DIR ...`) for beams/cones.
+Directional aiming via an **aim-direction target** form (`DIR ...`) is **deferred** (no directional weapons are planned near-term).
 
-To support teleport, mines, grenades, and other “non-bot” targeting (plus `DIR` aiming), we need a **future-proof target grammar** that stays small and deterministic.
+To support teleport, mines, grenades, and other “non-bot” targeting, we need a **future-proof target grammar** that stays small and deterministic. (`DIR ...` can be added later without changing `USE_SLOTn`.)
 
 ### 3.1 Recommended vNext target union
 
@@ -99,12 +99,14 @@ Target kinds (stable):
   - `SECTOR <N>` (1..9, sector center)
   - `SECTOR <N> ZONE <Z>` (`Z` = 1..4, zone center)
 
-- **DIRECTION** (aim independent of a bot/location; useful for directional beams, cones, “fire forward”, etc.):
-  - `DIR UP|DOWN|LEFT|RIGHT` (recommended to match movement directions)
-  - future: can extend to diagonals if movement ever supports them
-
 - **NONE**:
   - `NONE`
+
+Deferred extension (optional; only needed if/when directional weapons are introduced):
+
+- **DIRECTION** (aim independent of a bot/location; useful for directional beams, cones, “fire forward”, etc.):
+  - `DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` (recommended to match movement directions)
+  - future: can extend to analog headings if the movement model ever needs it
 
 Then:
 - `USE_SLOTn <TARGET>` becomes the canonical activation form.
@@ -209,12 +211,13 @@ Mechanics (module-defined):
 - cost: energy only, or hybrid
 - cooldown: medium (or toggle drain if sustained)
 - targeting:
-  - bot target (`BOT` kind), or
-  - direction target (`DIRECTION` kind via `DIR ...`), optionally coupled with facing
+  - bot target (`BOT` kind)
+  - (deferred) direction target (`DIRECTION` kind via `DIR ...`) if you introduce directional beams/cones
 - shield interaction (future): may set `ignoresShield` so beams can pass through active shields
 
 Language interaction:
-- `USE_SLOTn TARGET` / `USE_SLOTn BOT2` / `USE_SLOTn DIR RIGHT`
+- `USE_SLOTn TARGET` / `USE_SLOTn BOT2`
+- (deferred) `USE_SLOTn DIR RIGHT`
 - optional predicates: `SLOT_QUERY(SLOTn, READY)`
 
 ### 7.2 Sniper rifle
@@ -298,11 +301,11 @@ This directly supports the “what went wrong?” browser experience.
 
 When you’re ready to evolve the spec, the next safe edits are:
 
-1) Add **direction targets** for aiming:
-   - allow `USE_SLOTn DIR UP|DOWN|LEFT|RIGHT`
+1) Add generic introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) and keep any named predicates as sugar.
+2) Optionally add facing model (B or C) if you want directional weapons.
+3) (Deferred) Add **direction targets** for aiming if you introduce directional weapons:
+   - allow `USE_SLOTn DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`
    - keep existing v1 `<TARGET>` (bots + locations + `SELF|NONE`) unchanged
-2) Add generic introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) and keep any named predicates as sugar.
-3) Optionally add facing model (B or C) if you want directional weapons.
 4) Optionally add registers if you want deeper programming strategies.
 
 ---
@@ -310,8 +313,8 @@ When you’re ready to evolve the spec, the next safe edits are:
 ## 10) Decisions to lock (pick one per row)
 
 1) Direction aiming targets:
-- **A)** keep v1 `<TARGET>` (bots + locations + `SELF/NONE`; **no** `DIR ...`)
-- **B)** add `DIR UP|DOWN|LEFT|RIGHT` as a new `<TARGET>` kind for vNext (recommended)
+- **A)** keep v1 `<TARGET>` (bots + locations + `SELF/NONE`; **no** `DIR ...`) (recommended while there are no directional weapons)
+- **B)** add `DIR UP|DOWN|LEFT|RIGHT` as a new `<TARGET>` kind (deferred; only needed for directional weapons)
 
 2) Slot/module introspection:
 - **A)** no introspection (bots may waste ticks)

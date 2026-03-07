@@ -66,6 +66,7 @@ This prevents mid-run edits from affecting the run.
 
 ### 4.1 Match format (locked)
 - Daily run matches are **4-player matches** (four bots total in one arena).
+- Match end conditions are defined in `Ruleset.md` (last bot alive OR `tickCap` OR `STALEMATE`).
 - Spawn rule (locked): bots spawn in the **four corners** of the arena:
   - `BOT1 → SECTOR 1 ZONE 1` (top-left)
   - `BOT2 → SECTOR 3 ZONE 2` (top-right)
@@ -106,6 +107,12 @@ Common v1 approach (simple):
   - 3rd: +Z
   - 4th: +W
 
+Tie handling (time-limit / stalemate):
+- If a match ends with multiple bots still alive (`endReason ∈ {TICK_CAP, STALEMATE}`), the surviving bots **tie**.
+- Placement points for tied bots are split **evenly** across the tied group by averaging the points for the occupied ranks.
+  - Example (2 bots alive at end): if placement points are `{1st: X, 2nd: Y, 3rd: Z, 4th: W}` then each survivor gets `(X + Y) / 2`.
+  - Example (3 bots alive at end): each survivor gets `(X + Y + Z) / 3`.
+
 Optional add-ons (later):
 - damage dealt bonus
 - survival ticks bonus
@@ -127,13 +134,13 @@ When a bot drops below threshold:
 You described a manual “verify intent” action to allow a bot back into daily runs.
 
 Server-side interpretation (no UI details):
-- a user can set `active_for_next_run = true` for a bot version
+- a user can set `active_for_next_run = true` for a bot
 - eligibility still requires meeting the threshold rules (or you may optionally allow a “rejoin grace” mechanic)
 
 This should be recorded as an auditable event:
 - who re-enabled
 - when
-- which bot version/loadout was active
+- which bot `source_hash` was active at the time (v1 server stores “latest source” only)
 
 ---
 
@@ -143,8 +150,11 @@ For a given daily run, results must be reproducible from stored artifacts:
 - `season_id`
 - `run_seed`
 - per-match `match_seed` derived from (`run_seed`, round index, match index)
-- exact bot versions (source hashes + loadouts)
+- exact bot code snapshots (at least `source_hash`, ideally also stored `source_text` in replays)
 - exact ruleset version
+
+Note on loadouts:
+- v1 server-run matches use a fixed default loadout for all bots (see `ServerPlan.md`). Client-side loadout/equipment does not affect daily competition results in v1.
 
 ---
 
@@ -156,7 +166,7 @@ Per match:
 - replay reference
 
 Per daily run:
-- list of participating bot versions
+- list of participating bots (botIds + source hashes; v1 may also store source_text snapshots in replays)
 - updated season points table
 - daily leaderboard snapshot
 
