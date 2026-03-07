@@ -222,7 +222,13 @@ Code implements mechanics; data defines *what exists* and *with what numbers*.
 - Document tricky math, rounding, tie-breakers, and order-dependent logic.
 - Avoid redundant comments that restate the code.
 - Keep comments accurate: update them when behavior changes; delete stale comments.
-- In TypeScript, use TSDoc (`/** ... */`) on exported/public APIs and non-obvious functions/types.
+
+### 8.2 Clarity checklist
+
+- Prefer clear, maintainable code over cleverness; small, well-named functions/modules.
+- Add comments for *why*, invariants, and tricky edge cases; avoid redundant comments that restate code.
+- In TypeScript, use TSDoc/JSDoc (`/** ... */`) for exported/public APIs and non-obvious logic; include examples where helpful.
+- Track larger TODOs in `Todo.md` rather than leaving many inline TODO comments.
 
 ---
 
@@ -252,7 +258,6 @@ The simulation tick loop is a hot path.
 
 - Update `Versions.md` for user-visible features and meaningful bug fixes.
 - Track unfixed, reproducible issues in `Bugs.md` with repro steps.
-- Track future work in `Todo.md` instead of leaving many inline TODOs.
 
 ---
 
