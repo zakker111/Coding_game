@@ -4,6 +4,28 @@ This file is the **single source of truth** for near-term engineering tasks and 
 
 ---
 
+## Implementation status (as of 0.0.2 / “0.02”)
+
+Completed (high-level):
+- Monorepo workspace with `apps/web` and `packages/replay` (legacy `site/` excluded from workspace scripts).
+- `packages/replay` provides deterministic sample replay generation with tests.
+- `apps/web` implements a playable client loop:
+  - Landing (`/`) → Workshop (`/workshop`)
+  - Bot editing for `BOT1..BOT4` with local persistence and explicit apply/update step for BOT1
+  - Deterministic opponent selection/randomization (seeded; no `Math.random()`)
+  - Local match runs in a Web Worker
+  - Replay playback with smooth intra-tick interpolation
+  - ArenaCanvas rendering (grid, walls, bots, bullets, powerups)
+  - Inspector with per-tick event filtering
+- `deploy/` contains a buildless static workshop prototype.
+
+Next priorities (to reach ruleset-accurate v1 engine):
+- Implement the real bot DSL parser/VM + predicates from `BotInstructions.md`.
+- Replace sample replay generator with a ruleset-accurate deterministic simulation core shared by client/server.
+- Lock remaining TBD balance parameters in `Ruleset.md` (wall bump damage, powerup deltas, baseline weapon numbers).
+
+---
+
 ## Current decisions (locked)
 
 ### Runtime + architecture

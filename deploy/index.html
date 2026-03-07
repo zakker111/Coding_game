@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nowt</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Nowt</div>
+      <nav class="nav">
+        <a href="./">Home</a>
+        <a href="./workshop/">Workshop</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h1>Nowt</h1>
+        <p class="muted">A deterministic bot-fighting coding game. Write bots, run matches, inspect replays tick-by-tick.</p>
+        <div class="actions">
+          <a class="button primary" href="./workshop/">Start Game</a>
+        </div>
+
+        <div class="grid3" style="margin-top: 18px">
+          <div class="feature">
+            <div class="feature-title">Deterministic</div>
+            <div class="muted">Same seed + same inputs → identical replay.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-title">Replayable</div>
+            <div class="muted">Per-tick state + events.</div>
+          </div>
+          <div class="feature">
+            <div class="feature-title">Safe DSL (planned)</div>
+            <div class="muted">Bots will run in a constrained sandbox.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="muted">Client-only deploy (first pass)</div>
+    </footer>
+  </body>
+</html>
