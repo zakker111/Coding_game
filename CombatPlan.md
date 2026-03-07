@@ -178,7 +178,7 @@ Locked direction:
 - bullets can hit **any bot** they collide with (not only the intended target).
 
 Collision model:
-- each alive bot has a **32×32** axis-aligned hitbox (AABB) centered on its current world position (see `ArenaPlan.md` §3).
+- each alive bot has a **16×16** axis-aligned hitbox (AABB) centered on its current world position (see `ArenaPlan.md` §3).
 - the bullet collides when its swept segment intersects a bot hitbox.
 - the bullet does **not** collide with its owner (`ownerBotId`) (prevents self-hits due to spawn overlap).
 
@@ -351,7 +351,7 @@ Baseline rule (linear projectiles; recommended):
 - treat each tick’s movement as a swept segment `fromPos → toPos`
 - resolve the **earliest** intersection along that segment against:
   - outer walls
-  - bot hitboxes (32×32 AABB)
+  - bot hitboxes (16×16 AABB)
 - if an intersection occurs, clamp `toPos` to the impact point and resolve the hit/despawn deterministically
 
 Non-linear trajectories (wavy/curved):

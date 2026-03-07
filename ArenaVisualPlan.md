@@ -40,7 +40,9 @@ Use an integer `S` (“pixels per world unit”) for crisp scaling.
 
 ### 2.3 Anchor locations (`loc`) → world coordinates (powerups)
 
-Bots are rendered directly from their continuous `pos` (see `ReplayViewerPlan.md`), but **powerups** (and any other anchored entities) may be encoded using deterministic anchor locations:
+Bots are rendered directly from their continuous `pos` (see `ReplayViewerPlan.md`). **Bots do not move anchor-to-anchor or snap to sector/zone centers.** Their `pos` can be anywhere in world space; some high-level movement targets may be expressed as “go to sector/zone center”, but the resulting motion/positions remain continuous.
+
+**Powerups** (and any other anchored entities) may be encoded using deterministic anchor locations:
 - `loc = { sector: 1..9, zone: 0..4 }`
   - `zone=0` => sector center
   - `zone=1..4` => zone center
@@ -69,17 +71,18 @@ Let `worldToPx(x) = round(x * S)` and same for `y`.
   - `px = worldToPx(wx)`
   - `py = worldToPx(wy)`
 
-Bots have a notional **32×32 world-unit hitbox** in the rules (matching zone size). The viewer can use this for hit/collision visuals, but should treat replay `pos` as authoritative.
+Bots have a notional **16×16 world-unit hitbox** in the rules. The viewer can use this for hit/collision visuals, but should treat replay `pos` as authoritative.
 
 ### Bot visual sizing (v1 placeholder: circle tokens)
 
 In v1, bots are rendered as **filled circles**, centered on their replay `pos`.
 
-To keep tokens readable inside a 32×32 zone cell (and to leave room for labels/bars), use a smaller token than the full 32×32 hitbox.
-
-**Chosen size (v1):**
-- `botDiameterWorld = 16`
+Token sizing is derived from the gameplay hitbox:
+- `botHitboxWorld = 16` (width/height)
+- `botDiameterWorld = botHitboxWorld = 16`
 - `botRadiusWorld = 8`
+
+This is intentionally smaller than a 32×32 zone cell, leaving room for labels/bars.
 
 Pixel sizing at render scale `S`:
 - `botDiameterPx = botDiameterWorld * S = 16*S`
@@ -102,6 +105,26 @@ If rendering on `<canvas>`:
 - Then scale the drawing context by `devicePixelRatio`.
 
 This keeps lines crisp while matching layout pixels.
+
+### 2.6 Pixel-perfect rendering rules (required)
+
+The arena is intended to look “pixel-perfect”: no blurry sprites, no anti-aliased grid, and stable positions while panning/zooming.
+
+Rules:
+- **Integer world scale:** `S` must be an integer (CSS pixels per world unit).
+- **DPR handling:** after applying the `devicePixelRatio` backing-store scale (§2.5), treat your drawing coordinates as **CSS pixels**.
+  - to stay crisp even on fractional DPRs, snap CSS pixels to the device-pixel grid:
+    - `snapPx = (cssPx) => Math.round(cssPx * devicePixelRatio) / devicePixelRatio`
+- **Disable sprite smoothing:** if drawing images/sprites, set `ctx.imageSmoothingEnabled = false`.
+- **Round/snap all entity positions:** after applying world→pixel scale, snap final draw positions to the pixel grid.
+  - recommended:
+    - `toCssPx = (w) => w * S`
+    - `toPx = (w) => snapPx(Math.round(toCssPx(w)))`
+  - for bots/projectiles: `xPx = toPx(pos.x)`, `yPx = toPx(pos.y)`
+  - if you apply transient offsets (e.g., bounce), apply offsets in world-space then snap the final pixel position.
+- **Crisp grid lines:** draw grid lines on pixel boundaries.
+  - for 1px lines, draw at `snapPx(x + 0.5)` / `snapPx(y + 0.5)` (CSS pixel space after DPR scaling) to avoid blur.
+  - all grid coordinates are multiples of `32*S` (zones) and `64*S` (sectors), so they are naturally integer-aligned.
 
 ---
 
@@ -279,8 +302,9 @@ Rendering rule (recommended):
 - When paused/scrubbing/stepping (render `p=1`), the offset is `0` so the tick is stable.
 
 Concrete deterministic bounce model:
-- Define a small distance in world units:
-  - `bounceDistanceWorld = 3` (≈ 3/8 of the v1 bot radius)
+- Define a small distance in world units (derived from bot size):
+  - `bounceDistanceWorld = 0.375 * botRadiusWorld`
+  - v1: with `botRadiusWorld = 8` → `bounceDistanceWorld = 3`
 - Define a short duration within the tick:
   - `bounceDuration = 0.35` (fraction of the tick)
 - Map the bump `dir` to a unit vector `v` in world-space:
@@ -448,6 +472,7 @@ Back-to-front draw order:
 
 v1 can start with pure vector/Canvas primitives.
 If you introduce pixel sprites later:
-- keep them authored at **32×32** and scale by integer `S`.
+- keep them authored at **16×16** (representing the bot’s 16×16 hitbox) and scale by integer `S` (so the sprite draws at `16*S` CSS pixels).
+- ensure image smoothing is disabled (`ctx.imageSmoothingEnabled = false`).
 
 ---

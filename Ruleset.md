@@ -109,7 +109,7 @@ Loadout constraints (v1 validation rules):
 
 Bots execute **1 instruction per tick** (see `BotInstructions.md`).
 
-Bot movement is **continuous** in arena world units (see `ArenaPlan.md`): each bot has a world position `pos = { x, y }` and a **32×32** axis-aligned hitbox (AABB) centered at `pos`.
+Bot movement is **continuous** in arena world units (see `ArenaPlan.md`): each bot has a world position `pos = { x, y }` and a **16×16** axis-aligned hitbox (AABB) centered at `pos`.
 
 Ruleset parameters (v1 recommended defaults):
 - `baseSpeedUnitsPerTick = 16` (world units per tick)
@@ -133,8 +133,8 @@ Rules (movement + collision; v1):
 - Movement is resolved in `BOT1..BOT4` order using stable, implementable rules:
   1) Let `fromPos` be the bot’s start-of-movement position for the tick.
   2) Compute `candidateToPos = fromPos + delta`.
-  3) **Wall clamp**: clamp `candidateToPos` so the entire 32×32 bot hitbox stays inside the arena.
-     - using `ArenaPlan.md` bounds, this is equivalent to clamping bot centers to `x ∈ [16,176]`, `y ∈ [16,176]`.
+  3) **Wall clamp**: clamp `candidateToPos` so the entire 16×16 bot hitbox stays inside the arena.
+     - using `ArenaPlan.md` bounds, this is equivalent to clamping bot centers to `x ∈ [8,184]`, `y ∈ [8,184]`.
      - if clamping changed `candidateToPos`, emit `BUMP_WALL` and apply `wallBumpDamage`.
   4) **Bot–bot collision**: if moving to `candidateToPos` would make this bot’s hitbox overlap any other alive bot’s hitbox, the movement is canceled:
      - set `toPos = fromPos` (no movement)
@@ -294,7 +294,7 @@ Each tick during projectile advancement:
   - `candidateToPos = bullet.pos + bullet.vel`
 - resolve the **earliest** collision along that segment against:
   - the outer wall (arena bounds)
-  - any alive bot hitbox (32×32 AABB centered at the bot’s current world position), excluding the bullet owner
+  - any alive bot hitbox (16×16 AABB centered at the bot’s current world position), excluding the bullet owner
 - if a collision occurs, clamp `toPos` to the impact point and resolve deterministically:
   - bot impact: apply bullet damage (`source = BOT`, `kind = BULLET`), then remove the bullet
   - wall impact: remove the bullet
@@ -411,7 +411,7 @@ Recommended v1 policy:
 Pickup phase (see tick ordering in `ServerSimulationPlan.md`):
 - If an **alive** bot’s hitbox overlaps a powerup’s position, the bot **collides** with the powerup and automatically picks it up.
   - In v1, powerups live at fixed sector/zone centers; treat a powerup as a point at that center.
-  - Equivalently (with a 32×32 bot AABB centered at `bot.pos`): pickup occurs when `abs(bot.pos.x - powerup.pos.x) <= 16` and `abs(bot.pos.y - powerup.pos.y) <= 16`.
+  - Equivalently (with a 16×16 bot AABB centered at `bot.pos`): pickup occurs when `abs(bot.pos.x - powerup.pos.x) <= 8` and `abs(bot.pos.y - powerup.pos.y) <= 8`.
   - Bots that reached `health <= 0` earlier in the tick do not pick up powerups later in the tick.
 - Apply a **fixed amount** per powerup type (this principle should hold for any future powerup too):
   - `HEALTH`: `health = min(100, health + powerupHealthDelta)`

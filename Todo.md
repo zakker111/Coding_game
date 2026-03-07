@@ -28,7 +28,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 ### Arena model
 - **9 sectors (1..9)** arranged as a 3×3 grid.
 - Each sector contains **4 zones (1..4)** arranged as a 2×2 grid.
-- **Bots** have continuous world positions `pos = {x,y}` (32×32 hitbox) and can move freely inside the outer wall.
+- **Bots** have continuous world positions `pos = {x,y}` (16×16 hitbox) and can move freely inside the outer wall.
   - Spawns are still specified via sector/zone anchors, and are initialized at the corresponding anchor center point.
 - **Powerups** spawn at deterministic **location anchors**:
   - sector center: `SECTOR s`
@@ -86,7 +86,7 @@ Speed/weight (locked direction):
 ### Projectiles / explosives
 - Bullets are **continuous projectiles** updated each tick (not instant hits).
 - Bullet direction (locked direction): on fire, resolve a target bot id, compute a velocity vector toward the target bot’s **position at fire time**, and keep that direction (no homing). (See `Ruleset.md` §5.1 / `CombatPlan.md` §3.3.)
-- Bullet collision model (locked direction): bullets can hit **any bot** they collide with (32×32 bot hitbox), not only the intended target.
+- Bullet collision model (locked direction): bullets can hit **any bot** they collide with (16×16 bot hitbox), not only the intended target.
 - **Bullets stop at walls** (locked).
   - v1: bullets are removed immediately on wall contact and emit `BULLET_DESPAWN reason=WALL`.
 - Explosives (grenades/mines) (planned future modules):

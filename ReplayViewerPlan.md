@@ -183,6 +183,7 @@ Rendering note (smooth playback; required for v1 Workshop/replay viewer):
 - For tick `t`, treat `state[t-1]` as the **start-of-tick** state and `state[t]` as the **end-of-tick** state.
 - While playing, compute an intra-tick progress `p ∈ [0,1]` and interpolate *positions* from `start → end`.
   - Keep non-positional state (HP/ammo/energy, deaths, pickups) snapped to tick boundaries.
+- When converting world positions to pixels, use integer scale + DPR and round final positions to integer CSS pixels for crisp/pixel-perfect rendering (see `ArenaVisualPlan.md` §2.6).
 - When paused/scrubbing/stepping, render at `p=1` (end-of-tick) so the playhead tick matches `state[t]`.
 
 ---
@@ -241,15 +242,16 @@ Powerups may still use deterministic **anchor locations** (`loc`) for compact re
 
 Encode a continuous position as:
 - `pos = { x, y }` in **arena world units** (see `ArenaPlan.md` / `UIPlan.md` sizing), where `(0,0)` is the arena top-left and `(192,192)` is the arena bottom-right outer wall.
+- `pos` is continuous: bots do not snap to grid intersections/anchor points. (Some movement *targets* may be described as “go to sector/zone center”, but the resulting positions remain continuous.)
 - Bounds convention:
   - Outer wall is at `x=0`, `x=192`, `y=0`, `y=192`.
-  - **Bots** (32×32 hitbox centered at `pos`) should have centers clamped to `x ∈ [16,176]`, `y ∈ [16,176]` (see `ArenaPlan.md`).
+  - **Bots** (16×16 hitbox centered at `pos`) should have centers clamped to `x ∈ [8,184]`, `y ∈ [8,184]` (see `ArenaPlan.md`).
   - **Projectiles** may use the full `0..192` range and are removed on wall impact.
 
 Rendering conventions:
 - Bots should always have `pos` in `state[t]`.
 - When paused/scrubbing/stepping, render exactly `state[t].bots[].pos`.
-- For hit/collision visuals/explanations, treat each bot as having a **32×32** axis-aligned hitbox (AABB) centered at the bot’s world position.
+- For hit/collision visuals/explanations, treat each bot as having a **16×16** axis-aligned hitbox (AABB) centered at the bot’s world position.
 
 Derived region (for UI overlays/tooltips; not an authoritative gameplay position encoding):
 - Given `pos`, the viewer may compute `sector (1..9)` and `zone (1..4)` by grid partitioning:

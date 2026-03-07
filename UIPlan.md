@@ -328,6 +328,7 @@ Detailed visual/UX spec (grid rendering, scaling, entity visuals, overlays): see
 
 Simulation remains **tick-based**:
 - bot positions are continuous `pos` (world units) and change only at tick boundaries (end-of-tick snapshots)
+  - bots do **not** move anchor-to-anchor or snap to zone/sector centers (even if a movement target is expressed as a zone/sector center)
 - movement updates a bot’s `pos` by up to `speedUnitsPerTick` per tick (then collision/bump rules may clamp/cancel it)
 
 Rendering must feel smooth while playing:
@@ -359,6 +360,7 @@ Render scaling:
 
 - bots:
   - v1 (locked): render each bot as a **circle token** (solid fill) + slot id (`BOT1..BOT4`) + resource bars
+    - token size is derived from the 16×16 gameplay hitbox: `botDiameterWorld = 16` (see `ArenaVisualPlan.md` §2.4)
     - color comes from the replay header `bots[].appearance` (see `ReplayViewerPlan.md`)
     - fallback when missing: deterministic per-slot palette (e.g. BOT1 blue, BOT2 red, BOT3 green, BOT4 yellow)
   - bump feedback (render-only): when `BUMP_WALL` or `BUMP_BOT` occurs, render a small deterministic “bounce” effect (no gameplay physics). See `ArenaVisualPlan.md` §5.7.

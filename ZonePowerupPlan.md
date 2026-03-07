@@ -103,8 +103,8 @@ On spawn:
 ### 4.2 Pickup = collision
 
 Pickup rule (hitbox overlap):
-- after movement resolution, if an alive bot’s **32×32 hitbox** overlaps the powerup’s anchored center point, the bot picks it up.
-  - equivalently: `abs(bot.pos.x - powerupCenter.x) <= 16` and `abs(bot.pos.y - powerupCenter.y) <= 16`
+- after movement resolution, if an alive bot’s **16×16 hitbox** overlaps the powerup’s anchored center point, the bot picks it up.
+  - equivalently: `abs(bot.pos.x - powerupCenter.x) <= 8` and `abs(bot.pos.y - powerupCenter.y) <= 8`
 
 Pickup effect rule (fixed amount per type; capped at 100):
 - `health = min(100, health + powerupHealthDelta)`

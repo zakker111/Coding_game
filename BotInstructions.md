@@ -353,7 +353,7 @@ Future-proofing note (planning):
     - `TARGET` (your current `targetBotId`; if invalid/dead, no-op)
     - `CLOSEST_BOT` / `NEAREST_BOT` (closest alive bot; ties: lowest bot id)
     - `LOWEST_HEALTH_BOT` / `WEAKEST_BOT` (lowest-health alive bot; ties: lowest bot id)
-  - Bullets are continuous projectiles; bullets can hit **any bot** they collide with (32×32 bot hitbox), not only the chosen target.
+  - Bullets are continuous projectiles; bullets can hit **any bot** they collide with (16×16 bot hitbox), not only the chosen target.
 
 - `SAW ON`
 - `SAW OFF`

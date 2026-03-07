@@ -128,7 +128,7 @@ Future:
 ## 3) Collision representation (continuous, zone-aware)
 
 Locked geometry:
-- each bot has a **32×32 collision box**
+- each bot has a **16×16 collision box**
   - treated as an axis-aligned bounding box (AABB)
   - centered at the bot’s continuous position `pos = { x, y }`
 - each **zone** is **32×32**
@@ -145,9 +145,9 @@ v1 semantics:
 
 Outer wall constraints:
 - the arena bounds are `[0,192] × [0,192]`
-- to keep the full 32×32 bot hitbox inside the arena, bot center positions are clamped to:
-  - `x ∈ [16, 176]`
-  - `y ∈ [16, 176]`
+- to keep the full 16×16 bot hitbox inside the arena, bot center positions are clamped to:
+  - `x ∈ [8, 184]`
+  - `y ∈ [8, 184]`
 
 ---
 
