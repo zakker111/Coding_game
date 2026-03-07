@@ -12,6 +12,11 @@ export type LocalBotLibraryV1 = {
 
 export const LOCAL_BOTS_STORAGE_KEY = 'nowt:workshop:myBots:v1'
 
+// Legacy per-slot drafts (pre "My Bots" library).
+const LEGACY_DRAFTS_STORAGE_KEY = 'nowt:workshop:drafts:v1'
+
+type LegacyDrafts = Partial<Record<'BOT1' | 'BOT2' | 'BOT3' | 'BOT4', string>>
+
 export function createDefaultLocalBotLibrary(starterSourceText: string): LocalBotLibraryV1 {
   return {
     version: 1,
@@ -72,11 +77,57 @@ function normalizeParsedLibrary(parsed: unknown, starterSourceText: string): Loc
   }
 }
 
+function readLegacyDrafts(): LegacyDrafts | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_DRAFTS_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as any
+    const out: LegacyDrafts = {}
+
+    for (const slot of ['BOT1', 'BOT2', 'BOT3', 'BOT4'] as const) {
+      const v = parsed?.[slot]
+      if (typeof v === 'string' && v.length > 0) out[slot] = v
+    }
+
+    return Object.keys(out).length ? out : null
+  } catch {
+    return null
+  }
+}
+
+function createLibraryFromLegacyDrafts(legacy: LegacyDrafts, starterSourceText: string): LocalBotLibraryV1 {
+  const bots: LocalBot[] = [1, 2, 3].map((i) => {
+    const slot = (i === 1 ? 'BOT1' : i === 2 ? 'BOT2' : 'BOT3') as const
+    return {
+      id: `my-bot-${i}`,
+      name: `my-bot-${i}`,
+      sourceText: legacy[slot] ?? starterSourceText,
+    }
+  })
+
+  if (typeof legacy.BOT4 === 'string' && legacy.BOT4.length > 0) {
+    bots.push({ id: 'my-bot-4', name: 'my-bot-4', sourceText: legacy.BOT4 })
+  }
+
+  return {
+    version: 1,
+    selectedBotId: bots[0].id,
+    bots,
+  }
+}
+
 export function loadLocalBotLibrary(starterSourceText: string): LocalBotLibraryV1 {
   try {
     const raw = localStorage.getItem(LOCAL_BOTS_STORAGE_KEY)
+
+    // Migration path: if no library exists yet, try to import legacy drafts.
     if (!raw) {
-      const created = createDefaultLocalBotLibrary(starterSourceText)
+      const legacy = readLegacyDrafts()
+      const created = legacy
+        ? createLibraryFromLegacyDrafts(legacy, starterSourceText)
+        : createDefaultLocalBotLibrary(starterSourceText)
+
       saveLocalBotLibrary(created)
       return created
     }
@@ -85,7 +136,7 @@ export function loadLocalBotLibrary(starterSourceText: string): LocalBotLibraryV
     const normalized = normalizeParsedLibrary(parsed, starterSourceText)
 
     // If the stored value was malformed or missing required fields, re-save the normalized value.
-    if (JSON.stringify(normalized) !== raw) {
+    if (JSON.stringify(normalized) !== JSON.stringify(parsed)) {
       saveLocalBotLibrary(normalized)
     }
 
