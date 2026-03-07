@@ -29,10 +29,7 @@ jobs:
         # frozen installs on CI. Allow lockfile generation for now.
         run: pnpm install --no-frozen-lockfile
 
-      - name: QA (tests + builds)
+      - name: QA (Phase 1)
         run: |
           set -euo pipefail
-          pnpm test:all
-          pnpm build:all
-          pnpm -C apps/web test
-          pnpm -C apps/web build
+          pnpm qa:phase1

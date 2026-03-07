@@ -27,6 +27,18 @@ To run tests:
 pnpm test
 ```
 
+## QA (Phase 1)
+
+Phase 1 QA is intended to be fully reproducible in CI and locally.
+
+```bash
+pnpm qa:phase1
+```
+
+This runs workspace-wide tests + builds (including `apps/web`).
+
+Note: `site/` is a legacy prototype and is intentionally excluded from the pnpm workspace + CI.
+
 ## Deploying (static)
 
 Build the client-only app:

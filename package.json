@@ -11,6 +11,7 @@
 
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test",
-    "qa:phase1": "pnpm test:all && pnpm build:all && pnpm -C apps/web test"
+    "qa:phase1": "pnpm test:all && pnpm build:all",
+    "qa": "pnpm qa:phase1"
   }
 }
