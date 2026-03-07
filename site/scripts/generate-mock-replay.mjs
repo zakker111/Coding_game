@@ -11,9 +11,9 @@ function generateMockReplay(seed) {
   return {
     schemaVersion: '0.1.0',
     rulesetVersion: '0.1.0',
-    ticksPerSecond: 10,
+    ticksPerSecond: 1,
     matchSeed: seed,
-    tickCap: 300,
+    tickCap: 2,
     bots: [
       {
         slotId: 'BOT1',

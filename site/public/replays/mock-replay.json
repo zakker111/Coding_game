@@ -1,9 +1,9 @@
 {
   "schemaVersion": "0.1.0",
   "rulesetVersion": "0.1.0",
-  "ticksPerSecond": 10,
+  "ticksPerSecond": 1,
   "matchSeed": 12345,
-  "tickCap": 300,
+  "tickCap": 2,
   "bots": [
     {
       "slotId": "BOT1",
