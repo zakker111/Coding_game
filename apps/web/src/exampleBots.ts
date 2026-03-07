@@ -28,7 +28,7 @@ function extractFirstTextFence(md: string): string {
 export const EXAMPLE_BOTS: Record<ExampleBotId, ExampleBot> = {
   bot0: {
     id: 'bot0',
-    displayName: 'Powerup Seeker (starter)',
+    displayName: 'Aggressive Skirmisher (starter)',
     sourceText: extractFirstTextFence(bot0Md),
   },
   bot1: {

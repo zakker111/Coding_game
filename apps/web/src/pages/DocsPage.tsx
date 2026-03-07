@@ -8,8 +8,8 @@ export function DocsPage() {
     <>
       <div className="workshop-header">
         <div>
-          <h1 className="workshop-title">Bot instruction docs</h1>
-          <div className="subtitle">Full reference for the DSL used in the Workshop.</div>
+          <h1 className="workshop-title">Bot instructions</h1>
+          <div className="subtitle">Quick guide + full reference for the stable v1 bot language.</div>
         </div>
 
         <div className="workshop-header-actions">

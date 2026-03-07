@@ -293,7 +293,7 @@ Bot identity/version planning note:
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)
 - **Starter template (v1)**:
-  - `examples/bot0.md` (Powerup Seeker) is the default script used when a bot has no saved draft yet.
+  - `examples/bot0.md` (Aggressive Skirmisher) is the default script used when a bot has no saved draft yet.
 - **Persistence/memory (v1)**:
   - persist per-bot code drafts + per-bot loadout drafts locally (so switching bots and refreshing is safe)
   - persist minimal run config: seed (optional), tick cap (optional), opponent selection (if configurable), UI layout

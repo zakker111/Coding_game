@@ -842,7 +842,7 @@ export function WorkshopPage() {
             <div className="panel-title">Instruction reference</div>
             <div style={{ marginTop: 10 }}>
               <Link className="ui-button ui-button-secondary" to="/docs">
-                Open bot instruction docs
+                Open bot instructions
               </Link>
             </div>
           </div>

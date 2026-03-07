@@ -16,6 +16,6 @@ it('renders the docs page', () => {
 
   render(<RouterProvider router={router} />)
 
-  expect(screen.getByRole('heading', { name: 'Bot instruction docs' })).toBeInTheDocument()
-  expect(screen.getByText(/Full reference for the DSL used in the Workshop\./)).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Bot instructions' })).toBeInTheDocument()
+  expect(screen.getByText(/Quick guide \+ full reference/i)).toBeInTheDocument()
 })

@@ -80,7 +80,7 @@ Notes:
 
 Supporting docs:
 
-- `examples/bot0.md` — bot0 starter (Workshop starter template): Powerup Seeker
+- `examples/bot0.md` — bot0 starter (Workshop starter template): Aggressive Skirmisher
 - `examples/bot1.md` — bot1: Zone Patrol Shooter
 - `examples/bot2.md` — bot2: Chaser Shooter
 - `examples/bot3.md` — bot3: Corner Bunker

@@ -3,12 +3,29 @@
 export const EXAMPLE_BOTS = {
   bot0: {
     id: 'bot0',
-    displayName: 'Powerup Seeker (starter)',
-    sourceText: `; bot0 — Powerup Seeker (starter)
+    displayName: 'Aggressive Skirmisher (starter)',
+    sourceText: `; bot0 — Aggressive Skirmisher (starter)
+; Loadout: SLOT1=BULLET
+; Summary: chase+shoot the closest bot; when low HP, run to HEALTH for 6 ticks.
 
 LABEL LOOP
+
+; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
+IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+
+; Otherwise pick a fight.
+TARGET_CLOSEST
+SET_MOVE_TO_TARGET
+IF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET
+
+GOTO LOOP
+
+LABEL HEAL
+CLEAR_TARGET_BOT
 TARGET_POWERUP HEALTH
-MOVE_TO_TARGET
+SET_MOVE_TO_TARGET
+WAIT 6
+CLEAR_MOVE
 GOTO LOOP
 `,
   },

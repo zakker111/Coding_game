@@ -92,7 +92,7 @@ To match the Workshop UX (top selector with 3 bots), the server should ensure ea
 Recommendation:
 - On user creation (or first Workshop visit), if the user has fewer than 3 bots, auto-create bots until they have 3.
 - Default bot names can be simple and stable (example): `bot1`, `bot2`, `bot3`.
-- Initial `source_text` for newly created bots should be the same starter template used by the Workshop: `examples/bot0.md` ("Powerup Seeker").
+- Initial `source_text` for newly created bots should be the same starter template used by the Workshop: `examples/bot0.md` ("Aggressive Skirmisher").
 
 This keeps v1 simple: there is always something to select/edit, and the server storage model stays minimal.
 

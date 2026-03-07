@@ -7,6 +7,14 @@ function formatMarketingVersion(version: string) {
   return `0.0${m[1]}`
 }
 
+const STARTER_SNIPPET = `; Aggressive starter (BULLET in SLOT1)
+LABEL LOOP
+IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) DO MOVE_TO_POWERUP HEALTH
+TARGET_CLOSEST
+SET_MOVE_TO_TARGET
+IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET
+GOTO LOOP`
+
 export function LandingPage() {
   const nav = useNavigate()
   const startRef = React.useRef<HTMLButtonElement | null>(null)
@@ -37,9 +45,13 @@ export function LandingPage() {
           >
             Start Game
           </button>
+
+          <button className="ui-button ui-button-secondary" onClick={() => nav('/docs')}>
+            Bot instructions
+          </button>
         </div>
 
-        <div style={{ marginTop: 28 }} className="panel landing-features">
+        <div style={{ marginTop: 18 }} className="panel landing-features">
           <div className="row">
             <div style={{ flex: '1 1 240px' }}>
               <strong>Deterministic</strong>
@@ -54,12 +66,23 @@ export function LandingPage() {
               </div>
             </div>
             <div style={{ flex: '1 1 240px' }}>
-              <strong>Safe</strong>
+              <strong>Easy to script</strong>
               <div className="muted" style={{ marginTop: 6 }}>
-                Bots will run in a constrained DSL sandbox.
+                Tiny DSL: loops, IFs, movement goals, and module actions.
               </div>
             </div>
           </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div className="panel-title">A tiny bot script</div>
+          <div className="muted" style={{ marginTop: 8 }}>
+            Built-ins include aggressive bots like <strong style={{ color: 'var(--text)' }}>Burst Hunter</strong> and{' '}
+            <strong style={{ color: 'var(--text)' }}>Energy Saw Skirmisher</strong>.
+          </div>
+          <pre className="docs-pre" style={{ marginTop: 10, maxHeight: 260 }}>
+            {STARTER_SNIPPET}
+          </pre>
         </div>
       </div>
     </div>

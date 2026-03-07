@@ -415,9 +415,10 @@ export function generateSampleReplay(seed, opts = {}) {
   const defaultHeaderBots = /** @type {Replay['bots']} */ ([
     {
       slotId: 'BOT1',
-      displayName: 'Powerup Seeker',
+      displayName: 'Aggressive Skirmisher',
       appearance: { kind: 'COLOR', color: '#4ade80' },
-      sourceText: 'LABEL LOOP\nTARGET_POWERUP HEALTH\nMOVE_TO_TARGET\nGOTO LOOP\n',
+      sourceText:
+        '; bot0 — Aggressive Skirmisher (starter)\nLABEL LOOP\nIF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL\nTARGET_CLOSEST\nSET_MOVE_TO_TARGET\nIF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET\nGOTO LOOP\nLABEL HEAL\nCLEAR_TARGET_BOT\nTARGET_POWERUP HEALTH\nSET_MOVE_TO_TARGET\nWAIT 6\nCLEAR_MOVE\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT2',
