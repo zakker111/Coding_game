@@ -113,6 +113,27 @@ export type ResourceDeltaEvent = {
   cause: string
 }
 
+export type PowerupSpawnEvent = {
+  type: 'POWERUP_SPAWN'
+  powerupId: string
+  powerupType: ReplayPowerupState['type']
+  loc: { sector: number; zone: number }
+}
+
+export type PowerupPickupEvent = {
+  type: 'POWERUP_PICKUP'
+  botId: SlotId
+  powerupId: string
+  powerupType: ReplayPowerupState['type']
+  loc: { sector: number; zone: number }
+}
+
+export type PowerupDespawnEvent = {
+  type: 'POWERUP_DESPAWN'
+  powerupId: string
+  reason: 'PICKUP' | 'RULES'
+}
+
 export type BulletSpawnEvent = {
   type: 'BULLET_SPAWN'
   bulletId: string
@@ -167,6 +188,9 @@ export type KnownReplayEvent =
   | BumpWallEvent
   | BumpBotEvent
   | ResourceDeltaEvent
+  | PowerupSpawnEvent
+  | PowerupPickupEvent
+  | PowerupDespawnEvent
   | BulletSpawnEvent
   | BulletMoveEvent
   | BulletHitEvent

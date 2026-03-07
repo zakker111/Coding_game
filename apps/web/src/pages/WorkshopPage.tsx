@@ -3,7 +3,13 @@ import React from 'react'
 import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
 import { EXAMPLE_BOTS, EXAMPLE_OPPONENT_IDS } from '../exampleBots'
-import { createNewLocalBotId, createDefaultLocalBotLibrary, loadLocalBotLibrary, saveLocalBotLibrary, type LocalBotLibraryV1 } from '../localBots'
+import {
+  createNewLocalBotId,
+  createDefaultLocalBotLibrary,
+  loadLocalBotLibrary,
+  saveLocalBotLibrary,
+  type LocalBotLibraryV1,
+} from '../localBots'
 import { selectDistinctFromPool } from '../opponents'
 import { fnv1a32 } from '../worker/seed'
 
@@ -55,10 +61,22 @@ function writeOpponentNonce(n: number) {
 function readOpponentAssignments(): OpponentAssignments {
   try {
     const raw = localStorage.getItem(OPPONENT_ASSIGNMENTS_KEY)
-    if (!raw) return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+    if (!raw) {
+      return {
+        BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
+        BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
+        BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
+      }
+    }
 
     const parsed = JSON.parse(raw) as Partial<StoredOpponentAssignmentsV1>
-    if (parsed.version !== 1) return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+    if (parsed.version !== 1) {
+      return {
+        BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
+        BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
+        BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
+      }
+    }
 
     return {
       BOT2: typeof parsed.BOT2 === 'string' ? parsed.BOT2 : DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
@@ -66,7 +84,11 @@ function readOpponentAssignments(): OpponentAssignments {
       BOT4: typeof parsed.BOT4 === 'string' ? parsed.BOT4 : DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
     }
   } catch {
-    return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+    return {
+      BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
+      BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
+      BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
+    }
   }
 }
 
@@ -115,6 +137,11 @@ function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
       return e.victimBotId === botId || e.sourceBotId === botId
     case 'BOT_DIED':
       return e.victimBotId === botId || e.creditedBotId === botId
+    case 'POWERUP_PICKUP':
+      return e.botId === botId
+    case 'POWERUP_SPAWN':
+    case 'POWERUP_DESPAWN':
+      return true
     default:
       return false
   }
@@ -126,13 +153,23 @@ type OpponentOption = {
   sourceText: string
 }
 
+type AppliedRunInfo = {
+  seed: number
+  tickCap: number
+  bot1Id: string
+  bot1Name: string
+  sourceHashBySlot: Record<SlotId, number>
+}
+
 export function WorkshopPage() {
   const [seed, setSeed] = React.useState<number>(12345)
   const [tickCap, setTickCap] = React.useState<number>(200)
 
   const starterSourceText = EXAMPLE_BOTS.bot0.sourceText
 
-  const [myBots, setMyBots] = React.useState<LocalBotLibraryV1>(() => createDefaultLocalBotLibrary(starterSourceText))
+  const [myBots, setMyBots] = React.useState<LocalBotLibraryV1>(() =>
+    createDefaultLocalBotLibrary(starterSourceText),
+  )
   const [opponents, setOpponents] = React.useState<OpponentAssignments>({
     BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
     BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
@@ -145,24 +182,22 @@ export function WorkshopPage() {
 
   const [running, setRunning] = React.useState(false)
   const [runError, setRunError] = React.useState<string | null>(null)
+  const [appliedRun, setAppliedRun] = React.useState<AppliedRunInfo | null>(null)
 
   const [playback, dispatch] = React.useReducer(playbackReducer, initialPlaybackState)
   const [alpha, setAlpha] = React.useState(1)
 
-  // Load local bot library + opponent selections.
   React.useEffect(() => {
     setMyBots(loadLocalBotLibrary(starterSourceText))
     setOpponents(readOpponentAssignments())
     setLoaded(true)
   }, [starterSourceText])
 
-  // Persist my bots.
   React.useEffect(() => {
     if (!loaded) return
     saveLocalBotLibrary(myBots)
   }, [loaded, myBots])
 
-  // Persist opponent selections.
   React.useEffect(() => {
     if (!loaded) return
 
@@ -204,7 +239,6 @@ export function WorkshopPage() {
 
   const opponentPoolIds = React.useMemo(() => opponentPool.map((o) => o.id), [opponentPool])
 
-  // Ensure BOT2..BOT4 are always valid + distinct for the current pool.
   React.useEffect(() => {
     setOpponents((prev) => normalizeOpponentAssignments(prev, opponentPoolIds))
   }, [opponentPoolIds])
@@ -218,7 +252,37 @@ export function WorkshopPage() {
     }
   }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.sourceText])
 
-  // Playback clock (requestAnimationFrame).
+  const displayNameBySlot: Record<SlotId, string> = React.useMemo(() => {
+    const normalizeOpponentLabel = (name: string) => name.replace(/\s+\(my bot\)$/, '')
+
+    return {
+      BOT1: selectedMyBot.name,
+      BOT2: normalizeOpponentLabel(opponentPoolById.get(opponents.BOT2)?.displayName ?? 'BOT2'),
+      BOT3: normalizeOpponentLabel(opponentPoolById.get(opponents.BOT3)?.displayName ?? 'BOT3'),
+      BOT4: normalizeOpponentLabel(opponentPoolById.get(opponents.BOT4)?.displayName ?? 'BOT4'),
+    }
+  }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.name])
+
+  const currentSourceHashBySlot: Record<SlotId, number> = React.useMemo(() => {
+    return {
+      BOT1: fnv1a32(sourcesBySlot.BOT1),
+      BOT2: fnv1a32(sourcesBySlot.BOT2),
+      BOT3: fnv1a32(sourcesBySlot.BOT3),
+      BOT4: fnv1a32(sourcesBySlot.BOT4),
+    }
+  }, [sourcesBySlot])
+
+  const previewUpToDate = React.useMemo(() => {
+    if (!playback.replay || !appliedRun) return false
+    if (appliedRun.seed !== seed) return false
+    if (appliedRun.tickCap !== tickCap) return false
+    if (appliedRun.bot1Id !== selectedMyBot.id) return false
+
+    return SLOT_IDS.every((slotId) => appliedRun.sourceHashBySlot[slotId] === currentSourceHashBySlot[slotId])
+  }, [appliedRun, currentSourceHashBySlot, playback.replay, seed, selectedMyBot.id, tickCap])
+
+  const previewStatusText = !playback.replay ? 'Not run yet' : previewUpToDate ? 'Applied' : 'Out of date'
+
   React.useEffect(() => {
     const replay = playback.replay
     if (!replay) return
@@ -238,7 +302,6 @@ export function WorkshopPage() {
       const dt = now - lastNow
       lastNow = now
 
-      // speed is a multiplier on real time
       accMs += dt * playback.speed
 
       const steps = Math.floor(accMs / tickMs)
@@ -293,6 +356,19 @@ export function WorkshopPage() {
     })
   }, [alpha, playback.playing, playback.tick, replay])
 
+  const powerupsForRender = React.useMemo(() => {
+    if (!replay) return []
+    const t = clamp(playback.tick, 0, replay.tickCap)
+    const snap = replay.state[t]
+    const powerups = snap?.powerups ?? []
+
+    return powerups.map((p) => ({
+      powerupId: p.powerupId,
+      kind: p.type,
+      pos: powerupLocToWorld(p.loc),
+    }))
+  }, [playback.tick, replay])
+
   const renderState: ArenaRenderState = React.useMemo(() => {
     return {
       bots: botsForRender.map((b) => ({
@@ -303,10 +379,12 @@ export function WorkshopPage() {
         energy: b.energy,
         alive: b.alive,
         appearanceColor: appearanceMap[b.botId],
+        displayName: displayNameBySlot[b.botId],
       })),
       bullets: bulletsForRender,
+      powerups: powerupsForRender,
     }
-  }, [appearanceMap, botsForRender, bulletsForRender])
+  }, [appearanceMap, botsForRender, bulletsForRender, displayNameBySlot, powerupsForRender])
 
   const selectedBotSnapshot = botsForRender.find((b) => b.botId === selectedBotId)
 
@@ -397,6 +475,20 @@ export function WorkshopPage() {
     try {
       const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sourcesBySlot[slotId] }))
       const nextReplay: Replay = await runLocalInWorker({ seed, tickCap, bots })
+
+      setAppliedRun({
+        seed,
+        tickCap,
+        bot1Id: selectedMyBot.id,
+        bot1Name: selectedMyBot.name,
+        sourceHashBySlot: {
+          BOT1: fnv1a32(sourcesBySlot.BOT1),
+          BOT2: fnv1a32(sourcesBySlot.BOT2),
+          BOT3: fnv1a32(sourcesBySlot.BOT3),
+          BOT4: fnv1a32(sourcesBySlot.BOT4),
+        },
+      })
+
       dispatch({ type: 'LOAD_REPLAY', replay: nextReplay })
     } catch (err) {
       setRunError(err instanceof Error ? err.message : String(err))
@@ -434,8 +526,31 @@ export function WorkshopPage() {
 
           <label className="mini-field">
             <div className="mini-label">Tick cap</div>
-            <input className="mini-input" type="number" value={tickCap} onChange={(e) => setTickCap(Math.max(1, Number(e.target.value)))} />
+            <input
+              className="mini-input"
+              type="number"
+              value={tickCap}
+              onChange={(e) => setTickCap(Math.max(1, Number(e.target.value)))}
+            />
           </label>
+
+          <div className="mini-field">
+            <div className="mini-label">BOT1 (next run)</div>
+            <div className="mini-input" style={{ display: 'flex', alignItems: 'center', width: 180, fontWeight: 700 }}>
+              {selectedMyBot.name}
+            </div>
+          </div>
+
+          <div className="mini-field">
+            <div className="mini-label">Preview</div>
+            <div
+              className="mini-input"
+              style={{ display: 'flex', alignItems: 'center', width: 180 }}
+              title={appliedRun ? `Last run BOT1: ${appliedRun.bot1Name}` : undefined}
+            >
+              {previewStatusText}
+            </div>
+          </div>
 
           <button className="ui-button" onClick={handleRun} disabled={running}>
             {running ? 'Running…' : 'Run / Preview'}
@@ -453,8 +568,22 @@ export function WorkshopPage() {
         </div>
       ) : null}
 
+      {playback.replay && !previewUpToDate ? (
+        <div className="panel" style={{ marginTop: 16, borderColor: 'rgba(34, 197, 94, 0.22)' }}>
+          <strong style={{ color: 'var(--text)' }}>Preview out of date</strong>
+          <div className="muted" style={{ marginTop: 8 }}>
+            BOT1 source or match settings changed since the last run. Click{' '}
+            <strong style={{ color: 'var(--text)' }}>Run / Preview</strong> to apply and re-run.
+          </div>
+          {appliedRun ? (
+            <div className="muted" style={{ marginTop: 8 }}>
+              Last run BOT1: <strong style={{ color: 'var(--text)' }}>{appliedRun.bot1Name}</strong>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="workshop-grid" style={{ marginTop: 16 }}>
-        {/* Left: bot editor */}
         <section className="panel">
           <div className="panel-title">My Bots</div>
 
@@ -478,7 +607,12 @@ export function WorkshopPage() {
             <button className="ui-button ui-button-secondary" type="button" onClick={renameSelectedBot}>
               Rename
             </button>
-            <button className="ui-button ui-button-secondary" type="button" onClick={deleteSelectedBot} disabled={myBots.bots.length <= 1}>
+            <button
+              className="ui-button ui-button-secondary"
+              type="button"
+              onClick={deleteSelectedBot}
+              disabled={myBots.bots.length <= 1}
+            >
               Delete
             </button>
           </div>
@@ -489,7 +623,11 @@ export function WorkshopPage() {
 
           <div className="tab-row" style={{ marginTop: 10 }}>
             {SLOT_IDS.map((id) => (
-              <button key={id} className={['tab', id === editingBotId ? 'active' : ''].join(' ')} onClick={() => setEditingBotId(id)}>
+              <button
+                key={id}
+                className={['tab', id === editingBotId ? 'active' : ''].join(' ')}
+                onClick={() => setEditingBotId(id)}
+              >
                 {id}
               </button>
             ))}
@@ -502,7 +640,11 @@ export function WorkshopPage() {
 
             <label className="mini-field">
               <div className="mini-label">BOT2</div>
-              <select className="mini-input" value={opponents.BOT2} onChange={(e) => setOpponent('BOT2', e.target.value)}>
+              <select
+                className="mini-input"
+                value={opponents.BOT2}
+                onChange={(e) => setOpponent('BOT2', e.target.value)}
+              >
                 {optionsForOpponentSlot('BOT2').map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.displayName}
@@ -513,7 +655,11 @@ export function WorkshopPage() {
 
             <label className="mini-field">
               <div className="mini-label">BOT3</div>
-              <select className="mini-input" value={opponents.BOT3} onChange={(e) => setOpponent('BOT3', e.target.value)}>
+              <select
+                className="mini-input"
+                value={opponents.BOT3}
+                onChange={(e) => setOpponent('BOT3', e.target.value)}
+              >
                 {optionsForOpponentSlot('BOT3').map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.displayName}
@@ -524,7 +670,11 @@ export function WorkshopPage() {
 
             <label className="mini-field">
               <div className="mini-label">BOT4</div>
-              <select className="mini-input" value={opponents.BOT4} onChange={(e) => setOpponent('BOT4', e.target.value)}>
+              <select
+                className="mini-input"
+                value={opponents.BOT4}
+                onChange={(e) => setOpponent('BOT4', e.target.value)}
+              >
                 {optionsForOpponentSlot('BOT4').map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.displayName}
@@ -553,7 +703,9 @@ export function WorkshopPage() {
               const nextSourceText = e.target.value
               setMyBots((prev) => ({
                 ...prev,
-                bots: prev.bots.map((b) => (b.id === prev.selectedBotId ? { ...b, sourceText: nextSourceText } : b)),
+                bots: prev.bots.map((b) =>
+                  b.id === prev.selectedBotId ? { ...b, sourceText: nextSourceText } : b,
+                ),
               }))
             }}
             spellCheck={false}
@@ -564,7 +716,6 @@ export function WorkshopPage() {
           </div>
         </section>
 
-        {/* Center: arena + playback */}
         <section className="panel">
           <div className="panel-title">Arena</div>
 
@@ -573,15 +724,27 @@ export function WorkshopPage() {
           </div>
 
           <div className="controls" style={{ marginTop: 12 }}>
-            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'TOGGLE_PLAY' })} disabled={!replay}>
+            <button
+              className="ui-button ui-button-secondary"
+              onClick={() => dispatch({ type: 'TOGGLE_PLAY' })}
+              disabled={!replay}
+            >
               {playback.playing ? 'Pause' : 'Play'}
             </button>
 
-            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'STEP', delta: 1 })} disabled={!replay || playback.playing}>
+            <button
+              className="ui-button ui-button-secondary"
+              onClick={() => dispatch({ type: 'STEP', delta: 1 })}
+              disabled={!replay || playback.playing}
+            >
               Step
             </button>
 
-            <button className="ui-button ui-button-secondary" onClick={() => dispatch({ type: 'RESTART' })} disabled={!replay}>
+            <button
+              className="ui-button ui-button-secondary"
+              onClick={() => dispatch({ type: 'RESTART' })}
+              disabled={!replay}
+            >
               Restart
             </button>
 
@@ -616,13 +779,16 @@ export function WorkshopPage() {
           </div>
         </section>
 
-        {/* Right: reference + inspector */}
         <section className="panel">
           <div className="panel-title">Inspector</div>
 
           <div className="tab-row" style={{ marginTop: 10 }}>
             {SLOT_IDS.map((id) => (
-              <button key={id} className={['tab', id === selectedBotId ? 'active' : ''].join(' ')} onClick={() => setSelectedBotId(id)}>
+              <button
+                key={id}
+                className={['tab', id === selectedBotId ? 'active' : ''].join(' ')}
+                onClick={() => setSelectedBotId(id)}
+              >
                 {id}
               </button>
             ))}
@@ -646,8 +812,21 @@ export function WorkshopPage() {
 
           <div style={{ marginTop: 18 }}>
             <div className="panel-title">Tick events</div>
-            <pre style={{ marginTop: 8, padding: 10, borderRadius: 10, background: 'rgba(0,0,0,0.35)', overflow: 'auto', maxHeight: 240 }}>
-              {replay ? (selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)') : 'Run a match to see events.'}
+            <pre
+              style={{
+                marginTop: 8,
+                padding: 10,
+                borderRadius: 10,
+                background: 'rgba(0,0,0,0.35)',
+                overflow: 'auto',
+                maxHeight: 240,
+              }}
+            >
+              {replay
+                ? selectedTickEvents.length
+                  ? JSON.stringify(selectedTickEvents, null, 2)
+                  : '(no events)'
+                : 'Run a match to see events.'}
             </pre>
           </div>
 
@@ -672,4 +851,30 @@ export function WorkshopPage() {
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v))
+}
+
+function clampInt(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.floor(v)))
+}
+
+function powerupLocToWorld(loc: { sector: number; zone: number }): { x: number; y: number } {
+  const sectorId = clampInt(loc.sector, 1, 9)
+  const zone = clampInt(loc.zone, 0, 4)
+
+  const sectorRow = Math.floor((sectorId - 1) / 3)
+  const sectorCol = (sectorId - 1) % 3
+  const sectorOriginX = sectorCol * 64
+  const sectorOriginY = sectorRow * 64
+
+  if (zone === 0) return { x: sectorOriginX + 32, y: sectorOriginY + 32 }
+
+  const zoneOffsets: Record<number, { x: number; y: number }> = {
+    1: { x: 0, y: 0 },
+    2: { x: 32, y: 0 },
+    3: { x: 0, y: 32 },
+    4: { x: 32, y: 32 },
+  }
+
+  const off = zoneOffsets[zone] ?? { x: 0, y: 0 }
+  return { x: sectorOriginX + off.x + 16, y: sectorOriginY + off.y + 16 }
 }

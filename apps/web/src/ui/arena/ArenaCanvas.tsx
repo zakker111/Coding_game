@@ -19,6 +19,7 @@ export type ArenaRenderBot = {
   energy: number
   alive: boolean
   appearanceColor?: string
+  displayName?: string
 }
 
 export type ArenaRenderBullet = {
@@ -381,7 +382,7 @@ export function ArenaCanvas({
       }
 
       // Label pill
-      const label = bot.slotId
+      const label = bot.displayName ?? bot.slotId
       const labelFontSize = Math.max(10, Math.floor(9 + s * 1.1))
       ctx.font = `700 ${labelFontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"`
       const tm = ctx.measureText(label)

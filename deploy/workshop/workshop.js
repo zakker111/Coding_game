@@ -44,6 +44,15 @@ function mixSeed(seed, bots) {
   return h >>> 0
 }
 
+function computeRunSignature(seed, tickCap, sources) {
+  let h = fnv1a32(`seed:${seed}\ntickCap:${tickCap}\n`)
+  for (const slotId of SLOT_IDS) {
+    h ^= fnv1a32(`${slotId}\n${sources[slotId] ?? ''}\n`)
+    h = Math.imul(h, 2654435761) >>> 0
+  }
+  return h >>> 0
+}
+
 function createEl(tag, props = {}, children = []) {
   const el = document.createElement(tag)
   for (const [k, v] of Object.entries(props)) {
@@ -365,7 +374,7 @@ function opponentInfoFromValue(v, myBots) {
 
   const mb = getBotById(myBots, ref.id)
   if (!mb) return null
-  return { displayName: mb.name, sourceText: mb.sourceText }
+  return { displayName: mb.name, sourceText: draftTextForMyBot(mb) }
 }
 
 // DOM
@@ -413,6 +422,9 @@ let selectedBotId = 'BOT1'
 let replay = null
 let playing = false
 let speed = 1
+
+let lastRunSignature = 0
+let replayStale = false
 
 let runInProgress = false
 let randomizeInProgress = false
@@ -473,16 +485,22 @@ function updateMyBotDraftUI() {
   const dirty = isMyBotDirty(bot)
 
   myBotApplyBtn.disabled = !dirty
-  myBotApplyStatus.textContent = dirty ? 'Unapplied changes' : 'Applied'
+  myBotApplyStatus.textContent = dirty ? 'Draft (not saved)' : 'Saved'
 
-  runBtn.disabled = runInProgress || dirty
+  runBtn.disabled = runInProgress
   runBtn.textContent = runInProgress ? 'Running…' : 'Run / Preview'
 
   if (!randomizeInProgress) {
-    randomizeOpponentsBtn.disabled = runInProgress || dirty
+    randomizeOpponentsBtn.disabled = runInProgress
   }
 
-  runNotice.textContent = dirty ? 'Unapplied BOT1 edits — click “Update bot” to run.' : ''
+  if (replay && replayStale) {
+    runNotice.textContent = 'Replay is stale — click “Run / Preview” to regenerate.'
+  } else if (dirty) {
+    runNotice.textContent = 'BOT1 has unsaved edits. Run uses the draft; click “Update bot” to save.'
+  } else {
+    runNotice.textContent = ''
+  }
 }
 
 function hasUnappliedMyBotChanges() {
@@ -579,9 +597,17 @@ function updatePlaybackUI() {
     return
   }
 
-  tickLabel.textContent = `tick ${tick} / ${replay.tickCap}`
+  tickLabel.textContent = `tick ${tick} / ${replay.tickCap}${replayStale ? ' (stale)' : ''}`
   scrub.max = String(replay.tickCap)
   scrub.value = String(clamp(tick, 0, replay.tickCap))
+
+  if (replayStale) {
+    playPauseBtn.disabled = true
+    stepBtn.disabled = true
+    restartBtn.disabled = true
+    scrub.disabled = true
+    return
+  }
 
   playPauseBtn.disabled = false
   stepBtn.disabled = playing
@@ -595,6 +621,43 @@ function stop() {
   cancelAnimationFrame(rafId)
   rafId = 0
   updatePlaybackUI()
+}
+
+function currentRunSignature() {
+  myBots = readMyBots()
+  if (!myBots.length) myBots = ensureInitialMyBots()
+
+  const seed = Number(seedInput.value)
+  const tickCap = clamp(Math.floor(Number(tickCapInput.value)), 1, 2000)
+
+  const bot1 = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
+  const bot1Source = bot1 ? botEditor.value : EXAMPLE_BOTS.bot0.sourceText
+
+  const opp2 = opponentInfoFromValue(opponentSelections.BOT2, myBots)
+  const opp3 = opponentInfoFromValue(opponentSelections.BOT3, myBots)
+  const opp4 = opponentInfoFromValue(opponentSelections.BOT4, myBots)
+
+  const sources = {
+    BOT1: bot1Source,
+    BOT2: opp2?.sourceText ?? EXAMPLE_BOTS.bot2.sourceText,
+    BOT3: opp3?.sourceText ?? EXAMPLE_BOTS.bot3.sourceText,
+    BOT4: opp4?.sourceText ?? EXAMPLE_BOTS.bot4.sourceText,
+  }
+
+  return computeRunSignature(seed, tickCap, sources)
+}
+
+function markReplayStale() {
+  if (!replay) return
+
+  const nextStale = currentRunSignature() !== lastRunSignature
+  if (nextStale === replayStale) return
+
+  replayStale = nextStale
+  if (replayStale) stop()
+
+  updateMyBotDraftUI()
+  draw()
 }
 
 function start() {
@@ -698,7 +761,7 @@ async function run() {
   const tickCap = clamp(Math.floor(Number(tickCapInput.value)), 1, 2000)
 
   const bot1 = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
-  const bot1Source = bot1?.sourceText ?? EXAMPLE_BOTS.bot0.sourceText
+  const bot1Source = bot1 ? botEditor.value : EXAMPLE_BOTS.bot0.sourceText
 
   const opp2 = opponentInfoFromValue(opponentSelections.BOT2, myBots)
   const opp3 = opponentInfoFromValue(opponentSelections.BOT3, myBots)
@@ -742,6 +805,8 @@ async function run() {
   ]
 
   replay = generateSampleReplay(mixed, { tickCap, bots: headerBots })
+  lastRunSignature = computeRunSignature(seed, tickCap, sources)
+  replayStale = false
 
   tick = 0
   alpha = 1
@@ -757,7 +822,7 @@ function randomizeOpponents() {
 
   const seed =
     (Number(seedInput.value) >>> 0) ^
-    fnv1a32(bot1?.sourceText ?? '') ^
+    fnv1a32(bot1 ? botEditor.value : '') ^
     fnv1a32(bot1?.id ?? '') ^
     nonce
 
@@ -784,11 +849,22 @@ renderTabs(inspectTabs, selectedBotId, (id) => {
   draw()
 })
 
+seedInput.addEventListener('input', () => {
+  markReplayStale()
+  updateMyBotDraftUI()
+})
+
+tickCapInput.addEventListener('input', () => {
+  markReplayStale()
+  updateMyBotDraftUI()
+})
+
 myBotsSelect.addEventListener('change', () => {
   selectedMyBotId = myBotsSelect.value
   writeSelectedMyBotId(selectedMyBotId)
   updateMyBotsUI()
   updateOpponentsUI()
+  markReplayStale()
 })
 
 myBotRenameBtn.addEventListener('click', () => {
@@ -815,6 +891,7 @@ myBotNewBtn.addEventListener('click', () => {
 
   updateMyBotsUI()
   updateOpponentsUI()
+  markReplayStale()
 })
 
 myBotDeleteBtn.addEventListener('click', () => {
@@ -837,6 +914,7 @@ myBotDeleteBtn.addEventListener('click', () => {
 
   updateMyBotsUI()
   updateOpponentsUI()
+  markReplayStale()
 })
 
 myBotApplyBtn.addEventListener('click', () => {
@@ -873,30 +951,32 @@ botEditor.addEventListener('input', () => {
     writeMyBotDrafts(myBotDrafts)
   }
 
+  markReplayStale()
   updateMyBotDraftUI()
 })
 
 opponent2Select.addEventListener('change', () => {
   opponentSelections.BOT2 = opponent2Select.value
   updateOpponentsUI()
+  markReplayStale()
+  updateMyBotDraftUI()
 })
 
 opponent3Select.addEventListener('change', () => {
   opponentSelections.BOT3 = opponent3Select.value
   updateOpponentsUI()
+  markReplayStale()
+  updateMyBotDraftUI()
 })
 
 opponent4Select.addEventListener('change', () => {
   opponentSelections.BOT4 = opponent4Select.value
   updateOpponentsUI()
+  markReplayStale()
+  updateMyBotDraftUI()
 })
 
 randomizeOpponentsBtn.addEventListener('click', () => {
-  if (hasUnappliedMyBotChanges()) {
-    updateMyBotDraftUI()
-    return
-  }
-
   randomizeInProgress = true
   runInProgress = true
 
@@ -918,11 +998,6 @@ randomizeOpponentsBtn.addEventListener('click', () => {
 })
 
 runBtn.addEventListener('click', () => {
-  if (hasUnappliedMyBotChanges()) {
-    updateMyBotDraftUI()
-    return
-  }
-
   runInProgress = true
   updateMyBotDraftUI()
 

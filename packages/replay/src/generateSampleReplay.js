@@ -7,6 +7,27 @@ const ARENA_MAX = 192
 
 const BOT_HALF_SIZE = 8
 
+const SECTOR_SIZE_WORLD = 64
+
+const POWERUP_SPAWN_INTERVAL_MIN_TICKS = 10
+const POWERUP_SPAWN_INTERVAL_MAX_TICKS = 20
+const POWERUP_MAX_ACTIVE = 6
+
+const POWERUP_HEALTH_AMOUNT = 30
+const POWERUP_AMMO_AMOUNT = 20
+const POWERUP_ENERGY_AMOUNT = 30
+
+const POWERUP_TYPES = /** @type {const} */ (['HEALTH', 'AMMO', 'ENERGY'])
+
+const POWERUP_ANCHORS = (() => {
+  const out = []
+  for (let sector = 1; sector <= 9; sector++) {
+    out.push({ sector, zone: 0 })
+    for (let zone = 1; zone <= 4; zone++) out.push({ sector, zone })
+  }
+  return out
+})()
+
 const MOVE_SPEED = 2
 const BULLET_SPEED = 10
 const BULLET_TTL = 18
@@ -77,6 +98,33 @@ function botSourceHasShield(sourceText) {
   return /\bSHIELD\b/i.test(sourceText)
 }
 
+function stripBotSourceForHeuristics(sourceText) {
+  if (!sourceText) return ''
+
+  // This file is NOT a full DSL runner. We only use sourceText for lightweight heuristics,
+  // and we want edits like “clear the bot” to have an obvious effect.
+  return sourceText
+    .split(/\r?\n/g)
+    .map((line) => line.replace(/\t/g, ' ').trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('//') && !line.startsWith(';'))
+    .join('\n')
+    .trim()
+}
+
+function botSourceLooksIdle(sourceText) {
+  const s = stripBotSourceForHeuristics(sourceText)
+  if (!s) return true
+
+  // Heuristic: if the script is just LABEL/GOTO/WAIT, treat as a do-nothing bot.
+  for (const line of s.split('\n')) {
+    if (/^(LABEL|GOTO)\b/i.test(line)) continue
+    if (/^WAIT\b/i.test(line)) continue
+    return false
+  }
+
+  return true
+}
+
 /** @returns {import('./index.d.ts').MoveDir} */
 function dirToward(from, to) {
   const dx = to.x - from.x
@@ -102,6 +150,54 @@ function round3(n) {
 
 function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n))
+}
+
+function clampInt(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, Math.floor(n)))
+}
+
+function locToWorld(loc) {
+  const sectorId = clampInt(loc?.sector ?? 1, 1, 9)
+  const zone = clampInt(loc?.zone ?? 0, 0, 4)
+
+  const sectorRow = Math.floor((sectorId - 1) / 3)
+  const sectorCol = (sectorId - 1) % 3
+  const sectorOriginX = sectorCol * SECTOR_SIZE_WORLD
+  const sectorOriginY = sectorRow * SECTOR_SIZE_WORLD
+
+  if (zone === 0) {
+    return { x: sectorOriginX + 32, y: sectorOriginY + 32 }
+  }
+
+  const zoneOffsets = {
+    1: { x: 0, y: 0 },
+    2: { x: 32, y: 0 },
+    3: { x: 0, y: 32 },
+    4: { x: 32, y: 32 },
+  }
+
+  const off = zoneOffsets[zone] ?? { x: 0, y: 0 }
+  return {
+    x: sectorOriginX + off.x + 16,
+    y: sectorOriginY + off.y + 16,
+  }
+}
+
+/** @returns {import('./index.d.ts').ReplayTickState['powerups'][number]['type'] | null} */
+function parseTargetPowerupType(sourceText) {
+  const s = stripBotSourceForHeuristics(sourceText)
+  if (!s) return null
+  const m = s.match(/\bTARGET_POWERUP\s+(HEALTH|AMMO|ENERGY)\b/i)
+  if (!m) return null
+  const v = m[1]?.toUpperCase()
+  if (v === 'HEALTH' || v === 'AMMO' || v === 'ENERGY') return v
+  return null
+}
+
+function botSourceWantsPowerups(sourceText) {
+  const s = stripBotSourceForHeuristics(sourceText)
+  if (!s) return false
+  return /\bTARGET_POWERUP\b/i.test(s) || /\bMOVE_TO_TARGET\b/i.test(s)
 }
 
 /** @param {import('./index.d.ts').MoveDir} dir */
@@ -366,6 +462,27 @@ export function generateSampleReplay(seed, opts = {}) {
     BOT4: botSourceHasShield(headerById.BOT4?.sourceText),
   })
 
+  const botIdleByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
+    BOT1: botSourceLooksIdle(headerById.BOT1?.sourceText),
+    BOT2: botSourceLooksIdle(headerById.BOT2?.sourceText),
+    BOT3: botSourceLooksIdle(headerById.BOT3?.sourceText),
+    BOT4: botSourceLooksIdle(headerById.BOT4?.sourceText),
+  })
+
+  const botWantsPowerupsByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
+    BOT1: botSourceWantsPowerups(headerById.BOT1?.sourceText),
+    BOT2: botSourceWantsPowerups(headerById.BOT2?.sourceText),
+    BOT3: botSourceWantsPowerups(headerById.BOT3?.sourceText),
+    BOT4: botSourceWantsPowerups(headerById.BOT4?.sourceText),
+  })
+
+  const botPreferredPowerupByBotId = /** @type {Record<import('./index.d.ts').SlotId, import('./index.d.ts').ReplayTickState['powerups'][number]['type'] | null>} */ ({
+    BOT1: parseTargetPowerupType(headerById.BOT1?.sourceText),
+    BOT2: parseTargetPowerupType(headerById.BOT2?.sourceText),
+    BOT3: parseTargetPowerupType(headerById.BOT3?.sourceText),
+    BOT4: parseTargetPowerupType(headerById.BOT4?.sourceText),
+  })
+
   const spawnPosById = {
     BOT1: { x: 16, y: 16 },
     BOT2: { x: 176, y: 16 },
@@ -393,6 +510,15 @@ export function generateSampleReplay(seed, opts = {}) {
   /** @type {Array<{bulletId:string, ownerBotId: import('./index.d.ts').SlotId, pos:{x:number,y:number}, vel:{x:number,y:number}, ttl:number}>} */
   let bullets = []
   let bulletCounter = 0
+
+  /** @type {Array<{powerupId:string,type:'HEALTH'|'AMMO'|'ENERGY',loc:{sector:number,zone:number}}>} */
+  const powerups = []
+  let powerupCounter = 0
+  let powerupSpawnRemaining = rngInt(
+    rng,
+    POWERUP_SPAWN_INTERVAL_MIN_TICKS,
+    POWERUP_SPAWN_INTERVAL_MAX_TICKS
+  )
 
   const state = /** @type {Replay['state']} */ ([])
   const events = /** @type {Replay['events']} */ ([])
@@ -430,6 +556,23 @@ export function generateSampleReplay(seed, opts = {}) {
 
       const pcBefore = bot.pc
       let pcAfter = stepPc(pcBefore)
+
+      // If the user clears their bot script, we want that to be visually obvious.
+      // Treat empty/comment-only or LABEL/GOTO/WAIT-only scripts as idle (no movement/shooting).
+      if (botIdleByBotId[bot.botId]) {
+        tickEvents.push({
+          type: 'BOT_EXEC',
+          botId: bot.botId,
+          pcBefore,
+          pcAfter,
+          instrText: 'NOP',
+          result: 'NOP',
+          reason: 'INVALID_INSTR',
+        })
+
+        bot.pc = pcAfter
+        continue
+      }
 
       const nearest = findNearestLivingBot(bots, bot.botId, bot.pos)
       const nearestD2 = nearest ? dist2(bot.pos, nearest.pos) : Number.POSITIVE_INFINITY
@@ -574,6 +717,30 @@ export function generateSampleReplay(seed, opts = {}) {
         if (bot.botId === 'BOT2') {
           const target = bots.find((b) => b.alive && b.botId === 'BOT1')
           if (target) bot.moveDir = dirToward(bot.pos, target.pos)
+        } else if (botWantsPowerupsByBotId[bot.botId] && powerups.length) {
+          const preferred = botPreferredPowerupByBotId[bot.botId]
+
+          /** @type {{ loc: {sector:number,zone:number}, d2: number } | null} */
+          let best = null
+
+          for (const p of powerups) {
+            if (preferred && p.type !== preferred) continue
+            const pos = locToWorld(p.loc)
+            const d2 = dist2(bot.pos, pos)
+            if (!best || d2 < best.d2) best = { loc: p.loc, d2 }
+          }
+
+          if (!best) {
+            for (const p of powerups) {
+              const pos = locToWorld(p.loc)
+              const d2 = dist2(bot.pos, pos)
+              if (!best || d2 < best.d2) best = { loc: p.loc, d2 }
+            }
+          }
+
+          if (best) {
+            bot.moveDir = dirToward(bot.pos, locToWorld(best.loc))
+          }
         } else if (bot.sawCapable && nearest) {
           bot.moveDir = dirToward(bot.pos, nearest.pos)
         }
@@ -815,6 +982,119 @@ export function generateSampleReplay(seed, opts = {}) {
 
     bullets = nextBullets
 
+    // powerup pickups (after movement + projectiles)
+    for (const bot of bots) {
+      if (!bot.alive) continue
+
+      let idx = -1
+      for (let i = 0; i < powerups.length; i++) {
+        const pPos = locToWorld(powerups[i].loc)
+        if (
+          Math.abs(bot.pos.x - pPos.x) <= BOT_HALF_SIZE &&
+          Math.abs(bot.pos.y - pPos.y) <= BOT_HALF_SIZE
+        ) {
+          idx = i
+          break
+        }
+      }
+
+      if (idx < 0) continue
+
+      const p = powerups[idx]
+      powerups.splice(idx, 1)
+
+      tickEvents.push({
+        type: 'POWERUP_PICKUP',
+        botId: bot.botId,
+        powerupId: p.powerupId,
+        powerupType: p.type,
+        loc: { sector: p.loc.sector, zone: p.loc.zone },
+      })
+
+      tickEvents.push({
+        type: 'POWERUP_DESPAWN',
+        powerupId: p.powerupId,
+        reason: 'PICKUP',
+      })
+
+      let ammoDelta = 0
+      let energyDelta = 0
+      let healthDelta = 0
+
+      if (p.type === 'HEALTH') {
+        const gain = Math.max(0, Math.min(POWERUP_HEALTH_AMOUNT, 100 - bot.hp))
+        bot.hp += gain
+        healthDelta = gain
+      } else if (p.type === 'AMMO') {
+        const gain = Math.max(0, Math.min(POWERUP_AMMO_AMOUNT, 100 - bot.ammo))
+        bot.ammo += gain
+        ammoDelta = gain
+      } else if (p.type === 'ENERGY') {
+        const gain = Math.max(0, Math.min(POWERUP_ENERGY_AMOUNT, 100 - bot.energy))
+        bot.energy += gain
+        energyDelta = gain
+      }
+
+      if (ammoDelta || energyDelta || healthDelta) {
+        tickEvents.push({
+          type: 'RESOURCE_DELTA',
+          botId: bot.botId,
+          ammoDelta,
+          energyDelta,
+          healthDelta,
+          cause: `PICKUP_${p.type}`,
+        })
+      }
+    }
+
+    // powerup spawn timer + spawn (end-of-tick maintenance)
+    powerupSpawnRemaining--
+    const shouldSpawnPowerup = powerupSpawnRemaining <= 0
+
+    if (shouldSpawnPowerup) {
+      if (powerups.length >= POWERUP_MAX_ACTIVE) {
+        powerupSpawnRemaining = 1
+      } else {
+        const occupiedKeys = new Set(powerups.map((p) => `${p.loc.sector}:${p.loc.zone}`))
+
+        const candidates = POWERUP_ANCHORS.filter((loc) => {
+          const k = `${loc.sector}:${loc.zone}`
+          if (occupiedKeys.has(k)) return false
+
+          const pos = locToWorld(loc)
+          return !bots.some(
+            (b) =>
+              b.alive &&
+              Math.abs(b.pos.x - pos.x) <= BOT_HALF_SIZE &&
+              Math.abs(b.pos.y - pos.y) <= BOT_HALF_SIZE
+          )
+        })
+
+        if (!candidates.length) {
+          powerupSpawnRemaining = 1
+        } else {
+          const loc = rngChoice(rng, candidates)
+          const kind = rngChoice(rng, POWERUP_TYPES)
+          const powerupId = `P${++powerupCounter}`
+
+          powerups.push({ powerupId, type: kind, loc: { sector: loc.sector, zone: loc.zone } })
+
+          tickEvents.push({
+            type: 'POWERUP_SPAWN',
+            powerupId,
+            powerupType: kind,
+            loc: { sector: loc.sector, zone: loc.zone },
+          })
+
+          powerupSpawnRemaining = rngInt(
+            rng,
+            POWERUP_SPAWN_INTERVAL_MIN_TICKS,
+            POWERUP_SPAWN_INTERVAL_MAX_TICKS
+          )
+        }
+      }
+    }
+
     state.push({
       t,
       bots: bots.map((b) => ({
@@ -832,7 +1112,11 @@ export function generateSampleReplay(seed, opts = {}) {
         pos: clonePos(b.pos),
         vel: { x: b.vel.x, y: b.vel.y },
       })),
-      powerups: [],
+      powerups: powerups.map((p) => ({
+        powerupId: p.powerupId,
+        type: p.type,
+        loc: { sector: p.loc.sector, zone: p.loc.zone },
+      })),
     })
 
     events.push(tickEvents)

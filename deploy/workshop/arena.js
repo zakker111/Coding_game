@@ -77,6 +77,40 @@ function buildAppearanceMap(replay) {
   return map
 }
 
+function buildLabelMap(replay) {
+  const map = {}
+  for (const b of replay.bots || []) {
+    map[b.slotId] = typeof b?.displayName === 'string' && b.displayName ? b.displayName : b.slotId
+  }
+  return map
+}
+
+function clampInt(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, Math.floor(n)))
+}
+
+function locToWorld(loc) {
+  const sectorId = clampInt(loc?.sector ?? 1, 1, 9)
+  const zone = clampInt(loc?.zone ?? 0, 0, 4)
+
+  const sectorRow = Math.floor((sectorId - 1) / 3)
+  const sectorCol = (sectorId - 1) % 3
+  const sectorOriginX = sectorCol * SECTOR_SIZE_WORLD
+  const sectorOriginY = sectorRow * SECTOR_SIZE_WORLD
+
+  if (zone === 0) return { x: sectorOriginX + 32, y: sectorOriginY + 32 }
+
+  const zoneOffsets = {
+    1: { x: 0, y: 0 },
+    2: { x: 32, y: 0 },
+    3: { x: 0, y: 32 },
+    4: { x: 32, y: 32 },
+  }
+
+  const off = zoneOffsets[zone] ?? { x: 0, y: 0 }
+  return { x: sectorOriginX + off.x + 16, y: sectorOriginY + off.y + 16 }
+}
+
 function getInterpolatedBots(replay, tick, a) {
   const t = clamp(tick, 0, replay.tickCap)
   const next = replay.state[t]
@@ -181,6 +215,36 @@ function draw(ctx, cssSize, scale, renderState, selectedBotId) {
     }
   }
 
+  // Powerups
+  for (const p of renderState.powerups || []) {
+    const x = p.pos.x * scale
+    const y = p.pos.y * scale
+
+    const r = Math.max(4, Math.floor(2.2 * scale))
+
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(Math.PI / 4)
+
+    switch (p.kind) {
+      case 'HEALTH':
+        ctx.fillStyle = 'rgba(248, 113, 113, 0.9)'
+        break
+      case 'AMMO':
+        ctx.fillStyle = 'rgba(96, 165, 250, 0.9)'
+        break
+      case 'ENERGY':
+        ctx.fillStyle = 'rgba(234, 179, 8, 0.9)'
+        break
+      default:
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'
+        break
+    }
+
+    ctx.fillRect(-r, -r, r * 2, r * 2)
+    ctx.restore()
+  }
+
   // Bullets
   for (const b of renderState.bullets || []) {
     const x = b.pos.x * scale
@@ -253,7 +317,7 @@ function draw(ctx, cssSize, scale, renderState, selectedBotId) {
     ctx.fillRect(barX, barY + (barH + 1) * 2, barW * clamp(bot.energy / 100, 0, 1), barH)
 
     // Label
-    const label = bot.botId
+    const label = bot.label || bot.botId
     const labelFont = Math.max(10, Math.floor(9 + scale * 1.1))
     ctx.font = `700 ${labelFont}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial`
     const tm = ctx.measureText(label)
@@ -314,13 +378,24 @@ export function attachArenaRenderer(canvas) {
     ensureSize()
 
     const appearanceMap = buildAppearanceMap(replay)
+    const labelMap = buildLabelMap(replay)
+
     const bots = getInterpolatedBots(replay, tick, alpha).map((b) => ({
       ...b,
       appearanceColor: appearanceMap[b.botId] || null,
+      label: labelMap[b.botId] || b.botId,
     }))
     const bullets = getInterpolatedBullets(replay, tick, alpha)
 
-    draw(ctx, cssSize, scale, { bots, bullets }, selectedBotId)
+    const t = clamp(tick, 0, replay.tickCap)
+    const snapState = replay.state[t] || null
+    const powerups = (snapState?.powerups || []).map((p) => ({
+      powerupId: p.powerupId,
+      kind: p.type,
+      pos: locToWorld(p.loc),
+    }))
+
+    draw(ctx, cssSize, scale, { bots, bullets, powerups }, selectedBotId)
   }
 
   return {
