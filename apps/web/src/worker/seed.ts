@@ -1,9 +1,4 @@
-import type { SlotId } from '@coding-game/replay'
-
-export type BotSpec = {
-  slotId: SlotId
-  sourceText: string
-}
+import type { BotSpec } from './messages'
 
 /** FNV-1a 32-bit hash of UTF-16 code units. Deterministic across JS engines. */
 export function fnv1a32(str: string): number {

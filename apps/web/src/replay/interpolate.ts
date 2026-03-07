@@ -15,8 +15,8 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
 
-function mapBotsById(bots: ReplayBotState[]): Record<SlotId, ReplayBotState> {
-  const out = Object.create(null) as Record<SlotId, ReplayBotState>
+function mapBotsById(bots: ReplayBotState[]): Partial<Record<SlotId, ReplayBotState>> {
+  const out: Partial<Record<SlotId, ReplayBotState>> = Object.create(null)
   for (const b of bots) out[b.botId] = b
   return out
 }
@@ -31,8 +31,22 @@ export function interpolateBots(
   const nextById = mapBotsById(nextBots)
 
   return SLOT_IDS.map((botId) => {
-    const a = prevById[botId] ?? nextById[botId]
-    const b = nextById[botId] ?? prevById[botId]
+    const prev = prevById[botId]
+    const next = nextById[botId]
+
+    if (!prev && !next) {
+      return {
+        botId,
+        pos: { x: 0, y: 0 },
+        hp: 0,
+        ammo: 0,
+        energy: 0,
+        alive: false,
+      }
+    }
+
+    const a = prev ?? next!
+    const b = next ?? prev!
 
     const statSrc = t >= 1 ? b : a
 

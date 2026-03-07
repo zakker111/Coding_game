@@ -1,5 +1,5 @@
 import type { Replay, SlotId } from '@coding-game/replay'
-import type { BotSpec, RunLocalMessage } from './messages'
+import type { RunLocalMessage } from './messages'
 import { isRunResultMessage } from './messages'
 
 export type RunLocalParams = {
@@ -25,7 +25,7 @@ export async function runLocalInWorker(params: RunLocalParams): Promise<Replay> 
     requestId,
     seed: params.seed,
     tickCap: params.tickCap,
-    bots: params.bots as BotSpec[],
+    bots: params.bots,
   }
 
   return await new Promise<Replay>((resolve, reject) => {

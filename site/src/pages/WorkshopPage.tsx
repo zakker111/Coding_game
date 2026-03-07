@@ -1,93 +1,138 @@
 import * as React from 'react'
-import { generateSampleReplay, type Replay } from '@coding-game/replay'
-import { ArenaCanvas, type ArenaFrame } from '../../../ui/arena/ArenaCanvas'
+import { useLocation, useNavigate } from 'react-router-dom'
 
-type BotName = 'me/bot1' | 'me/bot2' | 'me/bot3'
-type SlotId = 'BOT1' | 'BOT2' | 'BOT3' | 'BOT4'
+import { loadMockReplay } from '../replay/loadMockReplay'
+import type { Replay } from '../replay/replayTypes'
+import { ArenaCanvas } from '../ui/arena/ArenaCanvas'
 
-type LoadoutSlot = '' | 'BULLET' | 'SAW' | 'SHIELD' | 'BOOST'
+const SPEED_STORAGE_KEY = 'nowt.workshop.speed'
+const SPEED_OPTIONS = [0.25, 0.5, 1, 2, 4] as const
 
-function slotIdToBotId(slotId: SlotId): 1 | 2 | 3 | 4 {
-  switch (slotId) {
-    case 'BOT1':
-      return 1
-    case 'BOT2':
-      return 2
-    case 'BOT3':
-      return 3
-    case 'BOT4':
-      return 4
+type Speed = (typeof SPEED_OPTIONS)[number]
+
+type Playhead = {
+  /**
+   * `ArenaCanvas` interprets `tick` as the "end-of-tick" snapshot index.
+   * During playback we render tick `t` with `p∈[0,1]` interpolating from state[t-1] → state[t].
+   */
+  tick: number
+  /** Intra-tick progress in [0,1]. */
+  p: number
+}
+
+function clampInt(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.floor(v)))
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v))
+}
+
+function readSpeedFromStorage(): Speed {
+  try {
+    const raw = window.localStorage.getItem(SPEED_STORAGE_KEY)
+    const v = raw ? Number(raw) : NaN
+    if (SPEED_OPTIONS.includes(v as Speed)) return v as Speed
+  } catch {
+    // ignore
+  }
+  return 1
+}
+
+function writeSpeedToStorage(speed: Speed) {
+  try {
+    window.localStorage.setItem(SPEED_STORAGE_KEY, String(speed))
+  } catch {
+    // ignore
   }
 }
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t
+function readTickFromSearch(search: string) {
+  const sp = new URLSearchParams(search)
+  const raw = sp.get('tick')
+  const v = raw ? Number(raw) : NaN
+  return Number.isFinite(v) ? Math.floor(v) : null
 }
 
-function tickToFrame(replay: Replay, tFloat: number): ArenaFrame {
-  const tickCap = replay.tickCap
-  const t0 = Math.max(0, Math.min(tickCap, Math.floor(tFloat)))
-  const t1 = Math.max(0, Math.min(tickCap, t0 + 1))
-  const alpha = t0 === t1 ? 0 : Math.min(1, Math.max(0, tFloat - t0))
-
-  const s0 = replay.state[t0] ?? replay.state[0]
-  const s1 = replay.state[t1] ?? s0
-
-  const botColorBySlot: Partial<Record<SlotId, string>> = Object.fromEntries(
-    replay.bots.map((b) => [b.slotId, b.appearance?.color] as const),
-  )
-
-  const bots1ById = new Map<SlotId, (typeof s1.bots)[number]>()
-  for (const b of s1.bots) bots1ById.set(b.botId as SlotId, b)
-
-  const bots: ArenaFrame['bots'] = s0.bots.map((b0) => {
-    const botId = b0.botId as SlotId
-    const b1 = bots1ById.get(botId)
-
-    const x = b1 ? lerp(b0.pos.x, b1.pos.x, alpha) : b0.pos.x
-    const y = b1 ? lerp(b0.pos.y, b1.pos.y, alpha) : b0.pos.y
-
-    return {
-      id: slotIdToBotId(botId),
-      pos: { x, y },
-      hp: b0.hp,
-      color: botColorBySlot[botId],
-    }
-  })
-
-  const bullets: ArenaFrame['bullets'] = s0.bullets?.map((b) => ({
-    id: b.bulletId,
-    pos: { x: b.pos.x, y: b.pos.y },
-    vel: b.vel ? { x: b.vel.x, y: b.vel.y } : undefined,
-  }))
-
-  return { bots, bullets, powerups: [] }
+function replaceTickInSearch(search: string, tick: number) {
+  const sp = new URLSearchParams(search)
+  sp.set('tick', String(tick))
+  const next = sp.toString()
+  return next ? `?${next}` : ''
 }
 
 export function WorkshopPage() {
-  const [seed, setSeed] = React.useState(12345)
-  const replay = React.useMemo(() => generateSampleReplay(seed, { tickCap: 200 }), [seed])
+  const location = useLocation()
+  const navigate = useNavigate()
 
-  const [myBot, setMyBot] = React.useState<BotName>('me/bot1')
-  const [editorText, setEditorText] = React.useState(
-    'LABEL LOOP\nTARGET_CLOSEST\nMOVE_DIR\nGOTO LOOP\n',
-  )
+  const [replay, setReplay] = React.useState<Replay | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
 
-  const [inspectBot, setInspectBot] = React.useState<SlotId>('BOT1')
+  const [speed, setSpeed] = React.useState<Speed>(() => {
+    if (typeof window === 'undefined') return 1
+    return readSpeedFromStorage()
+  })
 
-  const [slot1, setSlot1] = React.useState<LoadoutSlot>('BULLET')
-  const [slot2, setSlot2] = React.useState<LoadoutSlot>('')
-  const [slot3, setSlot3] = React.useState<LoadoutSlot>('')
-
-  const tickCap = replay.tickCap
-  const tps = replay.ticksPerSecond || 1
-
-  const [speed, setSpeed] = React.useState(1)
   const [playing, setPlaying] = React.useState(false)
-  const [playhead, setPlayhead] = React.useState(0)
+
+  // When paused/scrubbing/stepping, we keep p=1 (exact tick snapshot).
+  const [head, setHead] = React.useState<Playhead>({ tick: 0, p: 1 })
 
   React.useEffect(() => {
+    let cancelled = false
+
+    loadMockReplay()
+      .then((r) => {
+        if (cancelled) return
+        setReplay(r)
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : String(e))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const maxTick = replay ? Math.max(0, replay.state.length - 1) : 0
+
+  // Initialize tick from URL (only after replay loads so we can clamp).
+  React.useEffect(() => {
+    if (!replay) return
+
+    const fromUrl = readTickFromSearch(location.search)
+    if (fromUrl === null) return
+
+    setHead((h) => {
+      const nextTick = clampInt(fromUrl, 0, maxTick)
+      if (h.tick === nextTick && h.p === 1) return h
+      return { tick: nextTick, p: 1 }
+    })
+  }, [location.search, maxTick, replay])
+
+  // Keep URL query param in sync.
+  React.useEffect(() => {
+    if (!replay) return
+
+    const cur = readTickFromSearch(location.search)
+    if (cur === head.tick) return
+
+    navigate({ pathname: location.pathname, search: replaceTickInSearch(location.search, head.tick) }, { replace: true })
+  }, [head.tick, location.pathname, location.search, navigate, replay])
+
+  React.useEffect(() => {
+    writeSpeedToStorage(speed)
+  }, [speed])
+
+  // Playback loop.
+  React.useEffect(() => {
+    if (!replay) return
     if (!playing) return
+
+    const tps = replay.ticksPerSecond || 1
 
     let raf = 0
     let last = performance.now()
@@ -96,9 +141,22 @@ export function WorkshopPage() {
       const dt = Math.max(0, (now - last) / 1000)
       last = now
 
-      setPlayhead((prev) => {
-        const next = prev + dt * speed * tps
-        return next > tickCap ? 0 : next
+      const dp = dt * tps * speed
+
+      setHead((h) => {
+        let tick = h.tick
+        let p = h.p + dp
+
+        while (p >= 1 && tick < maxTick) {
+          p -= 1
+          tick += 1
+        }
+
+        if (tick >= maxTick) {
+          return { tick: maxTick, p: 1 }
+        }
+
+        return { tick, p: clamp(p, 0, 1) }
       })
 
       raf = requestAnimationFrame(step)
@@ -106,24 +164,55 @@ export function WorkshopPage() {
 
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [playing, speed, tickCap, tps])
+  }, [maxTick, playing, replay, speed])
 
-  const playheadForRender = playing ? playhead : Math.round(playhead)
-  const t0 = Math.floor(playheadForRender)
+  // Auto-stop at the end.
+  React.useEffect(() => {
+    if (!playing) return
+    if (!replay) return
 
-  const frame = React.useMemo(
-    () => tickToFrame(replay, playheadForRender),
-    [replay, playheadForRender],
-  )
+    if (head.tick >= maxTick && head.p >= 1) {
+      setPlaying(false)
+      setHead((h) => ({ tick: h.tick, p: 1 }))
+    }
+  }, [head.p, head.tick, maxTick, playing, replay])
 
-  const wsStatus = playing ? 'Playing' : 'Idle'
+  const tickLabel = replay ? `Tick ${head.tick} / ${maxTick}` : 'Loading replay…'
 
-  const runPreview = () => {
-    // Placeholder for the real local simulation runner.
-    // For now we generate a deterministic sample replay from a new seed.
+  const onPlayPause = () => {
+    if (!replay) return
+
+    setPlaying((v) => {
+      const next = !v
+
+      // If we are starting playback, shift to the next tick with p=0 to animate state[t] -> state[t+1].
+      if (next) {
+        setHead((h) => {
+          if (h.tick >= maxTick) return { tick: maxTick, p: 1 }
+
+          const nextTick = clampInt(h.tick + 1, 0, maxTick)
+          // tick=0 has no prior tick; ArenaCanvas forces p=1 anyway.
+          return nextTick === 0 ? { tick: 0, p: 1 } : { tick: nextTick, p: 0 }
+        })
+      } else {
+        // Pausing snaps to exact tick.
+        setHead((h) => ({ tick: h.tick, p: 1 }))
+      }
+
+      return next
+    })
+  }
+
+  const onSeekTick = (t: number) => {
+    if (!replay) return
     setPlaying(false)
-    setPlayhead(0)
-    setSeed((s) => s + 1)
+    setHead({ tick: clampInt(t, 0, maxTick), p: 1 })
+  }
+
+  const stepBy = (delta: number) => {
+    if (!replay) return
+    setPlaying(false)
+    setHead((h) => ({ tick: clampInt(h.tick + delta, 0, maxTick), p: 1 }))
   }
 
   return (
@@ -131,236 +220,96 @@ export function WorkshopPage() {
       <header className="ws-header">
         <div className="ws-brand">
           <h1 className="ws-brand-title">Workshop</h1>
-          <div className="ws-brand-subtitle">Edit BOT1 → Run / Preview → Replay</div>
+          <div className="ws-brand-subtitle">Replay viewer prototype (client-only)</div>
         </div>
 
-        <div className="ws-header-controls" aria-label="Workshop header controls">
+        <div className="ws-header-controls" aria-label="Workshop controls">
+          <button className="btn btn-secondary" type="button" onClick={onPlayPause} disabled={!replay}>
+            {playing ? 'Pause' : 'Play'}
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => stepBy(-1)}
+            disabled={!replay || playing}
+            title="Step back one tick"
+          >
+            Step -1
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => stepBy(1)}
+            disabled={!replay || playing}
+            title="Step forward one tick"
+          >
+            Step +1
+          </button>
+
           <div>
-            <label htmlFor="myBotSelect">BOT1</label>
+            <label htmlFor="speed" style={{ marginRight: 6 }}>
+              Speed
+            </label>
             <select
-              id="myBotSelect"
-              className="ws-select"
-              value={myBot}
-              onChange={(e) => setMyBot(e.target.value as BotName)}
+              id="speed"
+              value={speed}
+              onChange={(e) => setSpeed(Number(e.target.value) as Speed)}
+              disabled={!replay}
             >
-              <option value="me/bot1">me/bot1</option>
-              <option value="me/bot2">me/bot2</option>
-              <option value="me/bot3">me/bot3</option>
+              {SPEED_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}×
+                </option>
+              ))}
             </select>
           </div>
 
-          <button className="btn btn-secondary" type="button" disabled>
-            Save (placeholder)
-          </button>
-          <button className="btn btn-primary" type="button" onClick={runPreview}>
-            Run / Preview
-          </button>
-
           <div className="ws-status" role="status" aria-live="polite">
-            {wsStatus}
+            {tickLabel}
           </div>
         </div>
       </header>
 
       <div className="ws-body">
-        <div className="ws-grid" role="main">
-          <section className="panel" aria-label="Editor">
-            <div className="panel-header">
-              <h2 className="panel-title">Editor</h2>
-              <div className="panel-meta">
-                Editing: <span>{myBot}</span>
-              </div>
-            </div>
-            <div className="panel-body">
-              <textarea
-                className="ws-editor-textarea"
-                spellCheck={false}
-                aria-label="BOT1 code editor"
-                value={editorText}
-                onChange={(e) => setEditorText(e.target.value)}
-              />
-            </div>
-          </section>
+        {!replay && !error && <div className="card" style={{ padding: 16 }}>Loading replay…</div>}
+        {error && (
+          <div className="card" style={{ padding: 16, borderColor: 'rgba(255, 107, 107, 0.4)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Failed to load replay</div>
+            <div style={{ color: 'rgba(233, 239, 255, 0.72)' }}>{error}</div>
+          </div>
+        )}
 
-          <section className="panel" aria-label="Arena and replay controls">
+        {replay && (
+          <section className="panel" aria-label="Arena">
             <div className="panel-header">
               <h2 className="panel-title">Arena</h2>
-              <div className="panel-meta">Tick {t0} / {tickCap}</div>
+              <div className="panel-meta">
+                seed <span style={{ color: 'rgba(233, 239, 255, 0.9)' }}>{String(replay.matchSeed)}</span>
+              </div>
             </div>
             <div className="panel-body">
               <div className="arena-viewport" aria-label="Arena viewport">
-                <ArenaCanvas frame={frame} />
-              </div>
-
-              <div className="replay-controls" aria-label="Replay controls">
-                <div className="replay-controls-left">
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      if (playing) {
-                        setPlaying(false)
-                        setPlayhead((p) => Math.round(p))
-                      } else {
-                        setPlaying(true)
-                      }
-                    }}
-                  >
-                    {playing ? 'Pause' : 'Play'}
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => setPlayhead((v) => Math.min(tickCap, Math.floor(v) + 1))}
-                    disabled={playing}
-                  >
-                    Step +1
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => setPlayhead(0)}
-                    disabled={playing}
-                  >
-                    Restart
-                  </button>
-                </div>
-
-                <div className="replay-controls-right">
-                  <button
-                    className="chip"
-                    type="button"
-                    onClick={() => setSpeed((s) => (s >= 4 ? 0.25 : s * 2))}
-                    title="Click to change speed"
-                  >
-                    Speed: {speed}×
-                  </button>
-                  <span className="chip">Seed: {seed}</span>
-                  <span className="chip">Inspecting: {inspectBot}</span>
-                </div>
+                <ArenaCanvas replay={replay} tick={head.tick} p={playing ? head.p : 1} />
               </div>
 
               <div style={{ marginTop: 12 }}>
                 <input
                   type="range"
                   min={0}
-                  max={tickCap}
-                  value={Math.min(tickCap, Math.max(0, playheadForRender))}
+                  max={maxTick}
                   step={1}
-                  onChange={(e) => setPlayhead(Number(e.target.value))}
-                  aria-label="Replay playhead"
-                  disabled={playing}
+                  value={playing ? Math.max(0, head.tick - 1) : head.tick}
+                  onChange={(e) => onSeekTick(Number(e.target.value))}
+                  aria-label="Replay tick"
+                  disabled={!replay || playing}
                   style={{ width: '100%' }}
                 />
               </div>
             </div>
           </section>
-
-          <section className="panel" aria-label="Help and inspector">
-            <div className="panel-header">
-              <h2 className="panel-title">Inspector</h2>
-              <div className="panel-meta">Reference + bot stats (prototype)</div>
-            </div>
-            <div className="panel-body">
-              <div className="inspector-grid">
-                <div className="subcard">
-                  <div className="subcard-title">Instruction cheatsheet</div>
-                  <ul className="help-list">
-                    <li>
-                      <code>LABEL X</code> / <code>GOTO X</code>
-                    </li>
-                    <li>
-                      <code>TARGET_POWERUP HEALTH|AMMO|ENERGY</code>
-                    </li>
-                    <li>
-                      <code>MOVE_TO_TARGET</code>
-                    </li>
-                    <li>
-                      <code>USE_SLOT1 TARGET</code>
-                    </li>
-                  </ul>
-                  <div className="code-sample" aria-label="Cheatsheet example">
-                    ; example
-                    {'\n'}TARGET_POWERUP HEALTH
-                    {'\n'}MOVE_TO_TARGET
-                  </div>
-                </div>
-
-                <div className="subcard">
-                  <div className="subcard-title">Bot list</div>
-                  <div>
-                    <label htmlFor="inspectBotSelect">Inspect</label>
-                    <select
-                      id="inspectBotSelect"
-                      value={inspectBot}
-                      onChange={(e) => setInspectBot(e.target.value as SlotId)}
-                    >
-                      <option value="BOT1">BOT1 (you)</option>
-                      <option value="BOT2">BOT2 (builtin)</option>
-                      <option value="BOT3">BOT3 (builtin)</option>
-                      <option value="BOT4">BOT4 (builtin)</option>
-                    </select>
-                  </div>
-
-                  <div style={{ marginTop: 10 }}>
-                    <span style={{ color: 'rgba(233, 239, 255, 0.72)', fontSize: 12 }}>
-                      Stats at playhead tick:
-                    </span>{' '}
-                    <span style={{ color: 'rgba(233, 239, 255, 0.9)', fontSize: 12 }}>
-                      (not wired)
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <footer className="ws-loadout" aria-label="Loadout">
-          <div className="panel-header ws-loadout-header">
-            <h2 className="panel-title">Loadout (BOT1)</h2>
-            <div className="panel-meta">3 slots (local-only in v1)</div>
-          </div>
-
-          <div className="ws-loadout-row">
-            <div className="loadout-field">
-              <label htmlFor="slot1">Slot 1</label>
-              <select id="slot1" value={slot1} onChange={(e) => setSlot1(e.target.value as LoadoutSlot)}>
-                <option value="">(empty)</option>
-                <option value="BULLET">BULLET (weapon)</option>
-                <option value="SAW">SAW (weapon)</option>
-                <option value="SHIELD">SHIELD</option>
-                <option value="BOOST">BOOST</option>
-              </select>
-            </div>
-
-            <div className="loadout-field">
-              <label htmlFor="slot2">Slot 2</label>
-              <select id="slot2" value={slot2} onChange={(e) => setSlot2(e.target.value as LoadoutSlot)}>
-                <option value="">(empty)</option>
-                <option value="BULLET">BULLET (weapon)</option>
-                <option value="SAW">SAW (weapon)</option>
-                <option value="SHIELD">SHIELD</option>
-                <option value="BOOST">BOOST</option>
-              </select>
-            </div>
-
-            <div className="loadout-field">
-              <label htmlFor="slot3">Slot 3</label>
-              <select id="slot3" value={slot3} onChange={(e) => setSlot3(e.target.value as LoadoutSlot)}>
-                <option value="">(empty)</option>
-                <option value="BULLET">BULLET (weapon)</option>
-                <option value="SAW">SAW (weapon)</option>
-                <option value="SHIELD">SHIELD</option>
-                <option value="BOOST">BOOST</option>
-              </select>
-            </div>
-          </div>
-
-          <p className="ws-loadout-note">
-            Reminder: loadout affects movement speed (see Ruleset). (Not wired in prototype.)
-          </p>
-        </footer>
+        )}
       </div>
     </div>
   )

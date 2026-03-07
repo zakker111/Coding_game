@@ -1,5 +1,3 @@
-/// <reference lib="webworker" />
-
 import { generateSampleReplay } from '@coding-game/replay'
 import { isRunLocalMessage } from './messages'
 import { mixSeed } from './seed'

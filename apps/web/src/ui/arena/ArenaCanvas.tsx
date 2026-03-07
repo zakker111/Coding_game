@@ -245,6 +245,66 @@ export function ArenaCanvas({
       }
     }
 
+    // Powerups
+    if (renderState.powerups?.length) {
+      for (const p of renderState.powerups) {
+        const x = worldToSnappedCssPx(p.pos.x, s, dpr)
+        const y = worldToSnappedCssPx(p.pos.y, s, dpr)
+
+        const r = Math.max(4, Math.floor(2.2 * s))
+
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.rotate(Math.PI / 4)
+
+        switch (p.kind) {
+          case 'HEALTH':
+            ctx.fillStyle = 'rgba(248, 113, 113, 0.9)'
+            break
+          case 'AMMO':
+            ctx.fillStyle = 'rgba(96, 165, 250, 0.9)'
+            break
+          case 'ENERGY':
+            ctx.fillStyle = 'rgba(234, 179, 8, 0.9)'
+            break
+          default:
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+            break
+        }
+
+        ctx.fillRect(-r, -r, r * 2, r * 2)
+        ctx.restore()
+      }
+    }
+
+    // Bullets
+    if (renderState.bullets?.length) {
+      for (const b of renderState.bullets) {
+        const x = worldToSnappedCssPx(b.pos.x, s, dpr)
+        const y = worldToSnappedCssPx(b.pos.y, s, dpr)
+
+        const r = Math.max(2, Math.floor(1.2 * s))
+        const ownerColor = b.ownerBotId ? slotFallbackColor(b.ownerBotId) : null
+
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, Math.PI * 2)
+        ctx.fillStyle = ownerColor ?? 'rgba(255, 255, 255, 0.85)'
+        ctx.fill()
+
+        if (b.vel) {
+          // small direction hint
+          const dx = Math.max(-12, Math.min(12, b.vel.x))
+          const dy = Math.max(-12, Math.min(12, b.vel.y))
+          ctx.beginPath()
+          ctx.moveTo(x, y)
+          ctx.lineTo(worldToSnappedCssPx(b.pos.x + dx * 0.1, s, dpr), worldToSnappedCssPx(b.pos.y + dy * 0.1, s, dpr))
+          ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+          ctx.lineWidth = Math.max(1, Math.floor(0.25 * s))
+          ctx.stroke()
+        }
+      }
+    }
+
     // Bots
     const botRadiusPx = 8 * s
     const barH = Math.max(2, Math.floor(0.6 * s))

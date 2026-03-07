@@ -5,19 +5,11 @@
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "pnpm -C site dev",
+    "build": "pnpm -C site build",
     "preview": "pnpm -C site preview",
+    "test": "pnpm -C site test",
 
-    "dev:site": "pnpm -C site dev",
-    "build:site": "pnpm -C site build",
-    "preview:site": "pnpm -C site preview",
-    "test:site": "pnpm -C site test",
-
-    "dev:web": "pnpm -C apps/web dev",
-    "build:web": "pnpm -C apps/web build",
-    "preview:web": "pnpm -C apps/web preview",
-    "test:web": "pnpm -C apps/web test",
-
-    "build": "pnpm -r build",
-    "test": "pnpm -r test"
+    "build:all": "pnpm -r build",
+    "test:all": "pnpm -r test"
   }
 }
