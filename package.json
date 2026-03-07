@@ -10,6 +10,7 @@
     "test": "pnpm -C apps/web test",
 
     "build:all": "pnpm -r build",
-    "test:all": "pnpm -r test"
+    "test:all": "pnpm -r test",
+    "qa:phase1": "pnpm test:all && pnpm build:all && pnpm -C apps/web test"
   }
 }
