@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nowt – Workshop</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><a href="../">Nowt</a> <span class="muted">/ Workshop</span></div>
+      <nav class="nav">
+        <a href="../">Home</a>
+        <a class="active" href="./">Workshop</a>
+      </nav>
+    </header>
+
+    <main class="container wide">
+      <section class="card" style="margin-bottom: 14px">
+        <div class="row wrap" style="align-items: flex-end; gap: 10px">
+          <div style="flex: 1 1 260px">
+            <h1 style="margin: 0">Workshop</h1>
+            <div class="muted">Edit BOT scripts (seed-mixed stub), run a deterministic local match, inspect replay.</div>
+          </div>
+
+          <label class="field">
+            <div class="label">Seed</div>
+            <input id="seedInput" type="number" value="12345" />
+          </label>
+
+          <label class="field">
+            <div class="label">Tick cap</div>
+            <input id="tickCapInput" type="number" value="200" min="1" max="2000" />
+          </label>
+
+          <button id="runBtn" class="button primary">Run / Preview</button>
+        </div>
+      </section>
+
+      <div class="workshop-grid">
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Bot editor</div>
+              <div class="muted">Drafts persist locally. Source changes affect seed in this prototype.</div>
+            </div>
+          </div>
+          <div class="tabs" id="botTabs"></div>
+          <textarea id="botEditor" class="code" spellcheck="false"></textarea>
+        </section>
+
+        <section class="card">
+          <div class="card-header row" style="justify-content: space-between; align-items: center; gap: 10px">
+            <div>
+              <div class="card-title">Arena</div>
+              <div id="tickLabel" class="muted">tick 0 / 0</div>
+            </div>
+            <div class="row" style="gap: 8px; align-items: center">
+              <button id="playPauseBtn" class="button">Play</button>
+              <button id="stepBtn" class="button">Step</button>
+              <button id="restartBtn" class="button">Restart</button>
+              <select id="speedSelect" class="select" title="Playback speed">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="6">6×</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="arena-wrap">
+            <canvas id="arenaCanvas"></canvas>
+          </div>
+
+          <div style="margin-top: 10px">
+            <input id="scrub" type="range" min="0" max="0" value="0" />
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Inspector</div>
+              <div class="muted">Select a bot to inspect current tick snapshot.</div>
+            </div>
+          </div>
+
+          <div class="tabs" id="inspectTabs"></div>
+
+          <div id="inspectStats" class="kv" style="margin-top: 10px"></div>
+
+          <div style="margin-top: 14px">
+            <div class="card-title">Events @ tick</div>
+            <pre id="eventLog" class="pre"></pre>
+          </div>
+
+          <div style="margin-top: 14px">
+            <div class="card-title">Instruction reference</div>
+            <div class="muted">See BotInstructions.md in the repo for the full DSL.</div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="muted">Client-only deploy (first pass)</div>
+    </footer>
+
+    <script type="module" src="./workshop.js"></script>
+  </body>
+</html>

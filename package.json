@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.30.3",
   "scripts": {
-    "dev": "pnpm -C site dev",
-    "build": "pnpm -C site build",
-    "preview": "pnpm -C site preview",
-    "test": "pnpm -C site test",
+    "dev": "pnpm -C apps/web dev",
+    "build": "pnpm -C apps/web build",
+    "preview": "pnpm -C apps/web preview",
+    "test": "pnpm -C apps/web test",
 
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test"

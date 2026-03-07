@@ -19,13 +19,29 @@ pnpm dev
 Then open the printed URL (usually http://localhost:5173).
 
 - `/` is the landing page
-- `/workshop` renders a deterministic sample replay, with basic play/pause/step/scrub controls
+- `/workshop` runs a deterministic local match and lets you inspect the replay (play/pause/step/scrub)
 
 To run tests:
 
 ```bash
 pnpm test
 ```
+
+## Deploying (static)
+
+Build the client-only app:
+
+```bash
+pnpm build
+```
+
+Then deploy the generated static files from:
+
+- `apps/web/dist`
+
+Notes:
+- `apps/web/public/404.html` + the script in `apps/web/index.html` provide SPA deep-link support on hosts like GitHub Pages.
+- `apps/web/public/_redirects` provides SPA rewrites on Netlify/Cloudflare Pages.
 
 ## What the game is (v1)
 
