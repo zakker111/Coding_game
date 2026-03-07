@@ -1,0 +1,23 @@
+{
+  "name": "nowt",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev": "pnpm -C site dev",
+    "preview": "pnpm -C site preview",
+
+    "dev:site": "pnpm -C site dev",
+    "build:site": "pnpm -C site build",
+    "preview:site": "pnpm -C site preview",
+    "test:site": "pnpm -C site test",
+
+    "dev:web": "pnpm -C apps/web dev",
+    "build:web": "pnpm -C apps/web build",
+    "preview:web": "pnpm -C apps/web preview",
+    "test:web": "pnpm -C apps/web test",
+
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}

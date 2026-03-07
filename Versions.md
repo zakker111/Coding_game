@@ -19,9 +19,21 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-### Planned (first implementation target)
-- **0.1.0 (first playable implementation):** Landing (`/`) → Workshop (`/workshop`) with local deterministic simulation + replay viewer.
-  - Bot visuals: placeholder circle tokens (later replaceable with avatars/images/GIFs).
+- (none)
+
+---
+
+## 0.1.0 — 2026-03-07T00:00:00Z
+
+### Added
+- First client implementation (Vite/React) with routes:
+  - Landing (`/`) with a single **Start Game** CTA
+  - Workshop (`/workshop`) layout (editor + arena + inspector + loadout)
+- Deterministic sample replay generator package: `@coding-game/replay`.
+- Workshop replay playback with smooth intra-tick interpolation for bots.
+
+### Changed
+- Workspace setup updated to include `site`, `apps/*`, and `packages/*`.
 
 ### Definitions (planning)
 - `rulesetVersion`: the version of **gameplay rules + deterministic simulation semantics** (SemVer).
@@ -33,6 +45,20 @@ Naming convention note:
 - Server DB fields tend to use `snake_case` (e.g. `ruleset_version`).
 
 ---
+
+## 0.1.0 — 2026-03-07T00:00:00Z
+
+### Added
+- First runnable implementation:
+  - `packages/replay`: replay schema types + deterministic sample replay generator (`generateSampleReplay`).
+  - `apps/web`: Vite + React workshop prototype:
+    - Landing page (`/`)
+    - Workshop page (`/workshop`) with basic replay controls (play/pause/step/scrub)
+    - Canvas renderer implementing the arena grid + bot tokens (v1 circle tokens)
+    - Footer shows UI version (`v{__APP_VERSION__}`)
+
+### Notes
+- This is a prototype wired to the deterministic sample replay generator (not yet the full simulation engine / bot DSL runner).
 
 ## 0.0.4 — 2026-03-06T00:00:00Z
 

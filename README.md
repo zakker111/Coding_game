@@ -1,8 +1,31 @@
-# Coding Game (spec-first)
+# Coding Game (Nowt)
 
 A competitive programming/bot-fighting game where you write a tiny script to control your bot in a deterministic arena.
 
-This repo currently contains the **design/spec in Markdown**. Implementation comes next.
+This repo is **spec-first**, but includes an initial runnable prototype:
+
+- `packages/replay`: replay schema + deterministic sample replay generator
+- `apps/web`: Vite + React workshop prototype that renders a replay on a Canvas arena
+
+## Running the prototype
+
+Prereqs: Node.js + pnpm.
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Then open the printed URL (usually http://localhost:5173).
+
+- `/` is the landing page
+- `/workshop` renders a deterministic sample replay, with basic play/pause/step/scrub controls
+
+To run tests:
+
+```bash
+pnpm test
+```
 
 ## What the game is (v1)
 
@@ -28,6 +51,7 @@ This repo currently contains the **design/spec in Markdown**. Implementation com
 7. `ServerSimulationPlan.md` / `ServerPlan.md` — deterministic server runner + storage/API
 
 Supporting docs:
+
 - `examples/bot0.md` — bot0 starter (Workshop starter template): Powerup Seeker
 - `examples/bot1.md` — bot1: Zone Patrol Shooter
 - `examples/bot2.md` — bot2: Chaser Shooter
