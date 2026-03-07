@@ -20,6 +20,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 - Powerups: add `powerupLifetimeTicks` and despawn expired powerups with `POWERUP_DESPAWN reason=RULES`.
+- Ammo: explicitly specify ammo is consumable (bullet fire consumes ammo), does not regenerate, and is only replenished via `AMMO` powerups (docs + sample generator now demonstrates this via deterministic BOT2 shooting + lower initial ammo).
 
 ---
 

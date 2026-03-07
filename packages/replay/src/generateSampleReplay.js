@@ -35,6 +35,9 @@ const BULLET_TTL = 18
 const BULLET_DAMAGE = 10
 const SHOOT_COOLDOWN_TICKS = 7
 
+// Keep ammo visibly consumable within a typical sample replay tickCap.
+const BOT2_INITIAL_AMMO = 28
+
 const SAW_ON_RANGE = BOT_HALF_SIZE * 2 + 6
 const SAW_OFF_RANGE = SAW_ON_RANGE + 4
 const SAW_ATTACK_RANGE = BOT_HALF_SIZE * 2 + 2
@@ -497,7 +500,7 @@ export function generateSampleReplay(seed, opts = {}) {
     botId,
     pos: clonePos(spawnPosById[botId]),
     hp: 100,
-    ammo: 40,
+    ammo: botId === 'BOT2' ? BOT2_INITIAL_AMMO : 40,
     energy: 100,
     alive: true,
     pc: rngInt(rng, 1, 8),
@@ -629,11 +632,11 @@ export function generateSampleReplay(seed, opts = {}) {
         }
       }
 
-      const actionRoll = rng()
-      const doShoot = bot.botId === 'BOT2' && !bot.sawCapable && actionRoll < 0.18
+      const attemptShoot = bot.botId === 'BOT2' && !bot.sawCapable
+      let shotExecuted = false
 
-      if (doShoot) {
-        const target = findNearestLivingBot(bots, bot.botId, bot.pos)
+      if (attemptShoot) {
+        const target = nearest
 
         if (bot.shootCd > 0) {
           tickEvents.push({
@@ -686,6 +689,7 @@ export function generateSampleReplay(seed, opts = {}) {
 
           bot.ammo--
           bot.shootCd = SHOOT_COOLDOWN_TICKS
+          shotExecuted = true
 
           tickEvents.push({
             type: 'BOT_EXEC',
@@ -715,7 +719,9 @@ export function generateSampleReplay(seed, opts = {}) {
             targetPos: clonePos(target.pos),
           })
         }
-      } else {
+      }
+
+      if (!shotExecuted) {
         if (bot.botId === 'BOT2') {
           const target = bots.find((b) => b.alive && b.botId === 'BOT1')
           if (target) bot.moveDir = dirToward(bot.pos, target.pos)

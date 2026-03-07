@@ -92,6 +92,11 @@ Initial values (v1 recommended defaults; may become ruleset parameters later):
 - `ammo = 100`
 - `energy = 100`
 
+Ammo rules (v1):
+- Firing a bullet consumes ammo.
+- Ammo does not regenerate.
+- Only `AMMO` powerups increase ammo (see §7).
+
 New (locked direction): bots also have:
 - `botBaseArmor` (integer or small fixed-point; exact reduction math is defined elsewhere)
   - v1 recommended default: `0`
