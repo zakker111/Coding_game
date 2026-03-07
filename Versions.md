@@ -19,7 +19,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- (none)
+- Powerups: add `powerupLifetimeTicks` and despawn expired powerups with `POWERUP_DESPAWN reason=RULES`.
 
 ---
 

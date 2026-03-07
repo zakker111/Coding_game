@@ -158,6 +158,7 @@ Speed/weight (locked direction):
     - `powerupSpawnIntervalMaxTicks = 20`
 - Still to define (other ruleset parameters; see `Ruleset.md`):
   - optional `powerupMaxActive`
+  - `powerupLifetimeTicks` (powerup TTL; expired items despawn with `POWERUP_DESPAWN reason=RULES`)
   - per-type distribution (weights)
   - fixed per-type deltas (`powerupHealthDelta`, `powerupAmmoDelta`, `powerupEnergyDelta`)
 

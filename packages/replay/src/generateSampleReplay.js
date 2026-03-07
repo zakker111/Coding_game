@@ -12,6 +12,7 @@ const SECTOR_SIZE_WORLD = 64
 const POWERUP_SPAWN_INTERVAL_MIN_TICKS = 10
 const POWERUP_SPAWN_INTERVAL_MAX_TICKS = 20
 const POWERUP_MAX_ACTIVE = 6
+const POWERUP_LIFETIME_TICKS = 30
 
 const POWERUP_HEALTH_AMOUNT = 30
 const POWERUP_AMMO_AMOUNT = 20
@@ -1047,6 +1048,20 @@ export function generateSampleReplay(seed, opts = {}) {
       }
     }
 
+    // powerup TTL despawn (end-of-tick maintenance)
+    for (let i = powerups.length - 1; i >= 0; i--) {
+      const p = powerups[i]
+      if (p.expiresAtTick > t) continue
+
+      powerups.splice(i, 1)
+
+      tickEvents.push({
+        type: 'POWERUP_DESPAWN',
+        powerupId: p.powerupId,
+        reason: 'RULES',
+      })
+    }
+
     // powerup spawn timer + spawn (end-of-tick maintenance)
     powerupSpawnRemaining--
     const shouldSpawnPowerup = powerupSpawnRemaining <= 0
@@ -1077,7 +1092,12 @@ export function generateSampleReplay(seed, opts = {}) {
           const kind = rngChoice(rng, POWERUP_TYPES)
           const powerupId = `P${++powerupCounter}`
 
-          powerups.push({ powerupId, type: kind, loc: { sector: loc.sector, zone: loc.zone } })
+          powerups.push({
+            powerupId,
+            type: kind,
+            loc: { sector: loc.sector, zone: loc.zone },
+            expiresAtTick: t + POWERUP_LIFETIME_TICKS,
+          })
 
           tickEvents.push({
             type: 'POWERUP_SPAWN',

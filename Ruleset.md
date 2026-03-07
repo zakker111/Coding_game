@@ -371,6 +371,8 @@ Ruleset parameters (must be stored with `rulesetVersion`):
     - this guarantees **at least one spawn per simulated minute** (as long as there is an empty spawn anchor)
   - with v1 values, the spawn interval is **10–20 seconds** (10–20 ticks)
 - `powerupMaxActive` (optional cap; prevents arena clutter)
+- `powerupLifetimeTicks` (int; if a powerup isn't picked up in time, it despawns; see §7.5)
+  - v1 recommended default: `30` (the current sample generator uses `30` ticks)
 - `powerupTypeWeights` (optional; if not provided, use uniform)
 
 State:
@@ -426,6 +428,20 @@ Ruleset parameters:
 
 Deterministic ordering:
 - If multiple pickups would occur in the same tick (different bots at different powerups), process bots in `BOT1..BOT4` order.
+
+### 7.5 Lifetime + despawn
+
+Powerups are not permanent.
+
+Ruleset parameter:
+- `powerupLifetimeTicks` (int): powerups despawn if they aren't picked up within this many ticks of `POWERUP_SPAWN`.
+  - v1 recommended default: `30`
+
+Timing + replay semantics:
+- `POWERUP_SPAWN` occurs during end-of-tick maintenance, after pickups.
+  - A powerup spawned on tick `t` is first eligible to be picked up on tick `t+1`.
+- If a powerup reaches its lifetime without being picked up, remove it and emit `POWERUP_DESPAWN { powerupId, reason: RULES }`.
+  - `reason = RULES` means the powerup was removed by simulation rules (not by a pickup).
 
 
 
