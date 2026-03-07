@@ -48,7 +48,7 @@ Non-goals (until explicitly requested):
 - **Prefer modular, composable code.**
   - Keep modules focused; avoid “god modules”.
   - Extract helpers when logic is reused in 2+ places.
-  - **Keep files small**: if a source file grows beyond ~**600 lines**, refactor by splitting into smaller modules (new files are encouraged when it improves clarity).
+  - **Keep files small**: refactor large files by splitting into smaller modules when it improves clarity.
   - Keep the directory structure orderly: group by domain (Simulation, Bot API, Sandbox, Data, UI, Server) and name files by responsibility.
 
 - **Be explicit, deterministic, and data-driven.**
@@ -108,7 +108,7 @@ Rule of thumb:
 
 - Add new modules only when they reduce coupling or clarify ownership.
 - Avoid adding new top-level directories unless the domain will contain multiple modules.
-- Prefer consistent naming (e.g. `lower_snake_case`) unless the repo establishes another convention.
+- Prefer consistent naming; follow established conventions in the surrounding codebase.
 
 ---
 
@@ -211,10 +211,18 @@ Code implements mechanics; data defines *what exists* and *with what numbers*.
   - prefer creating new files over adding more nested conditionals in a single file
   - keep exports narrow and intentional (small public surface area)
   - keep related helpers colocated with the code they support
-- Use comments when needed:
-  - explain *why* (tradeoffs, invariants, determinism constraints)
-  - avoid redundant comments that restate the code
-- Add JSDoc on public modules and any tricky functions.
+- Maintain good coding practices:
+  - keep side effects explicit and localized (especially in simulation)
+  - avoid “quick hacks” that undermine determinism/security/readability
+  - prefer precise types over `any` (use `unknown` + narrowing when needed)
+
+### 8.1 Commenting guidelines
+
+- Use comments to explain *why*: invariants, determinism constraints, and security tradeoffs.
+- Document tricky math, rounding, tie-breakers, and order-dependent logic.
+- Avoid redundant comments that restate the code.
+- Keep comments accurate: update them when behavior changes; delete stale comments.
+- In TypeScript, use TSDoc (`/** ... */`) on exported/public APIs and non-obvious functions/types.
 
 ---
 
