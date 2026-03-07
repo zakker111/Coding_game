@@ -7,7 +7,6 @@
 
 **Intended behavior**
 - Demonstrates a **zone patrol loop** inside the bot’s current sector that reliably cycles through all 4 zones.
-  - Because movement is cardinal-only in v1, diagonal zone-to-zone moves (2→3 and 4→1) would pass through intermediate zones.
   - To keep the script simple (no extra state), this bot patrols in an axis-aligned loop: **1 → 2 → 4 → 3 → 1**.
 - Uses a **persistent movement goal** (`SET_MOVE_TO_ZONE`) so the bot keeps walking while it does other work.
 - Opportunistically fires at the nearest bot using an **inline selector** (no target register).

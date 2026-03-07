@@ -142,7 +142,7 @@ From `ReplayViewerPlan.md`:
 
 ## 7) Physics migration (later)
 
-v1 already uses continuous bot positions, but movement/collision is intentionally simple (cardinal steps + cancel-on-overlap).
+v1 already uses continuous bot positions, but movement/collision is intentionally simple (straight-line motion with 8-way direction support; cancel-on-overlap).
 
 Possible future upgrades (ruleset change):
 - sliding/pushing instead of cancel-on-overlap

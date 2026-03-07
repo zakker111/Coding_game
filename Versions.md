@@ -84,7 +84,7 @@ Naming convention note:
 - Readability-only instruction aliases in the bot language:
   - `TARGET_CLOSEST` (aliases: `TARGET_CLOSEST_BOT`, `TARGET_NEAREST`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
-  - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
+  - `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` / `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` (aliases of `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT` / `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)`)
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>`
   - `FIRE_SLOT1|2|3 <TARGET>` (alias of `USE_SLOT1|2|3 <TARGET>`)
   - `FIRE_TARGET <SLOT>` convenience (uses the current target bot id)

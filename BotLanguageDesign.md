@@ -105,8 +105,8 @@ Target kinds (stable):
 Deferred extension (optional; only needed if/when directional weapons are introduced):
 
 - **DIRECTION** (aim independent of a bot/location; useful for directional beams, cones, “fire forward”, etc.):
-  - `DIR UP|DOWN|LEFT|RIGHT` (recommended to match movement directions)
-  - future: can extend to diagonals if movement ever supports them
+  - `DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` (recommended to match movement directions)
+  - future: can extend to analog headings if the movement model ever needs it
 
 Then:
 - `USE_SLOTn <TARGET>` becomes the canonical activation form.
@@ -304,7 +304,7 @@ When you’re ready to evolve the spec, the next safe edits are:
 1) Add generic introspection (`SLOT_QUERY`, `SLOT_HAS_CAP`) and keep any named predicates as sugar.
 2) Optionally add facing model (B or C) if you want directional weapons.
 3) (Deferred) Add **direction targets** for aiming if you introduce directional weapons:
-   - allow `USE_SLOTn DIR UP|DOWN|LEFT|RIGHT`
+   - allow `USE_SLOTn DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`
    - keep existing v1 `<TARGET>` (bots + locations + `SELF|NONE`) unchanged
 4) Optionally add registers if you want deeper programming strategies.
 

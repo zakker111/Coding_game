@@ -156,9 +156,9 @@ Recommended target kinds (stable):
 
 Deferred extension (optional; only needed if/when directional weapons are introduced):
 - `DIRECTION`: an aim direction independent of a bot/location
-  - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT`
+  - tokens (recommended to match movement directions): `DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`
   - `DIR ...` targets are not part of the stable v1 language (see `BotInstructions.md` notation).
-  - future: can extend to diagonals if movement ever supports them
+  - future: can extend to analog headings if the movement model ever needs it
 
 Rules:
 - each module declares `targetKinds` it supports (see §2.2) and the engine validates/normalizes the provided target

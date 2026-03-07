@@ -126,10 +126,10 @@ Derived per bot each tick:
 
 Rules (movement + collision; v1):
 - Each tick, the engine derives at most one `moveRequest` per bot (from an immediate move instruction or an active move goal).
-- A `moveRequest` deterministically produces a **candidate displacement** `delta = {dx, dy}` where:
-  - `dx, dy ∈ {-speedUnitsPerTick, 0, +speedUnitsPerTick}`
-  - at most one of `dx,dy` is non-zero (i.e. **cardinal movement** only)
-  - the exact mapping from instructions/goals → `delta` is defined in `BotInstructions.md`.
+- A `moveRequest` deterministically produces a **candidate displacement** `delta = {dx, dy}` (continuous / fixed-point) where:
+  - the straight-line length `|delta|` is `<= speedUnitsPerTick` (world units per tick)
+  - the exact mapping from instructions/goals → `delta` and the required fixed-point math are defined in `BotInstructions.md`.
+  - the move also has an associated direction token `dir ∈ {UP,DOWN,LEFT,RIGHT,UP_LEFT,UP_RIGHT,DOWN_LEFT,DOWN_RIGHT}` used for bump events.
 - Movement is resolved in `BOT1..BOT4` order using stable, implementable rules:
   1) Let `fromPos` be the bot’s start-of-movement position for the tick.
   2) Compute `candidateToPos = fromPos + delta`.
@@ -244,9 +244,10 @@ Event requirements:
   - direction of impact relative to the bot (`dir`)
 
 Direction rule (recommended for v1):
-- If the collision was caused by a bot’s movement attempt in direction `<DIR>`, then:
-  - mover records `dir = <DIR>`
-  - the other bot records `dir = OPPOSITE(<DIR>)`
+- If the collision was caused by a bot’s movement attempt in direction `dir ∈ {UP,DOWN,LEFT,RIGHT,UP_LEFT,UP_RIGHT,DOWN_LEFT,DOWN_RIGHT}`, then:
+  - mover records `dir`
+  - the other bot records `dir = OPPOSITE(dir)`
+    - `OPPOSITE(UP)=DOWN`, `OPPOSITE(LEFT)=RIGHT`, `OPPOSITE(UP_LEFT)=DOWN_RIGHT`, etc.
 
 Rendering note:
 - The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_BOT` (purely visual; see `ArenaVisualPlan.md` §5.7).

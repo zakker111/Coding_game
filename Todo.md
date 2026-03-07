@@ -43,7 +43,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
     - `SECTOR n` (sector center)
     - `SECTOR n ZONE z` (zone center)
   - `SELF` / `NONE`
-  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT` are deferred (only needed if/when directional weapons are introduced).
+  - **Not in v1:** direction/aim targets like `DIR UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` are deferred (only needed if/when directional weapons are introduced).
 - Movement supports optional **persistent navigation goals** (set once, then auto-move each tick until cleared), enabling bots to keep attacking while navigating.
 - Beginner-friendly zone convenience (aliases that compile down to `MOVE_TO_SECTOR <S> ZONE <Z>`):
   - `MOVE_TO_ZONE <ZONE>` / `SET_MOVE_TO_ZONE <ZONE>`
@@ -51,7 +51,7 @@ This file is the **single source of truth** for near-term engineering tasks and 
 - Beginner-friendly shorthand aliases (readability only):
   - `TARGET_CLOSEST` (aliases: `TARGET_NEAREST`, `TARGET_CLOSEST_BOT`)
   - `TARGET_WEAKEST` (alias of `TARGET_LOWEST_HEALTH`)
-  - `MOVE_TO_WALL <DIR>` / `DIST_TO_WALL(<DIR>)` (aliases of `MOVE_TO_ARENA_EDGE <DIR>` / `DIST_TO_ARENA_EDGE(<DIR>)`)
+  - `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` / `DIST_TO_WALL(UP|DOWN|LEFT|RIGHT)` (aliases of `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT` / `DIST_TO_ARENA_EDGE(UP|DOWN|LEFT|RIGHT)`)
   - `TARGET_CLOSEST_POWERUP <TYPE>` / `MOVE_TO_CLOSEST_POWERUP <TYPE>` (aliases of `TARGET_POWERUP <TYPE>` / `MOVE_TO_POWERUP <TYPE>`)
 
 ### Loadout / modules
@@ -114,8 +114,8 @@ Speed/weight (locked direction):
 - **Walls are gameplay** (locked v1):
   - when a bot’s movement request would cross the outer wall: clamp at the wall and apply `BUMP_WALL` damage (see `Ruleset.md`)
 - Movement semantics for `MOVE_TO_*`:
-  - movement is continuous, but resolved as cardinal steps (`speedUnitsPerTick`) toward a target point
-  - deterministic direction choice + tie-breaks are defined in `BotInstructions.md`
+  - movement is continuous, resolved as straight-line motion toward a target point, capped to `speedUnitsPerTick`
+  - deterministic fixed-point mapping + tie-breaks are defined in `BotInstructions.md`
 
 - Bullet/wall interaction (future): do bullets bounce/penetrate? (v1 is stop+despawn)
 

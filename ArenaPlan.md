@@ -179,7 +179,7 @@ Rendering note (client/viewer):
 ## 5) Recommended next step
 
 Commit to continuous positions in v1, but keep the movement/collision rules intentionally simple:
-- cardinal movement (no diagonal velocity accumulation)
+- straight-line movement with 8-way direction support (cardinal + diagonal)
 - deterministic fixed-point arithmetic (no platform floats)
 - stable, documented collision resolution order (`BOT1..BOT4`)
 

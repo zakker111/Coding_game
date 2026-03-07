@@ -208,7 +208,7 @@ The right panel is always available and is split into two sections (tabs or stac
      - `USE_SLOT1 TARGET` (or `USE_SLOT1 NEAREST_BOT`)
    - **Predicates (common)**:
      - `POWERUP_EXISTS(HEALTH)`
-     - `DIST_TO_CLOSEST_BOT() <= 3`
+     - `DIST_TO_CLOSEST_BOT() <= 16`
 
    The right panel should be readable without scrolling too much; put the full instruction list behind an accordion/"More" link.
 

@@ -284,10 +284,20 @@ Concrete deterministic bounce model:
 - Define a short duration within the tick:
   - `bounceDuration = 0.35` (fraction of the tick)
 - Map the bump `dir` to a unit vector `v` in world-space:
-  - `UP    => ( 0, -1)`
-  - `DOWN  => ( 0,  1)`
-  - `LEFT  => (-1,  0)`
-  - `RIGHT => ( 1,  0)`
+  - `UP         => ( 0, -1)`
+  - `DOWN       => ( 0,  1)`
+  - `LEFT       => (-1,  0)`
+  - `RIGHT      => ( 1,  0)`
+  - `UP_LEFT    => (-1, -1)`
+  - `UP_RIGHT   => ( 1, -1)`
+  - `DOWN_LEFT  => (-1,  1)`
+  - `DOWN_RIGHT => ( 1,  1)`
+  - then normalize `v` to unit length (so diagonal bumps have the same bounce distance as cardinal bumps).
+  - For diagonals, use `k = 0.70710678`:
+    - `UP_LEFT    => (-k, -k)`
+    - `UP_RIGHT   => ( k, -k)`
+    - `DOWN_LEFT  => (-k,  k)`
+    - `DOWN_RIGHT => ( k,  k)`
 - With intra-tick progress `p ∈ [0,1]`, compute:
   - `q = clamp(p / bounceDuration, 0, 1)`
   - `w = (q < 0.5) ? (2*q) : (2 - 2*q)`  (triangle wave; 0→1→0)

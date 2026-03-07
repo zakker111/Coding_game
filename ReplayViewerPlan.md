@@ -278,7 +278,7 @@ Rendering conventions:
   - `botId`
   - `fromPos` (a `pos`; see §4.2)
   - `toPos` (a `pos`; see §4.2)
-  - `dir` (optional; `UP|DOWN|LEFT|RIGHT`)
+  - `dir` (optional; `UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`)
   - `tick` (optional; redundant; must match the container tick)
 
 Semantics:
@@ -286,8 +286,8 @@ Semantics:
 - In tick `t`, `fromPos` should match the bot position in `state[t-1]`, and `toPos` should match the bot position in `state[t]`.
 - If `dir` is present it is the bot’s chosen move direction for the tick.
 
-- `BUMP_WALL`: `botId`, `dir`, `damage`
-- `BUMP_BOT`: `botId`, `otherBotId`, `dir`
+- `BUMP_WALL`: `botId`, `dir`, `damage` (`dir` is `UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`)
+- `BUMP_BOT`: `botId`, `otherBotId`, `dir` (`dir` is `UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`)
 
 Semantics:
 - Bump events are the canonical signal for “collision / blocked movement” feedback.

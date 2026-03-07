@@ -16,7 +16,7 @@ This is a **single-line-per-tick** language:
 >   - `NEAREST_BOT` is an alias of `CLOSEST_BOT`.
 >   - `WEAKEST_BOT` is an alias of `LOWEST_HEALTH_BOT`.
 >   - Contrast: `TARGET_CLOSEST` / `TARGET_LOWEST_HEALTH` are instructions that **write** the target register; `CLOSEST_BOT` / `LOWEST_HEALTH_BOT` are argument tokens that do **not** write any state.
-> - `<DIR>`: `UP|DOWN|LEFT|RIGHT`
+> - `<DIR>`: `UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT`
 > - `<SECTOR>`: `1..9`
 > - `<ZONE>`: `1..4`
 > - `<LOC>`:
@@ -202,7 +202,7 @@ Priority rule:
 
 Movement is **continuous** in arena world units (see `ArenaPlan.md`).
 
-Per tick, a bot may attempt at most **one** movement (either from the executed instruction, or from an active move goal). The maximum travel distance is the bot’s `speedUnitsPerTick` (derived from loadout; see `Ruleset.md` §1.2).
+Per tick, a bot may attempt at most **one** movement (either from the executed instruction, or from an active move goal). The maximum straight-line travel distance per tick is the bot’s `speedUnitsPerTick` (derived from loadout; see `Ruleset.md` §1.2).
 
 Bots still refer to **named locations** via sectors/zones:
 - `SECTOR <SECTOR>` means the **sector center point**.
@@ -213,16 +213,23 @@ Bots still refer to **named locations** via sectors/zones:
 #### Directional movement
 
 - `MOVE <DIR>`
-  - Requests movement along a cardinal axis.
-  - Desired displacement for the tick:
-    - `UP    => ( 0, -speedUnitsPerTick)`
-    - `DOWN  => ( 0,  speedUnitsPerTick)`
-    - `LEFT  => (-speedUnitsPerTick, 0)`
-    - `RIGHT => ( speedUnitsPerTick, 0)`
+  - Requests movement in one of 8 directions.
+  - Convert `<DIR>` into a direction vector with components in `{-1,0,+1}`:
+    - `UP         => ( 0, -1)`
+    - `DOWN       => ( 0,  1)`
+    - `LEFT       => (-1,  0)`
+    - `RIGHT      => ( 1,  0)`
+    - `UP_LEFT    => (-1, -1)`
+    - `UP_RIGHT   => ( 1, -1)`
+    - `DOWN_LEFT  => (-1,  1)`
+    - `DOWN_RIGHT => ( 1,  1)`
+  - Then compute the intended displacement for the tick:
+    - `delta = Normalize(dirVec) * speedUnitsPerTick`
+  - `Normalize(...)` must be deterministic fixed-point math (no platform floats). This ensures `|delta| <= speedUnitsPerTick` even for diagonal directions.
 
 #### Move toward a location point
 
-These instructions request movement toward a target point. The engine converts this to a cardinal step of length `speedUnitsPerTick` using the deterministic rule below.
+These instructions request movement toward a target point. The engine converts this to a deterministic straight-line displacement of length `<= speedUnitsPerTick` (so it may be diagonal) using the rule below.
 
 - `MOVE_TO_SECTOR <SECTOR>`
   - target point = center of `SECTOR <SECTOR>`.
@@ -245,7 +252,7 @@ Zone-only convenience (current sector; compile-time sugar):
 - `MOVE_TO_POWERUP <TYPE>`
   - Requests movement toward the **closest currently-existing** powerup of that type.
   - Tie-breaks (deterministic):
-    1) shortest distance (world units; Manhattan; see §6.3)
+    1) shortest Manhattan distance in world units (see §6.3)
     2) lowest sector id
     3) sector center before zones
     4) lowest zone id
@@ -260,10 +267,10 @@ Enemy convenience:
   - Requests movement toward the alive bot with the lowest health (ties: lowest bot id).
 
 Walls / arena edge (outer boundary in v1):
-- `MOVE_TO_ARENA_EDGE <DIR>`
+- `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT`
   - Requests movement toward the outer boundary in that direction.
   - If already touching the edge in that direction, this is a no-op.
-- `MOVE_TO_WALL <DIR>` (alias of `MOVE_TO_ARENA_EDGE <DIR>`)
+- `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` (alias of `MOVE_TO_ARENA_EDGE ...`)
 
 Target-driven movement:
 - `MOVE_TO_TARGET`
@@ -271,17 +278,24 @@ Target-driven movement:
   - Else if `targetPowerupType` is set and such a powerup exists: behaves like `MOVE_TO_POWERUP <targetPowerupType>`
   - Else: no-op
 
-#### Deterministic “move toward point” step rule (v1)
+#### Deterministic “move toward point” rule (v1)
 
 Given current bot position `p = (x,y)` and target point `t = (tx,ty)`:
-- Let `dx = tx - x`, `dy = ty - y`.
-- If `dx == 0 && dy == 0`: no movement.
-- Otherwise choose a cardinal direction:
-  1) If `abs(dx) > abs(dy)`: move horizontally toward the target (`RIGHT` if `dx>0` else `LEFT`).
-  2) Else if `abs(dy) > abs(dx)`: move vertically toward the target (`DOWN` if `dy>0` else `UP`).
-  3) Else (tie): move horizontally (same as rule 1).
+- Let `v = (vx, vy) = (tx - x, ty - y)`.
+- If `vx == 0 && vy == 0`: no movement.
+- Otherwise compute a straight-line displacement toward the target using deterministic fixed-point math:
+  - Let `dist2 = vx*vx + vy*vy`.
+  - If `dist2 <= speedUnitsPerTick^2`: move exactly to the target (`delta = (vx, vy)`).
+  - Else:
+    - Let `dist = sqrt(dist2)` (deterministic; no platform floats).
+    - `delta = (vx, vy) * speedUnitsPerTick / dist`
 
-Then apply the same displacement rules as `MOVE <DIR>`.
+Direction token (`dir`) used by `BUMP_*_DIR(...)` and replay events:
+- For `MOVE <DIR>`, `dir` is the requested `<DIR>`.
+- For point/goal movement, derive a discrete `<DIR>` from the intended vector `(vx,vy)` deterministically:
+  - if `vy == 0`: `LEFT|RIGHT`
+  - else if `vx == 0`: `UP|DOWN`
+  - else: one of `UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT` by the signs of `(vx,vy)`.
 
 ### 3.1 Persistent navigation goals (move while doing other actions)
 
@@ -310,7 +324,7 @@ Resolution rules (recommended):
 
 Goal completion:
 - For goals with a fixed point target (sector center / zone center): clear when the bot reaches the point.
-  - recommended engine behavior: if the remaining Manhattan distance to the goal point is `<= speedUnitsPerTick`, the engine may snap the bot to the exact target point and clear the goal.
+  - recommended engine behavior: if the remaining straight-line distance to the goal point is `<= speedUnitsPerTick`, the engine may snap the bot to the exact target point and clear the goal.
 - `SET_MOVE_TO_POWERUP`:
   - each tick, the goal re-resolves to the closest currently-existing powerup of that type
   - clears when the bot picks up a powerup of that type
@@ -513,11 +527,11 @@ Arena edges / walls (outer boundary in v1):
 
 Bumps (read last tick result):
 - `BUMPED_WALL()` → bool
-- `BUMPED_WALL_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+- `BUMPED_WALL_DIR(<DIR>)` → bool
 
 - `BUMPED_BOT()` → bool
 - `BUMPED_BOT_IS(<BOT>)` → bool
-- `BUMPED_BOT_DIR(UP|DOWN|LEFT|RIGHT)` → bool
+- `BUMPED_BOT_DIR(<DIR>)` → bool
 
 Bump semantics:
 - Bump flags represent the bot’s **most recent bump event**.
@@ -679,8 +693,7 @@ GOTO LOOP
 
 ### Example H — Zone-to-zone movement inside the current sector
 
-Because movement is cardinal-only in v1, diagonal zone-to-zone moves (e.g. 2→3) will pass through another zone.
-The simplest reliable "patrol" pattern is an axis-aligned loop:
+Even with diagonal movement, the simplest reliable "patrol" pattern (no extra state; avoids edge/boundary ambiguity) is an axis-aligned loop:
 
 ```text
 LABEL LOOP
