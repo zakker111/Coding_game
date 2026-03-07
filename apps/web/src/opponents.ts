@@ -14,16 +14,18 @@ function createRng(seed: number): () => number {
 }
 
 /**
- * Deterministically selects `count` distinct opponent ids from the example pool (bot1..bot4).
+ * Deterministically selects `count` distinct ids from a provided pool.
+ *
+ * The selection depends on both `seed` and the pool order.
  */
-export function selectOpponents(seed: number, count = 3): ExampleOpponentId[] {
+export function selectDistinctFromPool<T extends string>(seed: number, pool: readonly T[], count: number): T[] {
   if (count <= 0) return []
-  if (EXAMPLE_OPPONENT_IDS.length < count) {
-    throw new Error(`Not enough example opponents (${EXAMPLE_OPPONENT_IDS.length}) for count=${count}`)
+  if (pool.length < count) {
+    throw new Error(`Not enough opponents (${pool.length}) for count=${count}`)
   }
 
   const rng = createRng(seed)
-  const arr = [...EXAMPLE_OPPONENT_IDS]
+  const arr = [...pool]
 
   // Deterministic Fisher–Yates shuffle.
   for (let i = arr.length - 1; i > 0; i--) {
@@ -32,4 +34,11 @@ export function selectOpponents(seed: number, count = 3): ExampleOpponentId[] {
   }
 
   return arr.slice(0, count)
+}
+
+/**
+ * Deterministically selects `count` distinct opponent ids from the example pool (bot1..bot4).
+ */
+export function selectOpponents(seed: number, count = 3): ExampleOpponentId[] {
+  return selectDistinctFromPool(seed, EXAMPLE_OPPONENT_IDS, count)
 }

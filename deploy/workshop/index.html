@@ -20,7 +20,7 @@
         <div class="row wrap" style="align-items: flex-end; gap: 10px">
           <div style="flex: 1 1 260px">
             <h1 style="margin: 0">Workshop</h1>
-            <div class="muted">Edit BOT scripts (seed-mixed stub), run a deterministic local match, inspect replay.</div>
+            <div class="muted">Edit your local BOT1 library, pick opponents, run a deterministic local match, inspect replay.</div>
           </div>
 
           <label class="field">
@@ -33,20 +33,59 @@
             <input id="tickCapInput" type="number" value="200" min="1" max="2000" />
           </label>
 
+          <label class="field" style="min-width: 180px">
+            <div class="label">Opponent (BOT2)</div>
+            <select id="opponent2Select" class="select"></select>
+          </label>
+
+          <label class="field" style="min-width: 180px">
+            <div class="label">Opponent (BOT3)</div>
+            <select id="opponent3Select" class="select"></select>
+          </label>
+
+          <label class="field" style="min-width: 180px">
+            <div class="label">Opponent (BOT4)</div>
+            <select id="opponent4Select" class="select"></select>
+          </label>
+
           <button id="randomizeOpponentsBtn" class="button">Randomize opponents</button>
           <button id="runBtn" class="button primary">Run / Preview</button>
+          <div id="runNotice" class="muted" style="flex: 1 1 240px; align-self: center"></div>
         </div>
       </section>
 
       <div class="workshop-grid">
         <section class="card">
-          <div class="card-header">
+          <div class="card-header" style="align-items: center">
             <div>
-              <div class="card-title">Bot editor</div>
-              <div class="muted">Drafts persist locally. Source changes affect seed in this prototype.</div>
+              <div class="card-title">My Bots</div>
+              <div class="muted">Edits are drafts until you click “Update bot”.</div>
+            </div>
+            <div class="row" style="gap: 8px; align-items: center">
+              <div id="myBotApplyStatus" class="muted" style="font-size: 12px; text-align: right"></div>
+              <button id="myBotApplyBtn" class="button primary" type="button">Update bot</button>
             </div>
           </div>
-          <div class="tabs" id="botTabs"></div>
+
+          <div class="row wrap" style="gap: 10px; align-items: flex-end; margin-top: 10px">
+            <label class="field" style="flex: 1 1 260px">
+              <div class="label">BOT1</div>
+              <select id="myBotsSelect" class="select"></select>
+            </label>
+
+            <button id="myBotNewBtn" class="button">New</button>
+            <button id="myBotDeleteBtn" class="button">Delete</button>
+          </div>
+
+          <div class="row wrap" style="gap: 10px; align-items: flex-end; margin-top: 10px">
+            <label class="field" style="flex: 1 1 260px">
+              <div class="label">Name</div>
+              <input id="myBotNameInput" type="text" autocomplete="off" />
+            </label>
+
+            <button id="myBotRenameBtn" class="button">Save name</button>
+          </div>
+
           <textarea id="botEditor" class="code" spellcheck="false"></textarea>
         </section>
 

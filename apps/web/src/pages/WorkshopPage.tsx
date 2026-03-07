@@ -2,8 +2,9 @@ import React from 'react'
 
 import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
-import { EXAMPLE_BOTS } from '../exampleBots'
-import { selectOpponents } from '../opponents'
+import { EXAMPLE_BOTS, EXAMPLE_OPPONENT_IDS } from '../exampleBots'
+import { createNewLocalBotId, createDefaultLocalBotLibrary, loadLocalBotLibrary, saveLocalBotLibrary, type LocalBotLibraryV1 } from '../localBots'
+import { selectDistinctFromPool } from '../opponents'
 import { fnv1a32 } from '../worker/seed'
 
 import { initialPlaybackState, playbackReducer } from '../replay/playbackReducer'
@@ -11,15 +12,27 @@ import { getAppearanceColorMap, getBotsForPlayback, SLOT_IDS } from '../replay/i
 import { ArenaCanvas, type ArenaRenderState } from '../ui/arena'
 import { runLocalInWorker } from '../worker/runLocalInWorker'
 
-const STORAGE_KEY = 'nowt:workshop:drafts:v1'
 const OPPONENT_NONCE_KEY = 'nowt:workshop:opponentNonce:v1'
+const OPPONENT_ASSIGNMENTS_KEY = 'nowt:workshop:opponents:v1'
 
-const DEFAULT_SOURCES: Record<SlotId, string> = {
-  BOT1: EXAMPLE_BOTS.bot0.sourceText,
-  BOT2: EXAMPLE_BOTS.bot2.sourceText,
-  BOT3: EXAMPLE_BOTS.bot3.sourceText,
-  BOT4: EXAMPLE_BOTS.bot4.sourceText,
+type OpponentAssignments = {
+  BOT2: string
+  BOT3: string
+  BOT4: string
 }
+
+type StoredOpponentAssignmentsV1 = {
+  version: 1
+} & OpponentAssignments
+
+const DEFAULT_OPPONENT_ASSIGNMENTS: StoredOpponentAssignmentsV1 = {
+  version: 1,
+  BOT2: 'bot2',
+  BOT3: 'bot3',
+  BOT4: 'bot4',
+}
+
+const OPPONENT_SLOTS = ['BOT2', 'BOT3', 'BOT4'] as const
 
 function readOpponentNonce(): number {
   try {
@@ -39,11 +52,65 @@ function writeOpponentNonce(n: number) {
   }
 }
 
+function readOpponentAssignments(): OpponentAssignments {
+  try {
+    const raw = localStorage.getItem(OPPONENT_ASSIGNMENTS_KEY)
+    if (!raw) return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+
+    const parsed = JSON.parse(raw) as Partial<StoredOpponentAssignmentsV1>
+    if (parsed.version !== 1) return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+
+    return {
+      BOT2: typeof parsed.BOT2 === 'string' ? parsed.BOT2 : DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
+      BOT3: typeof parsed.BOT3 === 'string' ? parsed.BOT3 : DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
+      BOT4: typeof parsed.BOT4 === 'string' ? parsed.BOT4 : DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
+    }
+  } catch {
+    return { BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2, BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3, BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4 }
+  }
+}
+
+function normalizeOpponentAssignments(prev: OpponentAssignments, poolIds: string[]): OpponentAssignments {
+  if (poolIds.length < 3) {
+    throw new Error(`Not enough opponent choices (${poolIds.length})`)
+  }
+
+  const used = new Set<string>()
+  const next: OpponentAssignments = { ...prev }
+
+  for (const slot of OPPONENT_SLOTS) {
+    const current = prev[slot]
+
+    if (poolIds.includes(current) && !used.has(current)) {
+      next[slot] = current
+      used.add(current)
+      continue
+    }
+
+    const replacement = poolIds.find((id) => !used.has(id))
+    if (!replacement) break
+
+    next[slot] = replacement
+    used.add(replacement)
+  }
+
+  if (next.BOT2 === prev.BOT2 && next.BOT3 === prev.BOT3 && next.BOT4 === prev.BOT4) return prev
+  return next
+}
+
 function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
   switch (e.type) {
     case 'BOT_EXEC':
+    case 'BOT_MOVED':
     case 'RESOURCE_DELTA':
+    case 'BUMP_WALL':
       return e.botId === botId
+    case 'BUMP_BOT':
+      return e.botId === botId || e.otherBotId === botId
+    case 'BULLET_SPAWN':
+      return e.ownerBotId === botId || e.targetBotId === botId
+    case 'BULLET_HIT':
+      return e.victimBotId === botId
     case 'DAMAGE':
       return e.victimBotId === botId || e.sourceBotId === botId
     case 'BOT_DIED':
@@ -53,11 +120,26 @@ function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
   }
 }
 
+type OpponentOption = {
+  id: string
+  displayName: string
+  sourceText: string
+}
+
 export function WorkshopPage() {
   const [seed, setSeed] = React.useState<number>(12345)
   const [tickCap, setTickCap] = React.useState<number>(200)
 
-  const [sources, setSources] = React.useState<Record<SlotId, string>>(DEFAULT_SOURCES)
+  const starterSourceText = EXAMPLE_BOTS.bot0.sourceText
+
+  const [myBots, setMyBots] = React.useState<LocalBotLibraryV1>(() => createDefaultLocalBotLibrary(starterSourceText))
+  const [opponents, setOpponents] = React.useState<OpponentAssignments>({
+    BOT2: DEFAULT_OPPONENT_ASSIGNMENTS.BOT2,
+    BOT3: DEFAULT_OPPONENT_ASSIGNMENTS.BOT3,
+    BOT4: DEFAULT_OPPONENT_ASSIGNMENTS.BOT4,
+  })
+  const [loaded, setLoaded] = React.useState(false)
+
   const [editingBotId, setEditingBotId] = React.useState<SlotId>('BOT1')
   const [selectedBotId, setSelectedBotId] = React.useState<SlotId>('BOT1')
 
@@ -67,32 +149,74 @@ export function WorkshopPage() {
   const [playback, dispatch] = React.useReducer(playbackReducer, initialPlaybackState)
   const [alpha, setAlpha] = React.useState(1)
 
-  // Load local draft.
+  // Load local bot library + opponent selections.
   React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as Partial<Record<SlotId, string>>
+    setMyBots(loadLocalBotLibrary(starterSourceText))
+    setOpponents(readOpponentAssignments())
+    setLoaded(true)
+  }, [starterSourceText])
 
-      setSources((prev) => ({
-        BOT1: typeof parsed.BOT1 === 'string' ? parsed.BOT1 : prev.BOT1,
-        BOT2: typeof parsed.BOT2 === 'string' ? parsed.BOT2 : prev.BOT2,
-        BOT3: typeof parsed.BOT3 === 'string' ? parsed.BOT3 : prev.BOT3,
-        BOT4: typeof parsed.BOT4 === 'string' ? parsed.BOT4 : prev.BOT4,
-      }))
-    } catch {
-      // ignore malformed localStorage
-    }
-  }, [])
-
-  // Persist draft.
+  // Persist my bots.
   React.useEffect(() => {
+    if (!loaded) return
+    saveLocalBotLibrary(myBots)
+  }, [loaded, myBots])
+
+  // Persist opponent selections.
+  React.useEffect(() => {
+    if (!loaded) return
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sources))
+      const stored: StoredOpponentAssignmentsV1 = { version: 1, ...opponents }
+      localStorage.setItem(OPPONENT_ASSIGNMENTS_KEY, JSON.stringify(stored))
     } catch {
       // ignore quota/unavailable
     }
-  }, [sources])
+  }, [loaded, opponents])
+
+  const selectedMyBot = React.useMemo(() => {
+    return myBots.bots.find((b) => b.id === myBots.selectedBotId) ?? myBots.bots[0]
+  }, [myBots])
+
+  const opponentPool: OpponentOption[] = React.useMemo(() => {
+    const exampleOpponents: OpponentOption[] = EXAMPLE_OPPONENT_IDS.map((id) => ({
+      id,
+      displayName: EXAMPLE_BOTS[id].displayName,
+      sourceText: EXAMPLE_BOTS[id].sourceText,
+    }))
+
+    const localOpponents: OpponentOption[] = myBots.bots
+      .filter((b) => b.id !== selectedMyBot.id)
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((b) => ({
+        id: b.id,
+        displayName: `${b.name} (my bot)`,
+        sourceText: b.sourceText,
+      }))
+
+    return [...exampleOpponents, ...localOpponents]
+  }, [myBots.bots, selectedMyBot.id])
+
+  const opponentPoolById = React.useMemo(() => {
+    return new Map(opponentPool.map((o) => [o.id, o]))
+  }, [opponentPool])
+
+  const opponentPoolIds = React.useMemo(() => opponentPool.map((o) => o.id), [opponentPool])
+
+  // Ensure BOT2..BOT4 are always valid + distinct for the current pool.
+  React.useEffect(() => {
+    setOpponents((prev) => normalizeOpponentAssignments(prev, opponentPoolIds))
+  }, [opponentPoolIds])
+
+  const sourcesBySlot: Record<SlotId, string> = React.useMemo(() => {
+    return {
+      BOT1: selectedMyBot.sourceText,
+      BOT2: opponentPoolById.get(opponents.BOT2)?.sourceText ?? '',
+      BOT3: opponentPoolById.get(opponents.BOT3)?.sourceText ?? '',
+      BOT4: opponentPoolById.get(opponents.BOT4)?.sourceText ?? '',
+    }
+  }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.sourceText])
 
   // Playback clock (requestAnimationFrame).
   React.useEffect(() => {
@@ -192,24 +316,77 @@ export function WorkshopPage() {
     return (replay.events[t] ?? []).filter((e) => isRelevantEvent(e, selectedBotId))
   }, [playback.tick, replay, selectedBotId])
 
-  function loadStarter() {
-    setSources((prev) => ({ ...prev, BOT1: EXAMPLE_BOTS.bot0.sourceText }))
+  function createNewBot() {
+    setMyBots((prev) => {
+      const id = createNewLocalBotId(prev.bots.map((b) => b.id))
+      return {
+        version: 1,
+        selectedBotId: id,
+        bots: [...prev.bots, { id, name: id, sourceText: starterSourceText }],
+      }
+    })
     setEditingBotId('BOT1')
+  }
+
+  function renameSelectedBot() {
+    const current = selectedMyBot
+    const next = window.prompt('Rename bot', current.name)
+    if (next == null) return
+
+    const trimmed = next.trim()
+    if (!trimmed) return
+
+    setMyBots((prev) => ({
+      ...prev,
+      bots: prev.bots.map((b) => (b.id === current.id ? { ...b, name: trimmed } : b)),
+    }))
+  }
+
+  function deleteSelectedBot() {
+    if (myBots.bots.length <= 1) return
+    const ok = window.confirm(`Delete "${selectedMyBot.name}"?`)
+    if (!ok) return
+
+    setMyBots((prev) => {
+      if (prev.bots.length <= 1) return prev
+
+      const remaining = prev.bots.filter((b) => b.id !== prev.selectedBotId)
+      const nextSelectedBotId = remaining[0]?.id ?? prev.selectedBotId
+
+      return {
+        version: 1,
+        selectedBotId: nextSelectedBotId,
+        bots: remaining.length ? remaining : prev.bots,
+      }
+    })
+
+    setEditingBotId('BOT1')
+  }
+
+  function selectBotAsBot1(id: string) {
+    setMyBots((prev) => ({ ...prev, selectedBotId: id }))
+    setEditingBotId('BOT1')
+  }
+
+  function loadStarter() {
+    setMyBots((prev) => ({
+      ...prev,
+      bots: prev.bots.map((b) => (b.id === prev.selectedBotId ? { ...b, sourceText: starterSourceText } : b)),
+    }))
+    setEditingBotId('BOT1')
+  }
+
+  function setOpponent(slot: keyof OpponentAssignments, id: string) {
+    setOpponents((prev) => normalizeOpponentAssignments({ ...prev, [slot]: id }, opponentPoolIds))
   }
 
   function randomizeOpponents() {
     const nonce = readOpponentNonce()
-    const randomizeSeed = (seed >>> 0) ^ fnv1a32(sources.BOT1 ?? '') ^ nonce
+    const randomizeSeed = (seed >>> 0) ^ fnv1a32(selectedMyBot.sourceText ?? '') ^ nonce
 
-    const ids = selectOpponents(randomizeSeed, 3)
+    const ids = selectDistinctFromPool(randomizeSeed, opponentPoolIds, 3)
 
-    setSources((prev) => ({
-      ...prev,
-      BOT2: EXAMPLE_BOTS[ids[0]].sourceText,
-      BOT3: EXAMPLE_BOTS[ids[1]].sourceText,
-      BOT4: EXAMPLE_BOTS[ids[2]].sourceText,
-    }))
-
+    setOpponents({ BOT2: ids[0], BOT3: ids[1], BOT4: ids[2] })
     writeOpponentNonce((nonce + 1) >>> 0)
   }
 
@@ -218,7 +395,7 @@ export function WorkshopPage() {
     setRunError(null)
 
     try {
-      const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sources[slotId] }))
+      const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sourcesBySlot[slotId] }))
       const nextReplay: Replay = await runLocalInWorker({ seed, tickCap, bots })
       dispatch({ type: 'LOAD_REPLAY', replay: nextReplay })
     } catch (err) {
@@ -228,8 +405,18 @@ export function WorkshopPage() {
     }
   }
 
+  function optionsForOpponentSlot(slot: keyof OpponentAssignments) {
+    const otherSlots = OPPONENT_SLOTS.filter((s) => s !== slot)
+    const usedByOtherSlots = new Set(otherSlots.map((s) => opponents[s]))
+
+    return opponentPool.filter((o) => o.id === opponents[slot] || !usedByOtherSlots.has(o.id))
+  }
+
   const speedButtons = [0.5, 1, 2, 6] as const
   const effectiveTickCap = replay?.tickCap ?? tickCap
+
+  const editorSourceText = sourcesBySlot[editingBotId]
+  const editorReadOnly = editingBotId !== 'BOT1'
 
   return (
     <>
@@ -269,7 +456,36 @@ export function WorkshopPage() {
       <div className="workshop-grid" style={{ marginTop: 16 }}>
         {/* Left: bot editor */}
         <section className="panel">
-          <div className="panel-title">Bot editor</div>
+          <div className="panel-title">My Bots</div>
+
+          <div className="tab-row" style={{ marginTop: 10 }}>
+            {myBots.bots.map((b) => (
+              <button
+                key={b.id}
+                className={['tab', b.id === myBots.selectedBotId ? 'active' : ''].join(' ')}
+                onClick={() => selectBotAsBot1(b.id)}
+                title={b.id}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+
+          <div className="controls" style={{ marginTop: 10 }}>
+            <button className="ui-button ui-button-secondary" type="button" onClick={createNewBot}>
+              New bot
+            </button>
+            <button className="ui-button ui-button-secondary" type="button" onClick={renameSelectedBot}>
+              Rename
+            </button>
+            <button className="ui-button ui-button-secondary" type="button" onClick={deleteSelectedBot} disabled={myBots.bots.length <= 1}>
+              Delete
+            </button>
+          </div>
+
+          <div className="panel-title" style={{ marginTop: 18 }}>
+            Bot editor
+          </div>
 
           <div className="tab-row" style={{ marginTop: 10 }}>
             {SLOT_IDS.map((id) => (
@@ -283,15 +499,63 @@ export function WorkshopPage() {
             <button className="ui-button ui-button-secondary" type="button" onClick={loadStarter}>
               Load starter
             </button>
+
+            <label className="mini-field">
+              <div className="mini-label">BOT2</div>
+              <select className="mini-input" value={opponents.BOT2} onChange={(e) => setOpponent('BOT2', e.target.value)}>
+                {optionsForOpponentSlot('BOT2').map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mini-field">
+              <div className="mini-label">BOT3</div>
+              <select className="mini-input" value={opponents.BOT3} onChange={(e) => setOpponent('BOT3', e.target.value)}>
+                {optionsForOpponentSlot('BOT3').map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mini-field">
+              <div className="mini-label">BOT4</div>
+              <select className="mini-input" value={opponents.BOT4} onChange={(e) => setOpponent('BOT4', e.target.value)}>
+                {optionsForOpponentSlot('BOT4').map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <button className="ui-button ui-button-secondary" type="button" onClick={randomizeOpponents}>
               Randomize opponents
             </button>
           </div>
 
+          {editorReadOnly ? (
+            <div className="muted" style={{ marginTop: 10 }}>
+              Opponent code is read-only. Select <strong style={{ color: 'var(--text)' }}>BOT1</strong> to edit your bot.
+            </div>
+          ) : null}
+
           <textarea
             className="code-editor"
-            value={sources[editingBotId]}
-            onChange={(e) => setSources((prev) => ({ ...prev, [editingBotId]: e.target.value }))}
+            value={editorSourceText}
+            readOnly={editorReadOnly}
+            onChange={(e) => {
+              if (editingBotId !== 'BOT1') return
+              const nextSourceText = e.target.value
+              setMyBots((prev) => ({
+                ...prev,
+                bots: prev.bots.map((b) => (b.id === prev.selectedBotId ? { ...b, sourceText: nextSourceText } : b)),
+              }))
+            }}
             spellCheck={false}
           />
 

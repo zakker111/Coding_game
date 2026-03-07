@@ -36,6 +36,34 @@ const DIRS = /** @type {const} */ ([
 
 const SLOT_IDS = /** @type {const} */ (['BOT1', 'BOT2', 'BOT3', 'BOT4'])
 
+/** @param {import('./index.d.ts').MoveDir} dir */
+function oppositeDir(dir) {
+  switch (dir) {
+    case 'UP':
+      return 'DOWN'
+    case 'DOWN':
+      return 'UP'
+    case 'LEFT':
+      return 'RIGHT'
+    case 'RIGHT':
+      return 'LEFT'
+    case 'UP_LEFT':
+      return 'DOWN_RIGHT'
+    case 'UP_RIGHT':
+      return 'DOWN_LEFT'
+    case 'DOWN_LEFT':
+      return 'UP_RIGHT'
+    case 'DOWN_RIGHT':
+      return 'UP_LEFT'
+    default:
+      return 'UP'
+  }
+}
+
+function bumpPairKey(a, b) {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
 function botSourceHasSaw(sourceText) {
   if (!sourceText) return false
   // Stub heuristic: if the bot source mentions SAW anywhere (including comments/loadout),
@@ -76,6 +104,7 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n))
 }
 
+/** @param {import('./index.d.ts').MoveDir} dir */
 function vecForDir(dir) {
   switch (dir) {
     case 'UP':
@@ -103,6 +132,30 @@ function dist2(a, b) {
   const dx = a.x - b.x
   const dy = a.y - b.y
   return dx * dx + dy * dy
+}
+
+function findOverlappingLivingBot(bots, botId, pos) {
+  /** @type {any | null} */
+  let best = null
+
+  for (const b of bots) {
+    if (!b.alive || b.botId === botId) continue
+
+    if (
+      Math.abs(b.pos.x - pos.x) < BOT_HALF_SIZE * 2 &&
+      Math.abs(b.pos.y - pos.y) < BOT_HALF_SIZE * 2
+    ) {
+      if (!best) {
+        best = b
+      } else {
+        const bestIdx = SLOT_IDS.indexOf(best.botId)
+        const idx = SLOT_IDS.indexOf(b.botId)
+        if (idx < bestIdx) best = b
+      }
+    }
+  }
+
+  return best
 }
 
 function findNearestLivingBot(bots, fromBotId, fromPos) {
@@ -235,7 +288,8 @@ function normalizeHeaderBots(input, fallback) {
 
   return SLOT_IDS.map((slotId) => {
     const b = byId.get(slotId)
-    const appearance = b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
+    const appearance =
+      b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
 
     return {
       slotId,
@@ -312,17 +366,11 @@ export function generateSampleReplay(seed, opts = {}) {
     BOT4: botSourceHasShield(headerById.BOT4?.sourceText),
   })
 
-  const primarySawBotId = SLOT_IDS.find((id) => sawCapableByBotId[id]) ?? 'BOT4'
-
   const spawnPosById = {
-    BOT1: { x: 112, y: 96 },
-    BOT2: { x: 160, y: 32 },
-    BOT3: { x: 32, y: 160 },
-    BOT4: { x: 160, y: 160 },
-  }
-
-  if (primarySawBotId && primarySawBotId !== 'BOT1') {
-    spawnPosById[primarySawBotId] = { x: 96, y: 96 }
+    BOT1: { x: 16, y: 16 },
+    BOT2: { x: 176, y: 16 },
+    BOT3: { x: 16, y: 176 },
+    BOT4: { x: 176, y: 176 },
   }
 
   /** @type {Array<{botId: import('./index.d.ts').SlotId, pos: {x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, pc:number, moveDir: import('./index.d.ts').MoveDir, shootCd:number, sawCapable:boolean, sawActive:boolean, shieldCapable:boolean, shieldActive:boolean}>} */
@@ -334,7 +382,7 @@ export function generateSampleReplay(seed, opts = {}) {
     energy: 100,
     alive: true,
     pc: rngInt(rng, 1, 8),
-    moveDir: rngChoice(rng, DIRS),
+    moveDir: botId === 'BOT1' || botId === 'BOT3' ? 'RIGHT' : 'LEFT',
     shootCd: 0,
     sawCapable: sawCapableByBotId[botId],
     sawActive: false,
@@ -372,6 +420,7 @@ export function generateSampleReplay(seed, opts = {}) {
   for (let t = 1; t <= tickCap; t++) {
     /** @type {Replay['events'][number]} */
     const tickEvents = []
+    const bumpedBotPairs = new Set()
 
     // bots act
     for (const bot of bots) {
@@ -436,7 +485,7 @@ export function generateSampleReplay(seed, opts = {}) {
       }
 
       const actionRoll = rng()
-      const doShoot = !bot.sawCapable && actionRoll < 0.18
+      const doShoot = bot.botId === 'BOT2' && !bot.sawCapable && actionRoll < 0.18
 
       if (doShoot) {
         const target = findNearestLivingBot(bots, bot.botId, bot.pos)
@@ -522,14 +571,15 @@ export function generateSampleReplay(seed, opts = {}) {
           })
         }
       } else {
-        // occasionally retarget movement direction
-        if (rng() < 0.14) bot.moveDir = rngChoice(rng, DIRS)
-
-        if (bot.sawCapable && nearest) {
+        if (bot.botId === 'BOT2') {
+          const target = bots.find((b) => b.alive && b.botId === 'BOT1')
+          if (target) bot.moveDir = dirToward(bot.pos, target.pos)
+        } else if (bot.sawCapable && nearest) {
           bot.moveDir = dirToward(bot.pos, nearest.pos)
         }
 
-        const dirVec = vecForDir(bot.moveDir)
+        const moveDir = bot.moveDir
+        const dirVec = vecForDir(moveDir)
         const fromPos = clonePos(bot.pos)
 
         let toPos = {
@@ -542,66 +592,64 @@ export function generateSampleReplay(seed, opts = {}) {
           y: round3(clamp(toPos.y, BOT_CENTER_MIN, BOT_CENTER_MAX)),
         }
 
-        const bumped = clamped.x !== toPos.x || clamped.y !== toPos.y
+        const bumpedWall = clamped.x !== toPos.x || clamped.y !== toPos.y
         toPos = clamped
 
-        bot.pos = toPos
+        const overlapped = findOverlappingLivingBot(bots, bot.botId, toPos)
 
         tickEvents.push({
           type: 'BOT_EXEC',
           botId: bot.botId,
           pcBefore,
           pcAfter,
-          instrText: `MOVE_${bot.moveDir}`,
+          instrText: `MOVE_${moveDir}`,
           result: 'EXECUTED',
         })
 
-        if (fromPos.x !== toPos.x || fromPos.y !== toPos.y) {
-          tickEvents.push({
-            type: 'BOT_MOVED',
-            botId: bot.botId,
-            fromPos,
-            toPos,
-            dir: bot.moveDir,
-          })
-        }
+        if (overlapped) {
+          const key = bumpPairKey(bot.botId, overlapped.botId)
 
-        if (bumped) {
-          tickEvents.push({
-            type: 'BUMP_WALL',
-            botId: bot.botId,
-            dir: bot.moveDir,
-            damage: 0,
-          })
+          if (!bumpedBotPairs.has(key)) {
+            bumpedBotPairs.add(key)
 
-          // reflect the direction for nicer motion patterns
-          switch (bot.moveDir) {
-            case 'LEFT':
-              bot.moveDir = 'RIGHT'
-              break
-            case 'RIGHT':
-              bot.moveDir = 'LEFT'
-              break
-            case 'UP':
-              bot.moveDir = 'DOWN'
-              break
-            case 'DOWN':
-              bot.moveDir = 'UP'
-              break
-            case 'UP_LEFT':
-              bot.moveDir = 'DOWN_RIGHT'
-              break
-            case 'UP_RIGHT':
-              bot.moveDir = 'DOWN_LEFT'
-              break
-            case 'DOWN_LEFT':
-              bot.moveDir = 'UP_RIGHT'
-              break
-            case 'DOWN_RIGHT':
-              bot.moveDir = 'UP_LEFT'
-              break
-            default:
-              break
+            tickEvents.push({
+              type: 'BUMP_BOT',
+              botId: bot.botId,
+              otherBotId: overlapped.botId,
+              dir: moveDir,
+            })
+
+            tickEvents.push({
+              type: 'BUMP_BOT',
+              botId: overlapped.botId,
+              otherBotId: bot.botId,
+              dir: oppositeDir(moveDir),
+            })
+          }
+
+          bot.moveDir = oppositeDir(moveDir)
+        } else {
+          bot.pos = toPos
+
+          if (fromPos.x !== toPos.x || fromPos.y !== toPos.y) {
+            tickEvents.push({
+              type: 'BOT_MOVED',
+              botId: bot.botId,
+              fromPos,
+              toPos,
+              dir: moveDir,
+            })
+          }
+
+          if (bumpedWall) {
+            tickEvents.push({
+              type: 'BUMP_WALL',
+              botId: bot.botId,
+              dir: moveDir,
+              damage: 0,
+            })
+
+            bot.moveDir = oppositeDir(moveDir)
           }
         }
       }
@@ -672,8 +720,7 @@ export function generateSampleReplay(seed, opts = {}) {
         }
       }
 
-      const botHitEarlier =
-        bestBotHit && (!wallHit || bestBotHit.hit.t <= wallHit.t)
+      const botHitEarlier = bestBotHit && (!wallHit || bestBotHit.hit.t <= wallHit.t)
 
       if (botHitEarlier) {
         const victim = bestBotHit.victim

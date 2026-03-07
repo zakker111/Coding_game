@@ -97,6 +97,13 @@ export type BumpWallEvent = {
   damage: number
 }
 
+export type BumpBotEvent = {
+  type: 'BUMP_BOT'
+  botId: SlotId
+  otherBotId: SlotId
+  dir: MoveDir
+}
+
 export type ResourceDeltaEvent = {
   type: 'RESOURCE_DELTA'
   botId: SlotId
@@ -158,6 +165,7 @@ export type KnownReplayEvent =
   | BotExecEvent
   | BotMovedEvent
   | BumpWallEvent
+  | BumpBotEvent
   | ResourceDeltaEvent
   | BulletSpawnEvent
   | BulletMoveEvent
@@ -196,9 +204,7 @@ export type GenerateSampleReplayOptions = {
    *
    * This is primarily for client stubs/tests; the sample generator is not a full DSL runner.
    */
-  bots?: Array<
-    { slotId: SlotId } & Partial<Omit<ReplayHeaderBot, 'slotId'>>
-  >
+  bots?: Array<{ slotId: SlotId } & Partial<Omit<ReplayHeaderBot, 'slotId'>>>
 }
 
 export declare function generateSampleReplay(

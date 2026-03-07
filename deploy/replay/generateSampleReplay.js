@@ -1,5 +1,3 @@
-// Copied from packages/replay/src/generateSampleReplay.js (buildless deploy bundle)
-
 import { createRng, rngChoice, rngInt } from './prng.js'
 
 const BOT_CENTER_MIN = 8
@@ -25,7 +23,7 @@ const SHIELD_THREAT_RANGE = 44
 const SHIELD_ENERGY_DRAIN = 1
 const SHIELD_ABSORB_FRACTION = 0.5
 
-const DIRS = [
+const DIRS = /** @type {const} */ ([
   'UP',
   'DOWN',
   'LEFT',
@@ -34,9 +32,37 @@ const DIRS = [
   'UP_RIGHT',
   'DOWN_LEFT',
   'DOWN_RIGHT',
-]
+])
 
-const SLOT_IDS = ['BOT1', 'BOT2', 'BOT3', 'BOT4']
+const SLOT_IDS = /** @type {const} */ (['BOT1', 'BOT2', 'BOT3', 'BOT4'])
+
+/** @param {import('./index.d.ts').MoveDir} dir */
+function oppositeDir(dir) {
+  switch (dir) {
+    case 'UP':
+      return 'DOWN'
+    case 'DOWN':
+      return 'UP'
+    case 'LEFT':
+      return 'RIGHT'
+    case 'RIGHT':
+      return 'LEFT'
+    case 'UP_LEFT':
+      return 'DOWN_RIGHT'
+    case 'UP_RIGHT':
+      return 'DOWN_LEFT'
+    case 'DOWN_LEFT':
+      return 'UP_RIGHT'
+    case 'DOWN_RIGHT':
+      return 'UP_LEFT'
+    default:
+      return 'UP'
+  }
+}
+
+function bumpPairKey(a, b) {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
 
 function botSourceHasSaw(sourceText) {
   if (!sourceText) return false
@@ -51,6 +77,7 @@ function botSourceHasShield(sourceText) {
   return /\bSHIELD\b/i.test(sourceText)
 }
 
+/** @returns {import('./index.d.ts').MoveDir} */
 function dirToward(from, to) {
   const dx = to.x - from.x
   const dy = to.y - from.y
@@ -77,6 +104,7 @@ function clamp(n, lo, hi) {
   return Math.max(lo, Math.min(hi, n))
 }
 
+/** @param {import('./index.d.ts').MoveDir} dir */
 function vecForDir(dir) {
   switch (dir) {
     case 'UP':
@@ -106,7 +134,32 @@ function dist2(a, b) {
   return dx * dx + dy * dy
 }
 
+function findOverlappingLivingBot(bots, botId, pos) {
+  /** @type {any | null} */
+  let best = null
+
+  for (const b of bots) {
+    if (!b.alive || b.botId === botId) continue
+
+    if (
+      Math.abs(b.pos.x - pos.x) < BOT_HALF_SIZE * 2 &&
+      Math.abs(b.pos.y - pos.y) < BOT_HALF_SIZE * 2
+    ) {
+      if (!best) {
+        best = b
+      } else {
+        const bestIdx = SLOT_IDS.indexOf(best.botId)
+        const idx = SLOT_IDS.indexOf(b.botId)
+        if (idx < bestIdx) best = b
+      }
+    }
+  }
+
+  return best
+}
+
 function findNearestLivingBot(bots, fromBotId, fromPos) {
+  /** @type {{ bot: any; d2: number } | null} */
   let best = null
 
   for (const b of bots) {
@@ -165,6 +218,7 @@ function segmentHitsArenaWall(p0, p1) {
   const dx = p1.x - p0.x
   const dy = p1.y - p0.y
 
+  /** @type {number[]} */
   const ts = []
 
   if (dx !== 0) {
@@ -222,6 +276,10 @@ function defaultAppearanceForSlot(slotId) {
   }
 }
 
+/**
+ * @param {unknown} input
+ * @param {any[]} fallback
+ */
 function normalizeHeaderBots(input, fallback) {
   if (!Array.isArray(input)) return fallback
 
@@ -230,7 +288,8 @@ function normalizeHeaderBots(input, fallback) {
 
   return SLOT_IDS.map((slotId) => {
     const b = byId.get(slotId)
-    const appearance = b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
+    const appearance =
+      b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
 
     return {
       slotId,
@@ -242,9 +301,13 @@ function normalizeHeaderBots(input, fallback) {
 }
 
 /**
+ * @typedef {import('./index.d.ts').Replay} Replay
+ */
+
+/**
  * Deterministic sample replay generator for driving client visuals.
  *
- * Tick semantics:
+ * Tick semantics match `ReplayViewerPlan.md`:
  * - state[t] is end-of-tick for tick t
  * - events[t] are events that transformed state[t-1] -> state[t]
  */
@@ -252,7 +315,7 @@ export function generateSampleReplay(seed, opts = {}) {
   const tickCap = opts.tickCap ?? 200
   const rng = createRng(seed)
 
-  const defaultHeaderBots = [
+  const defaultHeaderBots = /** @type {Replay['bots']} */ ([
     {
       slotId: 'BOT1',
       displayName: 'Powerup Seeker',
@@ -263,7 +326,8 @@ export function generateSampleReplay(seed, opts = {}) {
       slotId: 'BOT2',
       displayName: 'Chaser Shooter',
       appearance: { kind: 'COLOR', color: '#60a5fa' },
-      sourceText: 'LABEL LOOP\nSET_TARGET BOT1\nSET_MOVE_TO_TARGET\nUSE_SLOT1 TARGET\nGOTO LOOP\n',
+      sourceText:
+        'LABEL LOOP\nSET_TARGET BOT1\nSET_MOVE_TO_TARGET\nUSE_SLOT1 TARGET\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT3',
@@ -277,44 +341,39 @@ export function generateSampleReplay(seed, opts = {}) {
       appearance: { kind: 'COLOR', color: '#fbbf24' },
       sourceText: 'LABEL LOOP\nSAW ON\nSHIELD ON\nGOTO LOOP\n',
     },
-  ]
+  ])
 
   const headerBots = normalizeHeaderBots(opts.bots, defaultHeaderBots)
 
-  const headerById = {
+  const headerById = /** @type {Record<import('./index.d.ts').SlotId, any>} */ ({
     BOT1: headerBots.find((b) => b.slotId === 'BOT1'),
     BOT2: headerBots.find((b) => b.slotId === 'BOT2'),
     BOT3: headerBots.find((b) => b.slotId === 'BOT3'),
     BOT4: headerBots.find((b) => b.slotId === 'BOT4'),
-  }
+  })
 
-  const sawCapableByBotId = {
+  const sawCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
     BOT1: botSourceHasSaw(headerById.BOT1?.sourceText),
     BOT2: botSourceHasSaw(headerById.BOT2?.sourceText),
     BOT3: botSourceHasSaw(headerById.BOT3?.sourceText),
     BOT4: botSourceHasSaw(headerById.BOT4?.sourceText),
-  }
+  })
 
-  const shieldCapableByBotId = {
+  const shieldCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
     BOT1: botSourceHasShield(headerById.BOT1?.sourceText),
     BOT2: botSourceHasShield(headerById.BOT2?.sourceText),
     BOT3: botSourceHasShield(headerById.BOT3?.sourceText),
     BOT4: botSourceHasShield(headerById.BOT4?.sourceText),
-  }
-
-  const primarySawBotId = SLOT_IDS.find((id) => sawCapableByBotId[id]) ?? 'BOT4'
+  })
 
   const spawnPosById = {
-    BOT1: { x: 112, y: 96 },
-    BOT2: { x: 160, y: 32 },
-    BOT3: { x: 32, y: 160 },
-    BOT4: { x: 160, y: 160 },
+    BOT1: { x: 16, y: 16 },
+    BOT2: { x: 176, y: 16 },
+    BOT3: { x: 16, y: 176 },
+    BOT4: { x: 176, y: 176 },
   }
 
-  if (primarySawBotId && primarySawBotId !== 'BOT1') {
-    spawnPosById[primarySawBotId] = { x: 96, y: 96 }
-  }
-
+  /** @type {Array<{botId: import('./index.d.ts').SlotId, pos: {x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, pc:number, moveDir: import('./index.d.ts').MoveDir, shootCd:number, sawCapable:boolean, sawActive:boolean, shieldCapable:boolean, shieldActive:boolean}>} */
   const bots = SLOT_IDS.map((botId) => ({
     botId,
     pos: clonePos(spawnPosById[botId]),
@@ -323,7 +382,7 @@ export function generateSampleReplay(seed, opts = {}) {
     energy: 100,
     alive: true,
     pc: rngInt(rng, 1, 8),
-    moveDir: rngChoice(rng, DIRS),
+    moveDir: botId === 'BOT1' || botId === 'BOT3' ? 'RIGHT' : 'LEFT',
     shootCd: 0,
     sawCapable: sawCapableByBotId[botId],
     sawActive: false,
@@ -331,11 +390,12 @@ export function generateSampleReplay(seed, opts = {}) {
     shieldActive: false,
   }))
 
+  /** @type {Array<{bulletId:string, ownerBotId: import('./index.d.ts').SlotId, pos:{x:number,y:number}, vel:{x:number,y:number}, ttl:number}>} */
   let bullets = []
   let bulletCounter = 0
 
-  const state = []
-  const events = []
+  const state = /** @type {Replay['state']} */ ([])
+  const events = /** @type {Replay['events']} */ ([])
 
   state.push({
     t: 0,
@@ -358,7 +418,9 @@ export function generateSampleReplay(seed, opts = {}) {
   const sawAttackRange2 = SAW_ATTACK_RANGE * SAW_ATTACK_RANGE
 
   for (let t = 1; t <= tickCap; t++) {
+    /** @type {Replay['events'][number]} */
     const tickEvents = []
+    const bumpedBotPairs = new Set()
 
     // bots act
     for (const bot of bots) {
@@ -423,7 +485,7 @@ export function generateSampleReplay(seed, opts = {}) {
       }
 
       const actionRoll = rng()
-      const doShoot = !bot.sawCapable && actionRoll < 0.18
+      const doShoot = bot.botId === 'BOT2' && !bot.sawCapable && actionRoll < 0.18
 
       if (doShoot) {
         const target = findNearestLivingBot(bots, bot.botId, bot.pos)
@@ -509,14 +571,15 @@ export function generateSampleReplay(seed, opts = {}) {
           })
         }
       } else {
-        // occasionally retarget movement direction
-        if (rng() < 0.14) bot.moveDir = rngChoice(rng, DIRS)
-
-        if (bot.sawCapable && nearest) {
+        if (bot.botId === 'BOT2') {
+          const target = bots.find((b) => b.alive && b.botId === 'BOT1')
+          if (target) bot.moveDir = dirToward(bot.pos, target.pos)
+        } else if (bot.sawCapable && nearest) {
           bot.moveDir = dirToward(bot.pos, nearest.pos)
         }
 
-        const dirVec = vecForDir(bot.moveDir)
+        const moveDir = bot.moveDir
+        const dirVec = vecForDir(moveDir)
         const fromPos = clonePos(bot.pos)
 
         let toPos = {
@@ -529,66 +592,64 @@ export function generateSampleReplay(seed, opts = {}) {
           y: round3(clamp(toPos.y, BOT_CENTER_MIN, BOT_CENTER_MAX)),
         }
 
-        const bumped = clamped.x !== toPos.x || clamped.y !== toPos.y
+        const bumpedWall = clamped.x !== toPos.x || clamped.y !== toPos.y
         toPos = clamped
 
-        bot.pos = toPos
+        const overlapped = findOverlappingLivingBot(bots, bot.botId, toPos)
 
         tickEvents.push({
           type: 'BOT_EXEC',
           botId: bot.botId,
           pcBefore,
           pcAfter,
-          instrText: `MOVE_${bot.moveDir}`,
+          instrText: `MOVE_${moveDir}`,
           result: 'EXECUTED',
         })
 
-        if (fromPos.x !== toPos.x || fromPos.y !== toPos.y) {
-          tickEvents.push({
-            type: 'BOT_MOVED',
-            botId: bot.botId,
-            fromPos,
-            toPos,
-            dir: bot.moveDir,
-          })
-        }
+        if (overlapped) {
+          const key = bumpPairKey(bot.botId, overlapped.botId)
 
-        if (bumped) {
-          tickEvents.push({
-            type: 'BUMP_WALL',
-            botId: bot.botId,
-            dir: bot.moveDir,
-            damage: 0,
-          })
+          if (!bumpedBotPairs.has(key)) {
+            bumpedBotPairs.add(key)
 
-          // reflect the direction for nicer motion patterns
-          switch (bot.moveDir) {
-            case 'LEFT':
-              bot.moveDir = 'RIGHT'
-              break
-            case 'RIGHT':
-              bot.moveDir = 'LEFT'
-              break
-            case 'UP':
-              bot.moveDir = 'DOWN'
-              break
-            case 'DOWN':
-              bot.moveDir = 'UP'
-              break
-            case 'UP_LEFT':
-              bot.moveDir = 'DOWN_RIGHT'
-              break
-            case 'UP_RIGHT':
-              bot.moveDir = 'DOWN_LEFT'
-              break
-            case 'DOWN_LEFT':
-              bot.moveDir = 'UP_RIGHT'
-              break
-            case 'DOWN_RIGHT':
-              bot.moveDir = 'UP_LEFT'
-              break
-            default:
-              break
+            tickEvents.push({
+              type: 'BUMP_BOT',
+              botId: bot.botId,
+              otherBotId: overlapped.botId,
+              dir: moveDir,
+            })
+
+            tickEvents.push({
+              type: 'BUMP_BOT',
+              botId: overlapped.botId,
+              otherBotId: bot.botId,
+              dir: oppositeDir(moveDir),
+            })
+          }
+
+          bot.moveDir = oppositeDir(moveDir)
+        } else {
+          bot.pos = toPos
+
+          if (fromPos.x !== toPos.x || fromPos.y !== toPos.y) {
+            tickEvents.push({
+              type: 'BOT_MOVED',
+              botId: bot.botId,
+              fromPos,
+              toPos,
+              dir: moveDir,
+            })
+          }
+
+          if (bumpedWall) {
+            tickEvents.push({
+              type: 'BUMP_WALL',
+              botId: bot.botId,
+              dir: moveDir,
+              damage: 0,
+            })
+
+            bot.moveDir = oppositeDir(moveDir)
           }
         }
       }
@@ -623,6 +684,7 @@ export function generateSampleReplay(seed, opts = {}) {
     }
 
     // bullets advance + collide
+    /** @type {typeof bullets} */
     const nextBullets = []
 
     for (const bullet of bullets) {
@@ -634,6 +696,7 @@ export function generateSampleReplay(seed, opts = {}) {
 
       const wallHit = segmentHitsArenaWall(fromPos, proposedTo)
 
+      /** @type {{ victim: any; hit: {t:number,pos:{x:number,y:number}} } | null} */
       let bestBotHit = null
 
       for (const bot of bots) {
