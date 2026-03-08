@@ -158,15 +158,19 @@ function assertNoUnresolvedLabels(r, executable, name) {
  * @param {string} sourceText
  */
 function compileAndAssertOk(name, sourceText) {
-  const r = compileBotSource(sourceText)
+  const r1 = compileBotSource(sourceText)
+  const r2 = compileBotSource(sourceText)
 
-  const errors = r?.errors ?? []
+  // Determinism check: compilation must be pure and stable.
+  assert.deepStrictEqual(r2, r1, `expected deterministic compile output for ${name}`)
+
+  const errors = r1?.errors ?? []
   assert.deepStrictEqual(errors, [], `expected no compile errors for ${name}`)
 
-  const executable = getExecutableInstructions(r)
+  const executable = getExecutableInstructions(r1)
   assert.ok(executable.length > 0, `expected non-empty executable instruction list for ${name}`)
 
-  const pcToSourceLine = getPcToSourceLine(r)
+  const pcToSourceLine = getPcToSourceLine(r1)
   assert.equal(
     pcToSourceLine.length,
     executable.length + 1,
@@ -182,9 +186,9 @@ function compileAndAssertOk(name, sourceText) {
     )
   }
 
-  assertNoUnresolvedLabels(r, executable, name)
+  assertNoUnresolvedLabels(r1, executable, name)
 
-  return { r, executable }
+  return { r: r1, executable }
 }
 
 test('compileBotSource compiles example bots (bot0..bot6)', () => {

@@ -27,15 +27,23 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'TARGET_POWERUP', type: PowerupType }
  *   | { kind: 'SET_TARGET', bot: BotId }
  *   | { kind: 'CLEAR_TARGET_BOT' }
+ *   | { kind: 'CLEAR_TARGET_POWERUP' }
+ *   | { kind: 'CLEAR_TARGET' }
  *   | { kind: 'SET_MOVE_TO_TARGET' }
  *   | { kind: 'SET_MOVE_TO_ZONE', zone: 1 | 2 | 3 | 4 }
  *   | { kind: 'SET_MOVE_TO_SECTOR', sector: 1|2|3|4|5|6|7|8|9, zone?: 1|2|3|4 }
  *   | { kind: 'SET_MOVE_TO_POWERUP', type: PowerupType }
  *   | { kind: 'SET_MOVE_TO_BOT', target: string }
  *   | { kind: 'MOVE_TO_TARGET' }
+ *   | { kind: 'MOVE_TO_ZONE', zone: 1 | 2 | 3 | 4 }
+ *   | { kind: 'MOVE_TO_SECTOR', sector: 1|2|3|4|5|6|7|8|9, zone?: 1|2|3|4 }
+ *   | { kind: 'MOVE_TO_BOT', target: string }
+ *   | { kind: 'MOVE_TO_POWERUP', type: PowerupType }
+ *   | { kind: 'MOVE_TO_ARENA_EDGE', dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' }
  *   | { kind: 'CLEAR_MOVE' }
  *   | { kind: 'MODULE_TOGGLE', module: 'SAW' | 'SHIELD', on: boolean }
  *   | { kind: 'USE_SLOT', slot: 1 | 2 | 3, target: string }
+ *   | { kind: 'STOP_SLOT', slot: 1 | 2 | 3 }
  * )} BotInstruction
  */
 
@@ -66,7 +74,7 @@ const TARGET_TOKEN_ALIASES = new Map([
  * - Jumps are resolved to 1-indexed pcs.
  *
  * @param {string} sourceText
- * @returns {{ program: { instructions: BotInstruction[], pcToSourceLine: number[] }, errors: BotCompileIssue[] }}
+ * @returns {{ program: { instructions: BotInstruction[], pcToSourceLine: number[], labels: Record<string, number> }, errors: BotCompileIssue[] }}
  */
 export function compileBotProgram(sourceText) {
   const normalized = sourceText.replace(/\r\n?/g, '\n')
@@ -374,6 +382,8 @@ function parseSimpleInstruction(line, lineNo, errors) {
   }
 
   if (op === 'CLEAR_TARGET_BOT') return { kind: 'CLEAR_TARGET_BOT' }
+  if (op === 'CLEAR_TARGET_POWERUP') return { kind: 'CLEAR_TARGET_POWERUP' }
+  if (op === 'CLEAR_TARGET') return { kind: 'CLEAR_TARGET' }
 
   if (op === 'SET_MOVE_TO_TARGET') return { kind: 'SET_MOVE_TO_TARGET' }
 
@@ -420,16 +430,87 @@ function parseSimpleInstruction(line, lineNo, errors) {
 
   if (op === 'SET_MOVE_TO_BOT') {
     const token = parts[1]
-    if (!token) {
-      errors.push({ line: lineNo, message: 'SET_MOVE_TO_BOT expects a bot target token' })
+    if (!token || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'SET_MOVE_TO_BOT expects exactly 1 bot target token' })
       return { kind: 'INVALID' }
     }
     return { kind: 'SET_MOVE_TO_BOT', target: normalizeTargetToken(token) }
   }
 
-  if (op === 'MOVE_TO_TARGET') return { kind: 'MOVE_TO_TARGET' }
+  // Immediate movement helpers (not yet used by the sample replay generator, but part of stable v1).
+  if (op === 'MOVE_TO_TARGET') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_TARGET expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_TARGET' }
+  }
 
-  if (op === 'CLEAR_MOVE') return { kind: 'CLEAR_MOVE' }
+  if (op === 'MOVE_TO_ZONE') {
+    const zone = parseZone(parts[1])
+    if (!zone || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_ZONE expects a zone number 1..4' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_ZONE', zone }
+  }
+
+  if (op === 'MOVE_TO_SECTOR') {
+    const sector = parseSector(parts[1])
+    if (!sector) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_SECTOR expects a sector number 1..9' })
+      return { kind: 'INVALID' }
+    }
+
+    if (parts.length === 2) return { kind: 'MOVE_TO_SECTOR', sector }
+
+    if (parts.length === 4 && parts[2]?.toUpperCase() === 'ZONE') {
+      const zone = parseZone(parts[3])
+      if (!zone) {
+        errors.push({ line: lineNo, message: 'MOVE_TO_SECTOR ... ZONE expects a zone number 1..4' })
+        return { kind: 'INVALID' }
+      }
+      return { kind: 'MOVE_TO_SECTOR', sector, zone }
+    }
+
+    errors.push({ line: lineNo, message: 'MOVE_TO_SECTOR expects: MOVE_TO_SECTOR <n> [ZONE <z>]' })
+    return { kind: 'INVALID' }
+  }
+
+  if (op === 'MOVE_TO_BOT') {
+    const token = parts[1]
+    if (!token || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_BOT expects exactly 1 bot target token' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_BOT', target: normalizeTargetToken(token) }
+  }
+
+  if (op === 'MOVE_TO_POWERUP') {
+    const type = parsePowerupType(parts[1])
+    if (!type || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_POWERUP expects: HEALTH|AMMO|ENERGY' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_POWERUP', type }
+  }
+
+  if (op === 'MOVE_TO_ARENA_EDGE') {
+    const dir = parts[1]?.toUpperCase()
+    if ((dir !== 'UP' && dir !== 'DOWN' && dir !== 'LEFT' && dir !== 'RIGHT') || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_ARENA_EDGE expects: UP|DOWN|LEFT|RIGHT' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_ARENA_EDGE', dir }
+  }
+
+  if (op === 'CLEAR_MOVE') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'CLEAR_MOVE expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'CLEAR_MOVE' }
+  }
 
   if (op === 'SAW' || op === 'SHIELD') {
     const arg = parts[1]?.toUpperCase()
@@ -445,12 +526,22 @@ function parseSimpleInstruction(line, lineNo, errors) {
     const slot = /** @type {1|2|3} */ (Number.parseInt(op.slice(-1), 10))
     const target = parts[1]
 
-    if (!target) {
-      errors.push({ line: lineNo, message: `${op} expects a target token` })
+    if (!target || parts.length !== 2) {
+      errors.push({ line: lineNo, message: `${op} expects exactly 1 target token` })
       return { kind: 'INVALID' }
     }
 
     return { kind: 'USE_SLOT', slot, target: normalizeTargetToken(target) }
+  }
+
+  if (op === 'STOP_SLOT1' || op === 'STOP_SLOT2' || op === 'STOP_SLOT3') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: `${op} expects no arguments` })
+      return { kind: 'INVALID' }
+    }
+
+    const slot = /** @type {1|2|3} */ (Number.parseInt(op.slice(-1), 10))
+    return { kind: 'STOP_SLOT', slot }
   }
 
   errors.push({ line: lineNo, message: `Unknown instruction: ${op}` })
