@@ -13,6 +13,10 @@ import { parseExpression } from './expr.js'
  */
 
 /**
+ * @typedef {'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'UP_LEFT' | 'UP_RIGHT' | 'DOWN_LEFT' | 'DOWN_RIGHT'} MoveDir
+ */
+
+/**
  * @typedef {(
  *   | { kind: 'INVALID' }
  *   | { kind: 'NOP' }
@@ -24,11 +28,14 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'CLEAR_TIMER', timer: 1 | 2 | 3 }
  *   | { kind: 'TARGET_CLOSEST' }
  *   | { kind: 'TARGET_LOWEST_HEALTH' }
+ *   | { kind: 'TARGET_NEXT' }
+ *   | { kind: 'TARGET_NEXT_IF_DEAD' }
  *   | { kind: 'TARGET_POWERUP', type: PowerupType }
  *   | { kind: 'SET_TARGET', bot: BotId }
  *   | { kind: 'CLEAR_TARGET_BOT' }
  *   | { kind: 'CLEAR_TARGET_POWERUP' }
  *   | { kind: 'CLEAR_TARGET' }
+ *   | { kind: 'MOVE_DIR', dir: MoveDir }
  *   | { kind: 'SET_MOVE_TO_TARGET' }
  *   | { kind: 'SET_MOVE_TO_ZONE', zone: 1 | 2 | 3 | 4 }
  *   | { kind: 'SET_MOVE_TO_SECTOR', sector: 1|2|3|4|5|6|7|8|9, zone?: 1|2|3|4 }
@@ -38,6 +45,8 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'MOVE_TO_ZONE', zone: 1 | 2 | 3 | 4 }
  *   | { kind: 'MOVE_TO_SECTOR', sector: 1|2|3|4|5|6|7|8|9, zone?: 1|2|3|4 }
  *   | { kind: 'MOVE_TO_BOT', target: string }
+ *   | { kind: 'MOVE_TO_CLOSEST_BOT' }
+ *   | { kind: 'MOVE_TO_LOWEST_HEALTH_BOT' }
  *   | { kind: 'MOVE_TO_POWERUP', type: PowerupType }
  *   | { kind: 'MOVE_TO_ARENA_EDGE', dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' }
  *   | { kind: 'CLEAR_MOVE' }
@@ -57,6 +66,8 @@ const OPCODE_ALIASES = new Map([
   ['TARGET_WEAKEST', 'TARGET_LOWEST_HEALTH'],
   ['TARGET_CLOSEST_POWERUP', 'TARGET_POWERUP'],
   ['MOVE_TO_CLOSEST_POWERUP', 'MOVE_TO_POWERUP'],
+  ['MOVE_TO_NEAREST_BOT', 'MOVE_TO_CLOSEST_BOT'],
+  ['MOVE_TO_WEAKEST_BOT', 'MOVE_TO_LOWEST_HEALTH_BOT'],
   ['MOVE_TO_WALL', 'MOVE_TO_ARENA_EDGE'],
 ])
 
@@ -363,6 +374,10 @@ function parseSimpleInstruction(line, lineNo, errors) {
 
   if (op === 'TARGET_LOWEST_HEALTH') return { kind: 'TARGET_LOWEST_HEALTH' }
 
+  if (op === 'TARGET_NEXT') return { kind: 'TARGET_NEXT' }
+
+  if (op === 'TARGET_NEXT_IF_DEAD') return { kind: 'TARGET_NEXT_IF_DEAD' }
+
   if (op === 'TARGET_POWERUP') {
     const type = parsePowerupType(parts[1])
     if (!type) {
@@ -384,6 +399,19 @@ function parseSimpleInstruction(line, lineNo, errors) {
   if (op === 'CLEAR_TARGET_BOT') return { kind: 'CLEAR_TARGET_BOT' }
   if (op === 'CLEAR_TARGET_POWERUP') return { kind: 'CLEAR_TARGET_POWERUP' }
   if (op === 'CLEAR_TARGET') return { kind: 'CLEAR_TARGET' }
+
+  if (op === 'MOVE') {
+    const dir = parseMoveDir(parts[1])
+    if (!dir || parts.length !== 2) {
+      errors.push({
+        line: lineNo,
+        message: 'MOVE expects: UP|DOWN|LEFT|RIGHT|UP_LEFT|UP_RIGHT|DOWN_LEFT|DOWN_RIGHT',
+      })
+      return { kind: 'INVALID' }
+    }
+
+    return { kind: 'MOVE_DIR', dir }
+  }
 
   if (op === 'SET_MOVE_TO_TARGET') return { kind: 'SET_MOVE_TO_TARGET' }
 
@@ -484,6 +512,22 @@ function parseSimpleInstruction(line, lineNo, errors) {
       return { kind: 'INVALID' }
     }
     return { kind: 'MOVE_TO_BOT', target: normalizeTargetToken(token) }
+  }
+
+  if (op === 'MOVE_TO_CLOSEST_BOT') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_CLOSEST_BOT expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_CLOSEST_BOT' }
+  }
+
+  if (op === 'MOVE_TO_LOWEST_HEALTH_BOT') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'MOVE_TO_LOWEST_HEALTH_BOT expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_TO_LOWEST_HEALTH_BOT' }
   }
 
   if (op === 'MOVE_TO_POWERUP') {
@@ -613,6 +657,23 @@ function parseSector(s) {
   const n = Number.parseInt(s ?? '', 10)
   if (!Number.isInteger(n) || n < 1 || n > 9) return 0
   return /** @type {1|2|3|4|5|6|7|8|9} */ (n)
+}
+
+/**
+ * @param {string | undefined} s
+ * @returns {MoveDir | null}
+ */
+function parseMoveDir(s) {
+  const t = (s ?? '').toUpperCase()
+  if (t === 'UP') return 'UP'
+  if (t === 'DOWN') return 'DOWN'
+  if (t === 'LEFT') return 'LEFT'
+  if (t === 'RIGHT') return 'RIGHT'
+  if (t === 'UP_LEFT') return 'UP_LEFT'
+  if (t === 'UP_RIGHT') return 'UP_RIGHT'
+  if (t === 'DOWN_LEFT') return 'DOWN_LEFT'
+  if (t === 'DOWN_RIGHT') return 'DOWN_RIGHT'
+  return null
 }
 
 /**
