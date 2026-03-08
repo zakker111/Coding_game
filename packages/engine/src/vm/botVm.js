@@ -3,6 +3,40 @@ import { evalExpr } from '../dsl/evalExpr.js'
 // Control-flow instructions are not allowed as the nested instruction of IF_DO.
 const CONTROL_FLOW_KINDS = new Set(['WAIT', 'JUMP', 'IF_JUMP', 'IF_DO'])
 
+// Canonical instruction kinds understood by the VM.
+// Any unknown kind is treated as INVALID (NOP + pc reset).
+const KNOWN_KINDS = new Set([
+  // control flow
+  'JUMP',
+  'IF_JUMP',
+  'IF_DO',
+
+  // no-op / timing
+  'NOP',
+  'WAIT',
+  'SET_TIMER',
+  'CLEAR_TIMER',
+
+  // targeting
+  'SET_TARGET_BOT',
+  'SET_TARGET_POWERUP',
+  'CLEAR_TARGET',
+
+  // movement
+  'MOVE_DIR',
+  'SET_MOVE',
+  'MOVE',
+  'CLEAR_MOVE',
+
+  // modules/slots
+  'MODULE_TOGGLE',
+  'USE_SLOT',
+  'STOP_SLOT',
+
+  // placeholder
+  'INVALID',
+])
+
 /**
  * @param {{ instructions: any[] }} program
  */
@@ -23,8 +57,9 @@ export function initBotVm(program) {
  * Semantics:
  * 1) Start-of-step: decrement timers >0 by 1.
  * 2) If waitRemaining>0: decrement by 1 and return early (no execution, pc unchanged).
- * 3) Execute current instruction at pc (1-indexed; invalid/out-of-range pc coerces to 1).
+ * 3) Execute current instruction at pc (1-indexed).
  * 4) Advance pc by default; JUMP/IF_JUMP override; IF_DO advances once.
+ * 5) INVALID or unknown instructions are treated as NOP and reset pc to 1.
  *
  * @param {ReturnType<typeof initBotVm>} vm
  * @param {any} observation
@@ -46,6 +81,9 @@ export function stepBotVm(vm, observation) {
     nextVm.timers[t] = v > 0 ? v - 1 : 0
   }
 
+  // Keep pc in a valid range even if the VM state was corrupted.
+  nextVm.pc = normalizePc(nextVm.pc, len)
+
   // 2) Waiting blocks instruction execution.
   if ((nextVm.waitRemaining ?? 0) > 0) {
     const pcBefore = nextVm.pc
@@ -58,8 +96,7 @@ export function stepBotVm(vm, observation) {
     }
   }
 
-  const pcBefore = normalizePc(nextVm.pc, len)
-  nextVm.pc = pcBefore
+  const pcBefore = nextVm.pc
 
   /** @type {any[]} */
   const effects = []
@@ -70,7 +107,12 @@ export function stepBotVm(vm, observation) {
   /** @type {number} */
   let pcAfter
 
-  if (kind === 'JUMP') {
+  const isInvalidKind = kind === 'INVALID' || !KNOWN_KINDS.has(kind)
+
+  if (isInvalidKind) {
+    // v1 rule: invalid instruction = NOP + pc reset.
+    pcAfter = 1
+  } else if (kind === 'JUMP') {
     pcAfter = normalizePc(instr.targetPc, len)
   } else if (kind === 'IF_JUMP') {
     const cond = evalCond(instr.expr, nextVm, observation)
@@ -98,7 +140,7 @@ export function stepBotVm(vm, observation) {
   return {
     vm: nextVm,
     effects,
-    debug: { pcBefore, pcAfter: nextVm.pc, executedKind: kind, waiting: false },
+    debug: { pcBefore, pcAfter: nextVm.pc, executedKind: isInvalidKind ? 'INVALID' : kind, waiting: false },
   }
 }
 
@@ -128,6 +170,7 @@ function advancePc(pc, len) {
  * @param {any} observation
  */
 function evalCond(expr, vm, observation) {
+  // Expose VM timers to expression evaluation in the same token format used by the DSL.
   const timers = { T1: vm.timers[1] ?? 0, T2: vm.timers[2] ?? 0, T3: vm.timers[3] ?? 0 }
 
   const ctx = {
@@ -228,5 +271,5 @@ function execInstr(instr, vm, effects) {
     return
   }
 
-  // Unknown kinds are treated as INVALID.
+  // Unknown kinds are treated as INVALID by `stepBotVm`.
 }
