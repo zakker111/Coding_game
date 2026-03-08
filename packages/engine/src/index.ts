@@ -17,6 +17,37 @@ export type RunMatchParams = {
   bots: BotSourceSpec[]
 }
 
+export type BotCompileError = {
+  line: number
+  message: string
+}
+
+export type BotInstruction = {
+  kind: string
+  [k: string]: unknown
+}
+
+export type BotProgram = {
+  /** 0-indexed instruction array; runtime `pc` is 1-indexed into this list. */
+  instructions: BotInstruction[]
+
+  /** Maps runtime pc -> original source line number (pc 0 is always 0). */
+  pcToSourceLine: number[]
+
+  /** Optional debug info: resolved label name -> pc. */
+  labels?: Record<string, number>
+}
+
+export type BotCompileResult = {
+  program: BotProgram
+  errors: BotCompileError[]
+}
+
+/**
+ * Compile stable-v1 bot source into an executable instruction stream.
+ */
+export declare function compileBotSource(sourceText: string): BotCompileResult
+
 /**
  * Phase 1 scaffold.
  *
