@@ -7,6 +7,7 @@ import {
   BULLET_AMMO_COST,
   BULLET_COOLDOWN_TICKS,
   SLOT_IDS,
+  WALL_BUMP_DAMAGE,
 } from './constants.js'
 import {
   botsOverlap,
@@ -63,7 +64,7 @@ export function runMatchToReplay(params) {
 
   const headerBots = normalizeHeaderBots(params.bots)
 
-  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, vm: any, slot1Cooldown:number, pendingMove:any, bumpedLastTick:boolean, bumpedThisTick:boolean}>} */
+  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any, bumpedLastTick:boolean, bumpedThisTick:boolean}>} */
   const bots = SLOT_IDS.map((botId) => {
     const sourceText = headerBots.find((b) => b.slotId === botId)?.sourceText ?? ''
     const compiled = compileBotSource(sourceText)
@@ -75,6 +76,7 @@ export function runMatchToReplay(params) {
       ammo: 100,
       energy: 100,
       alive: true,
+      lastDamageByBotId: null,
       vm: initBotVm(compiled.program),
       slot1Cooldown: 0,
       pendingMove: null,
@@ -517,12 +519,7 @@ function resolveMovement(bots, powerupState, tickEvents) {
       overlapped.bumpedThisTick = true
 
       if (bumpedWall) {
-        tickEvents.push({
-          type: 'BUMP_WALL',
-          botId: bot.botId,
-          dir: request.dir,
-          damage: 0,
-        })
+        applyWallBumpDamage(bot, request.dir, tickEvents)
       }
 
       continue
@@ -541,12 +538,7 @@ function resolveMovement(bots, powerupState, tickEvents) {
     }
 
     if (bumpedWall) {
-      tickEvents.push({
-        type: 'BUMP_WALL',
-        botId: bot.botId,
-        dir: request.dir,
-        damage: 0,
-      })
+      applyWallBumpDamage(bot, request.dir, tickEvents)
     }
 
     // Goal completion.
@@ -556,6 +548,34 @@ function resolveMovement(bots, powerupState, tickEvents) {
         bot.vm.moveGoal = null
       }
     }
+  }
+}
+
+function applyWallBumpDamage(bot, dir, tickEvents) {
+  tickEvents.push({
+    type: 'BUMP_WALL',
+    botId: bot.botId,
+    dir,
+    damage: WALL_BUMP_DAMAGE,
+  })
+
+  bot.hp = Math.max(0, bot.hp - WALL_BUMP_DAMAGE)
+
+  tickEvents.push({
+    type: 'DAMAGE',
+    victimBotId: bot.botId,
+    amount: WALL_BUMP_DAMAGE,
+    source: 'ENV',
+    kind: 'BUMP_WALL',
+  })
+
+  if (bot.hp <= 0 && bot.alive) {
+    bot.alive = false
+    tickEvents.push({
+      type: 'BOT_DIED',
+      victimBotId: bot.botId,
+      ...(bot.lastDamageByBotId ? { creditedBotId: bot.lastDamageByBotId } : {}),
+    })
   }
 }
 

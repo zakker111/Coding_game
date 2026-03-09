@@ -182,6 +182,13 @@ export type BotDiedEvent = {
   creditedBotId?: SlotId
 }
 
+export type MatchEndReason = 'LAST_BOT_ALIVE' | 'ALL_DEAD' | 'STALEMATE' | 'TICK_CAP'
+
+export type MatchEndEvent = {
+  type: 'MATCH_END'
+  endReason: MatchEndReason
+}
+
 export type KnownReplayEvent =
   | BotExecEvent
   | BotMovedEvent
@@ -197,6 +204,7 @@ export type KnownReplayEvent =
   | BulletDespawnEvent
   | DamageEvent
   | BotDiedEvent
+  | MatchEndEvent
 
 export type UnknownReplayEvent = {
   type: string

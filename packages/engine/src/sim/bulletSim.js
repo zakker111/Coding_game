@@ -87,6 +87,7 @@ export function stepBullets(bullets, bots, tickEvents) {
         hitPos: clonePos(hit.pos),
       })
 
+      victim.lastDamageByBotId = bullet.ownerBotId
       victim.hp = Math.max(0, victim.hp - BULLET_DAMAGE)
 
       tickEvents.push({
@@ -104,7 +105,7 @@ export function stepBullets(bullets, bots, tickEvents) {
         tickEvents.push({
           type: 'BOT_DIED',
           victimBotId: victim.botId,
-          creditedBotId: bullet.ownerBotId,
+          creditedBotId: victim.lastDamageByBotId,
         })
       }
 

@@ -37,3 +37,5 @@ export const BULLET_DAMAGE = 10
 
 export const BULLET_AMMO_COST = 1
 export const BULLET_COOLDOWN_TICKS = 7
+
+export const WALL_BUMP_DAMAGE = 2
