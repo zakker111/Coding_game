@@ -49,11 +49,16 @@ const SPAWN_POS_BY_ID = {
 // (Ruleset.md v1 recommended baseSpeed 16 - 1 equipped slot penalty 4 => 12.)
 const BOT_SPEED_UNITS_PER_TICK = 12
 
+// Ruleset.md §0.1 recommended defaults.
+const STALEMATE_GRACE_TICKS = 120
+const STALEMATE_COUNTDOWN_TICKS = 30
+
 /**
  * @param {{ seed: number|string, tickCap: number, bots: Array<{slotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4', sourceText: string}> }} params
  */
 export function runMatchToReplay(params) {
-  const tickCap = params.tickCap
+  const tickCapLimit = params.tickCap
+  let tickCap = tickCapLimit
   const rng = createRng(params.seed)
 
   const headerBots = normalizeHeaderBots(params.bots)
@@ -90,7 +95,12 @@ export function runMatchToReplay(params) {
   state.push(snapshotState(0, bots, bullets, powerupState))
   events.push([])
 
-  for (let t = 1; t <= tickCap; t++) {
+  // Stalemate tracking (Ruleset.md §0.1.1).
+  let ticksSinceLastBotDamage = 0
+  /** @type {number | null} */
+  let stalemateCountdownRemaining = null
+
+  for (let t = 1; t <= tickCapLimit; t++) {
     /** @type {any[]} */
     const tickEvents = []
 
@@ -202,8 +212,56 @@ export function runMatchToReplay(params) {
       if (!powerupExists(powerupState, type)) bot.vm.target.powerupType = null
     }
 
+    // --- Match end conditions (Ruleset.md §0.1) ---
+
+    // Bot-vs-bot damage detection for stalemate tracking.
+    const botDamageThisTick = tickEvents.some(
+      (e) => e && e.type === 'DAMAGE' && typeof e.amount === 'number' && e.amount > 0 && e.sourceBotId
+    )
+
+    const aliveBotCount = bots.reduce((n, b) => (b.alive ? n + 1 : n), 0)
+
+    if (botDamageThisTick) {
+      ticksSinceLastBotDamage = 0
+      stalemateCountdownRemaining = null
+    } else {
+      ticksSinceLastBotDamage++
+
+      if (aliveBotCount >= 2) {
+        if (stalemateCountdownRemaining == null && ticksSinceLastBotDamage === STALEMATE_GRACE_TICKS) {
+          stalemateCountdownRemaining = STALEMATE_COUNTDOWN_TICKS
+        } else if (stalemateCountdownRemaining != null) {
+          stalemateCountdownRemaining--
+        }
+      } else {
+        stalemateCountdownRemaining = null
+      }
+    }
+
+    /** @type {string | null} */
+    let endReason = null
+
+    if (aliveBotCount === 0) {
+      endReason = 'ALL_DEAD'
+    } else if (aliveBotCount === 1) {
+      endReason = 'LAST_BOT_ALIVE'
+    } else if (stalemateCountdownRemaining != null && stalemateCountdownRemaining <= 0) {
+      endReason = 'STALEMATE'
+    } else if (t === tickCapLimit) {
+      endReason = 'TICK_CAP'
+    }
+
+    if (endReason) {
+      tickEvents.push({ type: 'MATCH_END', endReason })
+    }
+
     state.push(snapshotState(t, bots, bullets, powerupState))
     events.push(tickEvents)
+
+    if (endReason) {
+      tickCap = t
+      break
+    }
   }
 
   return {
