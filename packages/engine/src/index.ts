@@ -1,5 +1,4 @@
 import type { Replay, SlotId } from '@coding-game/replay'
-import { generateSampleReplay } from '@coding-game/replay'
 
 export type BotSourceSpec = {
   slotId: SlotId
@@ -49,16 +48,8 @@ export type BotCompileResult = {
 export declare function compileBotSource(sourceText: string): BotCompileResult
 
 /**
- * Phase 1 scaffold.
+ * Run a full match simulation and return a replay.
  *
- * This preserves current Workshop behavior by delegating to the deterministic
- * sample replay generator in `@coding-game/replay`.
- *
- * Later phases will replace this with a ruleset-accurate engine + DSL VM.
+ * Runtime implementation lives in `src/index.js`; this file is for TS checking.
  */
-export function runMatchToReplay(params: RunMatchParams): Replay {
-  return generateSampleReplay(params.seed, {
-    tickCap: params.tickCap,
-    bots: params.bots,
-  })
-}
+export declare function runMatchToReplay(params: RunMatchParams): Replay

@@ -68,9 +68,6 @@ export type BotCompileResult = {
 export declare function compileBotSource(sourceText: string): BotCompileResult
 
 /**
- * Phase 1 scaffold.
- *
- * This preserves current Workshop behavior by delegating to the deterministic
- * sample replay generator in `@coding-game/replay`.
+ * Run a full deterministic match simulation and return a replay.
  */
 export declare function runMatchToReplay(params: RunMatchParams): Replay

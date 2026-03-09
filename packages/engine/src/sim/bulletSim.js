@@ -1,0 +1,169 @@
+import {
+  ARENA_MAX,
+  ARENA_MIN,
+  BOT_HALF_SIZE,
+  BULLET_DAMAGE,
+  BULLET_TTL_TICKS,
+  BULLET_SPEED_UNITS_PER_TICK,
+  SLOT_IDS,
+} from './constants.js'
+import { bresenhamPoints } from './bresenham.js'
+import { clonePos, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
+
+export function createBullet(shooter, target) {
+  const dx = target.pos.x - shooter.pos.x
+  const dy = target.pos.y - shooter.pos.y
+
+  const vel = normalizeToMaxAxis(dx, dy, BULLET_SPEED_UNITS_PER_TICK)
+
+  return {
+    bulletId: '',
+    ownerBotId: shooter.botId,
+    pos: clonePos(shooter.pos),
+    vel,
+    ttl: BULLET_TTL_TICKS,
+  }
+}
+
+export function stepBullets(bullets, bots, tickEvents) {
+  /** @type {typeof bullets} */
+  const next = []
+
+  for (const bullet of bullets) {
+    const fromPos = clonePos(bullet.pos)
+    const candidateTo = {
+      x: bullet.pos.x + bullet.vel.x,
+      y: bullet.pos.y + bullet.vel.y,
+    }
+
+    const path = bresenhamPoints(fromPos, candidateTo)
+
+    /** @type {{ kind: 'NONE' } | { kind: 'WALL', pos: {x:number,y:number} } | { kind: 'BOT', pos: {x:number,y:number}, victim: any }} */
+    let hit = { kind: 'NONE' }
+
+    for (const p of path) {
+      if (p.x < ARENA_MIN || p.x > ARENA_MAX || p.y < ARENA_MIN || p.y > ARENA_MAX) {
+        hit = {
+          kind: 'WALL',
+          pos: {
+            x: Math.max(ARENA_MIN, Math.min(ARENA_MAX, p.x)),
+            y: Math.max(ARENA_MIN, Math.min(ARENA_MAX, p.y)),
+          },
+        }
+        break
+      }
+
+      for (const botId of SLOT_IDS) {
+        const bot = botsById(bots, botId)
+        if (!bot || !bot.alive) continue
+        if (bot.botId === bullet.ownerBotId) continue
+
+        if (pointInBotAabb(bot.pos, p)) {
+          hit = { kind: 'BOT', pos: clonePos(p), victim: bot }
+          break
+        }
+      }
+
+      if (hit.kind !== 'NONE') break
+    }
+
+    const toPos = hit.kind === 'NONE' ? clonePos(candidateTo) : clonePos(hit.pos)
+
+    tickEvents.push({
+      type: 'BULLET_MOVE',
+      bulletId: bullet.bulletId,
+      fromPos,
+      toPos,
+    })
+
+    if (hit.kind === 'BOT') {
+      const victim = hit.victim
+
+      tickEvents.push({
+        type: 'BULLET_HIT',
+        bulletId: bullet.bulletId,
+        victimBotId: victim.botId,
+        damage: BULLET_DAMAGE,
+        hitPos: clonePos(hit.pos),
+      })
+
+      victim.hp = Math.max(0, victim.hp - BULLET_DAMAGE)
+
+      tickEvents.push({
+        type: 'DAMAGE',
+        victimBotId: victim.botId,
+        amount: BULLET_DAMAGE,
+        source: 'BULLET',
+        sourceBotId: bullet.ownerBotId,
+        kind: 'DIRECT',
+        sourceRef: { type: 'BULLET', id: bullet.bulletId },
+      })
+
+      if (victim.hp <= 0 && victim.alive) {
+        victim.alive = false
+        tickEvents.push({
+          type: 'BOT_DIED',
+          victimBotId: victim.botId,
+          creditedBotId: bullet.ownerBotId,
+        })
+      }
+
+      tickEvents.push({
+        type: 'BULLET_DESPAWN',
+        bulletId: bullet.bulletId,
+        reason: 'HIT',
+        pos: clonePos(hit.pos),
+      })
+
+      continue
+    }
+
+    if (hit.kind === 'WALL') {
+      tickEvents.push({
+        type: 'BULLET_DESPAWN',
+        bulletId: bullet.bulletId,
+        reason: 'WALL',
+        pos: clonePos(hit.pos),
+      })
+      continue
+    }
+
+    // no collisions
+    bullet.pos = toPos
+    bullet.ttl--
+
+    if (bullet.ttl <= 0) {
+      tickEvents.push({
+        type: 'BULLET_DESPAWN',
+        bulletId: bullet.bulletId,
+        reason: 'TTL',
+        pos: clonePos(toPos),
+      })
+      continue
+    }
+
+    next.push(bullet)
+  }
+
+  return next
+}
+
+/**
+ * @param {any[]} bots
+ * @param {'BOT1'|'BOT2'|'BOT3'|'BOT4'} botId
+ */
+function botsById(bots, botId) {
+  // All bot arrays are stored in SLOT_IDS order; prefer a constant-time mapping.
+  switch (botId) {
+    case 'BOT1':
+      return bots[0]
+    case 'BOT2':
+      return bots[1]
+    case 'BOT3':
+      return bots[2]
+    case 'BOT4':
+      return bots[3]
+    default:
+      return null
+  }
+}

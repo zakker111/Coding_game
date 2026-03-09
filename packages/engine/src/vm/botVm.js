@@ -176,7 +176,14 @@ function evalCond(expr, vm, observation) {
   const ctx = {
     ...(observation && typeof observation === 'object' ? observation : {}),
     timers,
-    hasTargetBot: vm?.target?.botSelector != null,
+
+    // Prefer explicit hasTargetBot from the sim layer (it can incorporate
+    // validity checks like target existence/alive). Fall back to the VM's
+    // internal target register for tests.
+    hasTargetBot:
+      observation && typeof observation === 'object' && observation.hasTargetBot != null
+        ? observation.hasTargetBot
+        : vm?.target?.botSelector != null,
   }
 
   const r = evalExpr(expr, ctx)
@@ -216,14 +223,14 @@ function execInstr(instr, vm, effects) {
   }
 
   if (kind === 'SET_TARGET_BOT') {
+    // Per BotInstructions.md, bot and powerup targets are independent registers.
+    // Setting one must not clear the other.
     vm.target.botSelector = instr.selector ?? null
-    vm.target.powerupType = null
     return
   }
 
   if (kind === 'SET_TARGET_POWERUP') {
     vm.target.powerupType = instr.type ?? null
-    vm.target.botSelector = null
     return
   }
 
