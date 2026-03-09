@@ -277,6 +277,40 @@ test('botVm: timers continue decrementing during WAIT stalls', () => {
   assert.equal(vm.pc, 3)
 })
 
+test('botVm: bot/powerup targets are independent registers', () => {
+  const program = {
+    instructions: [
+      { kind: 'SET_TARGET_POWERUP', type: 'HEALTH' },
+      { kind: 'SET_TARGET_BOT', selector: 'CLOSEST_BOT' },
+      { kind: 'CLEAR_TARGET', which: 'BOT' },
+      { kind: 'SET_TARGET_BOT', selector: 'LOWEST_HEALTH_BOT' },
+      { kind: 'CLEAR_TARGET', which: 'POWERUP' },
+    ],
+  }
+
+  let vm = initBotVm(program)
+
+  ;({ vm } = stepBotVm(vm, {}))
+  assert.equal(vm.target.powerupType, 'HEALTH')
+  assert.equal(vm.target.botSelector, null)
+
+  ;({ vm } = stepBotVm(vm, {}))
+  assert.equal(vm.target.powerupType, 'HEALTH')
+  assert.equal(vm.target.botSelector, 'CLOSEST_BOT')
+
+  ;({ vm } = stepBotVm(vm, {}))
+  assert.equal(vm.target.powerupType, 'HEALTH')
+  assert.equal(vm.target.botSelector, null)
+
+  ;({ vm } = stepBotVm(vm, {}))
+  assert.equal(vm.target.powerupType, 'HEALTH')
+  assert.equal(vm.target.botSelector, 'LOWEST_HEALTH_BOT')
+
+  ;({ vm } = stepBotVm(vm, {}))
+  assert.equal(vm.target.powerupType, null)
+  assert.equal(vm.target.botSelector, 'LOWEST_HEALTH_BOT')
+})
+
 test('botVm: integration smoke - compile bot0 and step 10 ticks without crashing', () => {
   const filename = path.join(repoRoot, 'examples', 'bot0.md')
   const md = readFileSync(filename, 'utf8')
