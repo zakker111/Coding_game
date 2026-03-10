@@ -33,10 +33,12 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
 
 ; Resupply when low (and we aren't currently healing).
-IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+; (Ammo drains slowly with the current cooldown, so use a higher threshold for demos.)
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Otherwise pick a fight.
 TARGET_CLOSEST

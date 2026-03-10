@@ -1,4 +1,5 @@
 // Copied from /examples/*.md (scripts only) for the buildless deploy workshop.
+// Keep this file in sync with `/examples/`.
 
 export const EXAMPLE_BOTS = {
   bot0: {
@@ -14,10 +15,12 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
 
 ; Resupply when low (and we aren't currently healing).
-IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+; (Ammo drains slowly with the current cooldown, so use a higher threshold for demos.)
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Otherwise pick a fight.
 TARGET_CLOSEST
@@ -63,8 +66,9 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal / resupply detours.
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
-IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Patrol loop.
 IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
@@ -113,8 +117,9 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal / resupply detours.
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
-IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Target the first alive enemy in priority order.
 ; (This script is intended to run in the BOT2 slot, so we intentionally skip BOT2.)
@@ -167,14 +172,15 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Pick a powerup goal (priority: health → ammo).
-IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
-IF (AMMO < 20 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
 
 ; If we decided to go get a powerup, commit for 2 ticks while the goal keeps moving us.
-IF ((HEALTH < 40 && POWERUP_EXISTS(HEALTH)) || (AMMO < 20 && POWERUP_EXISTS(AMMO))) DO WAIT 2
+IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) DO WAIT 2
 
 ; Otherwise, go back home.
-IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
+IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 
 ; Only shoot when something is fairly close (helps conserve ammo).
 ; DIST_TO_CLOSEST_BOT() is Manhattan distance in world units (0..~400), so 3 is too small.
@@ -232,13 +238,14 @@ LABEL LOOP
 
 ; --- Emergency powerup logic (commit for 3 ticks) ---
 ; Low health → go to HEALTH.
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH) && TIMER_DONE(T1)) DO TARGET_POWERUP HEALTH
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH) && TIMER_DONE(T1)) DO SET_TIMER T1 3
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH) && TIMER_DONE(T1)) DO TARGET_POWERUP HEALTH
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH) && TIMER_DONE(T1)) DO SET_TIMER T1 3
 IF (TIMER_ACTIVE(T1)) DO MOVE_TO_TARGET
 
 ; Low ammo (but not in the middle of a health run) → go to AMMO.
-IF (!TIMER_ACTIVE(T1) && AMMO < 10 && POWERUP_EXISTS(AMMO) && TIMER_DONE(T2)) DO TARGET_POWERUP AMMO
-IF (!TIMER_ACTIVE(T1) && AMMO < 10 && POWERUP_EXISTS(AMMO) && TIMER_DONE(T2)) DO SET_TIMER T2 3
+IF (!TIMER_ACTIVE(T1) && AMMO < 80 && POWERUP_EXISTS(AMMO) && TIMER_DONE(T2)) DO TARGET_POWERUP AMMO
+IF (!TIMER_ACTIVE(T1) && AMMO < 80 && POWERUP_EXISTS(AMMO) && TIMER_DONE(T2)) DO SET_TIMER T2 3
 IF (TIMER_ACTIVE(T2)) DO MOVE_TO_TARGET
 
 ; --- Combat logic ---

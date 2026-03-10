@@ -27,8 +27,9 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal / resupply detours.
-IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
-IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Target the first alive enemy in priority order.
 ; (This script is intended to run in the BOT2 slot, so we intentionally skip BOT2.)

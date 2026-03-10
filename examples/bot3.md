@@ -27,14 +27,15 @@ LABEL LOOP
 IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Pick a powerup goal (priority: health → ammo).
-IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
-IF (AMMO < 20 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
+; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
+IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
+IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
 
 ; If we decided to go get a powerup, commit for 2 ticks while the goal keeps moving us.
-IF ((HEALTH < 40 && POWERUP_EXISTS(HEALTH)) || (AMMO < 20 && POWERUP_EXISTS(AMMO))) DO WAIT 2
+IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) DO WAIT 2
 
 ; Otherwise, go back home.
-IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
+IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 
 ; Only shoot when something is fairly close (helps conserve ammo).
 ; DIST_TO_CLOSEST_BOT() is Manhattan distance in world units (0..~400), so 3 is too small.
