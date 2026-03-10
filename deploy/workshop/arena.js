@@ -143,7 +143,16 @@ function getInterpolatedBullets(replay, tick, a) {
 
   const out = []
   for (const b of next?.bullets || []) {
-    const p = prevById.get(b.bulletId) || b
+    // If a bullet is newly spawned this tick, it won't exist in the previous snapshot.
+    // In that case, back-compute a plausible start position so the bullet animates
+    // immediately during its spawn tick (instead of "waiting" one tick).
+    const prevBullet = prevById.get(b.bulletId)
+    const p =
+      prevBullet ||
+      (b.vel
+        ? { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } }
+        : b)
+
     out.push({
       bulletId: b.bulletId,
       ownerBotId: b.ownerBotId,

@@ -344,7 +344,14 @@ export function WorkshopPage() {
     const prevById = new Map(prev.bullets.map((b) => [b.bulletId, b]))
 
     return next.bullets.map((b) => {
-      const p = prevById.get(b.bulletId) ?? b
+      const prevBullet = prevById.get(b.bulletId)
+      // Newly spawned bullets won't exist in prev. Back-compute a start position so
+      // bullets animate immediately during the spawn tick.
+      const p = prevBullet ?? {
+        ...b,
+        pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y },
+      }
+
       return {
         bulletId: b.bulletId,
         ownerBotId: b.ownerBotId,

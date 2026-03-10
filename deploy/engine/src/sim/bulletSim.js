@@ -17,10 +17,23 @@ export function createBullet(shooter, target) {
   // Ruleset.md §5.1: Euclidean normalization (direction locked at fire time).
   const vel = normalizeToLen(dx, dy, BULLET_SPEED_UNITS_PER_TICK)
 
+  // Spawn bullets from the shooter "muzzle" rather than bot center.
+  const muzzleOffset = normalizeToLen(dx, dy, BOT_HALF_SIZE + 2)
+
+  const spawn = {
+    x: shooter.pos.x + muzzleOffset.x,
+    y: shooter.pos.y + muzzleOffset.y,
+  }
+
+  const pos = {
+    x: Math.max(ARENA_MIN, Math.min(ARENA_MAX, spawn.x)),
+    y: Math.max(ARENA_MIN, Math.min(ARENA_MAX, spawn.y)),
+  }
+
   return {
     bulletId: '',
     ownerBotId: shooter.botId,
-    pos: clonePos(shooter.pos),
+    pos,
     vel,
     ttl: BULLET_TTL_TICKS,
   }
