@@ -4,6 +4,7 @@ import { initBotVm, stepBotVm } from '../vm/botVm.js'
 import {
   BOT_CENTER_MAX,
   BOT_CENTER_MIN,
+  BOT_HALF_SIZE,
   BULLET_AMMO_COST,
   BULLET_COOLDOWN_TICKS,
   SLOT_IDS,
@@ -47,13 +48,26 @@ const SPAWN_POS_BY_ID = {
   BOT4: { x: 176, y: 176 },
 }
 
-// v1 fixed default loadout: SLOT1=BULLET.
+// v1 default loadout is SLOT1=BULLET.
+// For now (until explicit loadouts are modeled in the engine sim), we treat any bot
+// script that references `SAW` as if SLOT1=SAW.
 // (Ruleset.md v1 recommended baseSpeed 16 - 1 equipped slot penalty 4 => 12.)
 const BOT_SPEED_UNITS_PER_TICK = 12
 
 // Ruleset.md §0.1 recommended defaults.
 const STALEMATE_GRACE_TICKS = 120
 const STALEMATE_COUNTDOWN_TICKS = 30
+
+// Stable v1 SAW numbers (match `packages/replay/src/generateSampleReplay.js`).
+const SAW_DAMAGE = 6
+const SAW_ENERGY_DRAIN = 1
+const SAW_ATTACK_RANGE = BOT_HALF_SIZE * 2 + 2
+const SAW_ATTACK_RANGE2 = SAW_ATTACK_RANGE * SAW_ATTACK_RANGE
+
+function botSourceHasSaw(sourceText) {
+  if (!sourceText) return false
+  return /\bSAW\b/i.test(sourceText)
+}
 
 /**
  * @param {{ seed: number|string, tickCap: number, bots: Array<{slotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4', sourceText: string}> }} params
@@ -65,10 +79,12 @@ export function runMatchToReplay(params) {
 
   const headerBots = normalizeHeaderBots(params.bots)
 
-  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any, bumpedLastTick:boolean, bumpedThisTick:boolean}>} */
+  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any, bumpedLastTick:boolean, bumpedThisTick:boolean, sawCapable:boolean, sawActive:boolean}>} */
   const bots = SLOT_IDS.map((botId) => {
     const sourceText = headerBots.find((b) => b.slotId === botId)?.sourceText ?? ''
     const compiled = compileBotSource(sourceText)
+
+    const sawCapable = botSourceHasSaw(sourceText)
 
     return {
       botId,
@@ -83,6 +99,8 @@ export function runMatchToReplay(params) {
       pendingMove: null,
       bumpedLastTick: false,
       bumpedThisTick: false,
+      sawCapable,
+      sawActive: false,
     }
   })
 
@@ -149,10 +167,54 @@ export function runMatchToReplay(params) {
           continue
         }
 
+        if (eff.kind === 'MODULE_TOGGLE') {
+          if (eff.module !== 'SAW' || !bot.sawCapable) {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_MODULE'
+            continue
+          }
+
+          const wantsOn = Boolean(eff.on)
+
+          if (wantsOn && bot.energy <= 0) {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_ENERGY'
+            bot.sawActive = false
+            continue
+          }
+
+          bot.sawActive = wantsOn
+          continue
+        }
+
+        if (eff.kind === 'STOP_SLOT') {
+          if (eff.slot === 1 && bot.sawCapable) {
+            bot.sawActive = false
+            continue
+          }
+
+          botExecResult = 'NOP'
+          botExecReason = 'NO_MODULE'
+          continue
+        }
+
         if (eff.kind === 'USE_SLOT') {
           if (eff.slot !== 1) {
             botExecResult = 'NOP'
             botExecReason = 'NO_MODULE'
+            continue
+          }
+
+          // v1: if SLOT1 is SAW, USE_SLOT1 behaves like SAW ON (target ignored).
+          if (bot.sawCapable) {
+            if (bot.energy <= 0) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_ENERGY'
+              bot.sawActive = false
+              continue
+            }
+
+            bot.sawActive = true
             continue
           }
 
@@ -188,10 +250,16 @@ export function runMatchToReplay(params) {
       })
     }
 
-    // 2) Movement + collision resolution
+    // 2) SAW drain
+    stepToggleDrains(bots, tickEvents)
+
+    // 3) Movement + collision resolution
     resolveMovement(bots, powerupState, tickEvents)
 
-    // 4) Projectile updates (bullets)
+    // 4) SAW melee damage
+    stepSawDamage(bots, tickEvents)
+
+    // 5) Projectile updates (bullets)
     bullets = stepBullets(bullets, bots, tickEvents)
 
     // 6) Pickups
@@ -365,12 +433,14 @@ function buildObservation(bot, bots, powerupState) {
     hasTargetBot: () => Boolean(targetBot && targetBot.alive),
 
     slotReady: (slot) => {
+      if (slot === 1 && bot.sawCapable) return bot.energy > 0
+
       if (slot !== 1) return false
       if (bot.slot1Cooldown > 0) return false
       return bot.ammo >= BULLET_AMMO_COST
     },
     slotActive: (slot) => {
-      if (slot !== 1) return false
+      if (slot === 1 && bot.sawCapable) return bot.sawActive
       return false
     },
     bumpedBot: bot.bumpedLastTick,
@@ -774,6 +844,7 @@ function findLowestHealthLivingBot(fromId, bots) {
 }
 
 function attemptUseSlot1(bot, targetToken, bots, bullets, nextBulletId, tickEvents) {
+  if (bot.sawCapable) return { ok: false, reason: 'NO_MODULE' }
   if (bot.slot1Cooldown > 0) return { ok: false, reason: 'COOLDOWN' }
   if (bot.ammo < BULLET_AMMO_COST) return { ok: false, reason: 'NO_AMMO' }
 
@@ -837,6 +908,8 @@ function formatInstr(instr) {
   if (kind === 'CLEAR_TARGET') return `CLEAR_TARGET ${instr.which ?? 'ALL'}`
 
   if (kind === 'USE_SLOT') return `USE_SLOT${instr.slot} ${instr.target}`
+  if (kind === 'STOP_SLOT') return `STOP_SLOT${instr.slot}`
+  if (kind === 'MODULE_TOGGLE') return `${instr.module} ${instr.on ? 'ON' : 'OFF'}`
 
   if (kind === 'WAIT') return `WAIT ${instr.ticks}`
   if (kind === 'SET_TIMER') return `SET_TIMER T${instr.timer} ${instr.ticks}`
@@ -875,4 +948,84 @@ function botsById(bots, botId) {
     default:
       return null
   }
+}
+
+function stepToggleDrains(bots, tickEvents) {
+  for (const bot of bots) {
+    if (!bot.alive) continue
+
+    if (!bot.sawActive) continue
+
+    if (bot.energy <= 0) {
+      bot.sawActive = false
+      continue
+    }
+
+    const drain = Math.min(SAW_ENERGY_DRAIN, bot.energy)
+    bot.energy -= drain
+
+    tickEvents.push({
+      type: 'RESOURCE_DELTA',
+      botId: bot.botId,
+      ammoDelta: 0,
+      energyDelta: -drain,
+      healthDelta: 0,
+      cause: 'SAW_DRAIN',
+    })
+
+    if (bot.energy <= 0) bot.sawActive = false
+  }
+}
+
+function stepSawDamage(bots, tickEvents) {
+  for (const bot of bots) {
+    if (!bot.alive) continue
+    if (!bot.sawActive) continue
+    if (bot.energy <= 0) continue
+
+    const victim = findClosestLivingBotInSawRange(bot.botId, bot.pos, bots)
+    if (!victim) continue
+
+    victim.lastDamageByBotId = bot.botId
+    victim.hp = Math.max(0, victim.hp - SAW_DAMAGE)
+
+    tickEvents.push({
+      type: 'DAMAGE',
+      victimBotId: victim.botId,
+      amount: SAW_DAMAGE,
+      source: 'SAW',
+      sourceBotId: bot.botId,
+      kind: 'DIRECT',
+      sourceRef: { type: 'SAW', id: bot.botId },
+    })
+
+    if (victim.hp <= 0 && victim.alive) {
+      victim.alive = false
+      tickEvents.push({
+        type: 'BOT_DIED',
+        victimBotId: victim.botId,
+        creditedBotId: victim.lastDamageByBotId,
+      })
+    }
+  }
+}
+
+function findClosestLivingBotInSawRange(fromId, fromPos, bots) {
+  /** @type {{ bot: any, d2: number } | null} */
+  let best = null
+
+  for (const b of bots) {
+    if (!b.alive) continue
+    if (b.botId === fromId) continue
+
+    const dx = fromPos.x - b.pos.x
+    const dy = fromPos.y - b.pos.y
+    const d2 = dx * dx + dy * dy
+
+    if (d2 > SAW_ATTACK_RANGE2) continue
+
+    if (!best || d2 < best.d2 || (d2 === best.d2 && b.botId < best.bot.botId)) best = { bot: b, d2 }
+  }
+
+  return best?.bot ?? null
 }
