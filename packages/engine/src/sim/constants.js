@@ -31,11 +31,11 @@ export const POWERUP_ANCHORS = (() => {
   return out
 })()
 
-export const BULLET_SPEED_UNITS_PER_TICK = 10
+export const BULLET_SPEED_UNITS_PER_TICK = 16
 export const BULLET_TTL_TICKS = 18
 export const BULLET_DAMAGE = 10
 
 export const BULLET_AMMO_COST = 1
-export const BULLET_COOLDOWN_TICKS = 7
+export const BULLET_COOLDOWN_TICKS = 4
 
 export const WALL_BUMP_DAMAGE = 2

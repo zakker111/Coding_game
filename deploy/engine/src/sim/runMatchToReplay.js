@@ -21,6 +21,7 @@ import {
   zoneFromPos,
 } from './arenaMath.js'
 import { createBullet, stepBullets } from './bulletSim.js'
+import { bresenhamPoints } from './bresenham.js'
 import { createRng } from './prng.js'
 import {
   findClosestPowerupLoc,
@@ -488,16 +489,34 @@ function resolveMovement(bots, powerupState, tickEvents) {
 
     const bumpedWall = clamped.x !== candidate.x || clamped.y !== candidate.y
 
-    // Bot-bot overlap check (movement cancels).
+    // Bot-bot overlap check along the movement segment.
     /** @type {any | null} */
     let overlapped = null
 
-    for (const other of bots) {
-      if (!other.alive) continue
-      if (other.botId === bot.botId) continue
-      if (!botsOverlap(clamped, other.pos)) continue
+    let finalPos = clamped
 
-      if (!overlapped || other.botId < overlapped.botId) overlapped = other
+    const segmentPoints = bresenhamPoints(fromPos, clamped)
+    let lastSafePos = fromPos
+
+    for (const p of segmentPoints) {
+      /** @type {any | null} */
+      let atPoint = null
+
+      for (const other of bots) {
+        if (!other.alive) continue
+        if (other.botId === bot.botId) continue
+        if (!botsOverlap(p, other.pos)) continue
+
+        if (!atPoint || other.botId < atPoint.botId) atPoint = other
+      }
+
+      if (atPoint) {
+        overlapped = atPoint
+        finalPos = lastSafePos
+        break
+      }
+
+      lastSafePos = p
     }
 
     if (overlapped) {
@@ -517,15 +536,9 @@ function resolveMovement(bots, powerupState, tickEvents) {
 
       bot.bumpedThisTick = true
       overlapped.bumpedThisTick = true
-
-      if (bumpedWall) {
-        applyWallBumpDamage(bot, request.dir, tickEvents)
-      }
-
-      continue
     }
 
-    bot.pos = clamped
+    bot.pos = finalPos
 
     if (fromPos.x !== bot.pos.x || fromPos.y !== bot.pos.y) {
       tickEvents.push({

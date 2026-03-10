@@ -7,6 +7,7 @@
 
 **Intended behavior**
 - Defaults to a fixed “home” location.
+- If a bot is **very close** (or we just bumped), briefly backs off toward the center before returning home.
 - If resources are low, sets a **powerup move goal** to the nearest relevant powerup.
 - Uses `WAIT` to briefly **commit** to a powerup run (keeps walking toward the goal while not re-planning).
 - Opportunistically fires using an **inline selector** (no target register).
@@ -16,11 +17,14 @@
 ```text
 ; bot3 — Corner Bunker
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
-; Summary: hold a home corner, run to powerups when low (with a short WAIT), shoot NEAREST_BOT when close.
+; Summary: hold a home corner; back off when too close; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1
 
 LABEL LOOP
+
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Pick a powerup goal (priority: health → ammo).
 IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
@@ -36,5 +40,11 @@ IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 ; DIST_TO_CLOSEST_BOT() is Manhattan distance in world units (0..~400), so 3 is too small.
 IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 120) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
 GOTO LOOP
 ```

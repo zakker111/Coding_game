@@ -81,7 +81,7 @@ function oppositeDir(dir) {
     case 'DOWN_RIGHT':
       return 'UP_LEFT'
     default:
-      return 'UP'
+      return dir
   }
 }
 

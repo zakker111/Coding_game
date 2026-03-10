@@ -6,12 +6,18 @@ export const EXAMPLE_BOTS = {
     displayName: 'Aggressive Skirmisher (starter)',
     sourceText: `; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
-; Summary: chase+shoot the closest bot; when low HP, run to HEALTH for 6 ticks.
+; Summary: chase+shoot the closest bot; back off when too close; detour for HEALTH/AMMO when low.
 
 LABEL LOOP
 
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+
 ; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
 IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+
+; Resupply when low (and we aren't currently healing).
+IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Otherwise pick a fight.
 TARGET_CLOSEST
@@ -20,11 +26,25 @@ IF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET
 
 GOTO LOOP
 
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
 LABEL HEAL
 CLEAR_TARGET_BOT
 TARGET_POWERUP HEALTH
 SET_MOVE_TO_TARGET
-WAIT 6
+WAIT 3
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL RESUPPLY
+CLEAR_TARGET_BOT
+TARGET_POWERUP AMMO
+SET_MOVE_TO_TARGET
+WAIT 3
 CLEAR_MOVE
 GOTO LOOP
 `,
@@ -35,9 +55,18 @@ GOTO LOOP
     displayName: 'Zone Patrol Shooter',
     sourceText: `; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
-; Summary: patrol zones 1→2→4→3→1 (current sector) and fire at NEAREST_BOT.
+; Summary: patrol zones 1→2→4→3→1 (current sector); back off when too close; detour for HEALTH/AMMO when low; fire at NEAREST_BOT.
 
 LABEL LOOP
+
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+
+; Heal / resupply detours.
+IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
+
+; Patrol loop.
 IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
 IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
 IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
@@ -45,6 +74,28 @@ IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
 
 IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL HEAL
+CLEAR_TARGET_BOT
+TARGET_POWERUP HEALTH
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL RESUPPLY
+CLEAR_TARGET_BOT
+TARGET_POWERUP AMMO
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
 GOTO LOOP
 `,
   },
@@ -54,9 +105,16 @@ GOTO LOOP
     displayName: 'Chaser Shooter',
     sourceText: `; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
-; Summary: choose first alive target (BOT1→BOT3→BOT4), chase it, shoot it.
+; Summary: choose first alive target (BOT1→BOT3→BOT4), chase it, shoot it; back off when too close; detour for HEALTH/AMMO when low.
 
 LABEL LOOP
+
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+
+; Heal / resupply detours.
+IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Target the first alive enemy in priority order.
 ; (This script is intended to run in the BOT2 slot, so we intentionally skip BOT2.)
@@ -69,6 +127,28 @@ SET_MOVE_TO_TARGET
 IF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO USE_SLOT1 TARGET
 
 GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL HEAL
+CLEAR_TARGET_BOT
+TARGET_POWERUP HEALTH
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL RESUPPLY
+CLEAR_TARGET_BOT
+TARGET_POWERUP AMMO
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
+GOTO LOOP
 `,
   },
 
@@ -77,11 +157,14 @@ GOTO LOOP
     displayName: 'Corner Bunker',
     sourceText: `; bot3 — Corner Bunker
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
-; Summary: hold a home corner, run to powerups when low (with a short WAIT), shoot NEAREST_BOT when close.
+; Summary: hold a home corner; back off when too close; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1
 
 LABEL LOOP
+
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Pick a powerup goal (priority: health → ammo).
 IF (HEALTH < 40 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
@@ -97,6 +180,12 @@ IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 ; DIST_TO_CLOSEST_BOT() is Manhattan distance in world units (0..~400), so 3 is too small.
 IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 120) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
 GOTO LOOP
 `,
   },

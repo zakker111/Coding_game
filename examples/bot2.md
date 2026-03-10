@@ -8,6 +8,9 @@
 **Intended behavior**
 - Demonstrates **explicit target selection** using `BOT_ALIVE(...)` + `SET_TARGET`:
   - target BOT1 if alive; else BOT3; else BOT4
+- If a bot is **very close** (or we just bumped), briefly backs off toward the center before re-engaging.
+- If health is low and a HEALTH powerup exists, commits briefly to a healing run.
+- If ammo is low and an AMMO powerup exists (and we’re not currently healing), commits briefly to an ammo run.
 - Chases the selected target using a **persistent movement goal** (`SET_MOVE_TO_TARGET`).
 - Shoots the target via `USE_SLOT1 TARGET`.
 
@@ -16,9 +19,16 @@
 ```text
 ; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
-; Summary: choose first alive target (BOT1→BOT3→BOT4), chase it, shoot it.
+; Summary: choose first alive target (BOT1→BOT3→BOT4), chase it, shoot it; back off when too close; detour for HEALTH/AMMO when low.
 
 LABEL LOOP
+
+; If we're about to collide, step away briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+
+; Heal / resupply detours.
+IF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL
+IF (AMMO < 10 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 
 ; Target the first alive enemy in priority order.
 ; (This script is intended to run in the BOT2 slot, so we intentionally skip BOT2.)
@@ -30,5 +40,27 @@ SET_MOVE_TO_TARGET
 
 IF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO USE_SLOT1 TARGET
 
+GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5
+WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL HEAL
+CLEAR_TARGET_BOT
+TARGET_POWERUP HEALTH
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL RESUPPLY
+CLEAR_TARGET_BOT
+TARGET_POWERUP AMMO
+SET_MOVE_TO_TARGET
+WAIT 3
+CLEAR_MOVE
 GOTO LOOP
 ```

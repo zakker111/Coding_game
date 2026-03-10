@@ -141,16 +141,18 @@ Rules (movement + collision; v1):
   3) **Wall clamp**: clamp `candidateToPos` so the entire 16×16 bot hitbox stays inside the arena.
      - using `ArenaPlan.md` bounds, this is equivalent to clamping bot centers to `x ∈ [8,184]`, `y ∈ [8,184]`.
      - if clamping changed `candidateToPos`, emit `BUMP_WALL` and apply `wallBumpDamage`.
-  4) **Bot–bot collision**: if moving to `candidateToPos` would make this bot’s hitbox overlap any other alive bot’s hitbox, the movement is canceled:
-     - set `toPos = fromPos` (no movement)
-     - choose the collided bot deterministically:
-       - lowest `otherBotId` among the overlapping bots
-     - emit `BUMP_BOT` for **both** bots (`dir` and `OPPOSITE(dir)`), with `dir` being the bot’s requested move direction for the tick.
+  4) **Bot–bot collision**: treat the movement as a swept segment `fromPos → candidateToPos`.
+     - If at any point along that segment this bot’s hitbox would overlap any other alive bot’s hitbox, the bot “bumps”.
+     - Choose the collided bot deterministically:
+       - lowest `otherBotId` among the overlapping bots at the first colliding point.
+     - Set `toPos` to the **last non-overlapping point** along the segment (may equal `fromPos`).
+     - Emit `BUMP_BOT` for **both** bots (`dir` and `OPPOSITE(dir)`), with `dir` being the bot’s requested move direction for the tick.
   5) Otherwise, movement succeeds: set `toPos = candidateToPos` and emit `BOT_MOVED { fromPos, toPos, dir? }`.
 
 Notes:
-- This “cancel on overlap” rule is intentionally simple; future rulesets can add sliding/pushing without changing the DSL.
-- If a bot both hits a wall and would overlap another bot after wall-clamp, the bot–bot collision rule wins (movement canceled), but the wall bump/damage still applies if the request attempted to cross the wall.
+- This “stop before overlap” rule is intentionally simple; future rulesets can add sliding/pushing without changing the DSL.
+- If a bot both hits a wall and would overlap another bot after wall-clamp, the bot–bot collision rule wins (movement stops before overlap), but the wall bump/damage still applies if the request attempted to cross the wall.
+
 
 Effect (intended gameplay):
 - empty slots ⇒ smaller `equippedSlotCount` ⇒ **faster movement**
