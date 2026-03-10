@@ -8,7 +8,7 @@ import {
   SLOT_IDS,
 } from './constants.js'
 import { bresenhamPoints } from './bresenham.js'
-import { clonePos, normalizeToLen, pointInBotAabb } from './arenaMath.js'
+import { clonePos, normalizeToLen, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
 
 export function createBullet(shooter, target) {
   const dx = target.pos.x - shooter.pos.x
@@ -19,7 +19,10 @@ export function createBullet(shooter, target) {
 
   // Visual + collision quality: spawn bullets from the shooter "muzzle" rather than
   // from the bot center, to avoid immediate overlap and to match player expectations.
-  const muzzleOffset = normalizeToLen(dx, dy, BOT_HALF_SIZE + 2)
+  //
+  // Important: this offset must be outside the shooter's 16x16 AABB even diagonally.
+  // To achieve that, use an L∞ normalization for the muzzle offset.
+  const muzzleOffset = normalizeToMaxAxis(dx, dy, BOT_HALF_SIZE + 2)
 
   const spawn = {
     x: shooter.pos.x + muzzleOffset.x,

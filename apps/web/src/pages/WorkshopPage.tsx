@@ -343,14 +343,19 @@ export function WorkshopPage() {
 
     const prevById = new Map(prev.bullets.map((b) => [b.bulletId, b]))
 
+    const spawnsByBulletId = new Map(
+      (replay.events[t] ?? [])
+        .filter((e) => e.type === 'BULLET_SPAWN')
+        .map((e) => [e.bulletId, e])
+    )
+
     return next.bullets.map((b) => {
       const prevBullet = prevById.get(b.bulletId)
-      // Newly spawned bullets won't exist in prev. Back-compute a start position so
-      // bullets animate immediately during the spawn tick.
-      const p = prevBullet ?? {
-        ...b,
-        pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y },
-      }
+      const spawn = spawnsByBulletId.get(b.bulletId)
+
+      // Newly spawned bullets won't exist in prev. Prefer BULLET_SPAWN.pos as the
+      // start position so bullets spawn from the muzzle and move immediately.
+      const p = prevBullet ?? (spawn ? { ...b, pos: spawn.pos } : { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } })
 
       return {
         bulletId: b.bulletId,

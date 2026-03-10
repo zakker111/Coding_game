@@ -141,17 +141,27 @@ function getInterpolatedBullets(replay, tick, a) {
   const prev = t > 0 ? replay.state[t - 1] : next
   const prevById = new Map((prev?.bullets || []).map((b) => [b.bulletId, b]))
 
+  // If a bullet is new at tick t, it won't exist in the previous snapshot (t-1).
+  // Prefer the BULLET_SPAWN event position as the "from" point so bullets appear
+  // to spawn at the muzzle and start moving immediately.
+  const spawnsByBulletId = new Map(
+    ((replay.events && replay.events[t]) || [])
+      .filter((e) => e && e.type === 'BULLET_SPAWN' && e.bulletId)
+      .map((e) => [e.bulletId, e])
+  )
+
   const out = []
   for (const b of next?.bullets || []) {
-    // If a bullet is newly spawned this tick, it won't exist in the previous snapshot.
-    // In that case, back-compute a plausible start position so the bullet animates
-    // immediately during its spawn tick (instead of "waiting" one tick).
     const prevBullet = prevById.get(b.bulletId)
+    const spawn = spawnsByBulletId.get(b.bulletId)
+
     const p =
       prevBullet ||
-      (b.vel
-        ? { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } }
-        : b)
+      (spawn && spawn.pos
+        ? { ...b, pos: spawn.pos }
+        : b.vel
+          ? { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } }
+          : b)
 
     out.push({
       bulletId: b.bulletId,
