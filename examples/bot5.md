@@ -22,6 +22,9 @@ SET_MOVE_TO_SECTOR 5
 
 LABEL LOOP
 
+; If we're about to collide, step to a nearby zone briefly.
+IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
+
 ; --- Emergency powerup logic (commit for 3 ticks) ---
 ; Low health → go to HEALTH.
 ; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
@@ -45,5 +48,11 @@ IF (TIMER_ACTIVE(T3) && HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO USE_SLOT1 TARG
 ; Otherwise take opportunistic pot-shots when something is very close.
 IF (!TIMER_ACTIVE(T3) && SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 20) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL BACKOFF
+SET_MOVE_TO_SECTOR 5 ZONE 1
+WAIT 2
+SET_MOVE_TO_SECTOR 5
 GOTO LOOP
 ```

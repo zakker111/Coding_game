@@ -236,6 +236,20 @@ function evalNode(node, ctx) {
       return ok(v)
     }
 
+    if (fn === 'BULLET_IN_SAME_SECTOR') {
+      if (node.arguments.length !== 0) return err('ARITY', 'BULLET_IN_SAME_SECTOR expects 0 arguments')
+      const v = resolveBoolish(ctx?.bulletInSameSector)
+      if (v == null) return err('MISSING', 'BULLET_IN_SAME_SECTOR not available in ctx')
+      return ok(v)
+    }
+
+    if (fn === 'BULLET_IN_ADJ_SECTOR') {
+      if (node.arguments.length !== 0) return err('ARITY', 'BULLET_IN_ADJ_SECTOR expects 0 arguments')
+      const v = resolveBoolish(ctx?.bulletInAdjSector)
+      if (v == null) return err('MISSING', 'BULLET_IN_ADJ_SECTOR not available in ctx')
+      return ok(v)
+    }
+
     // Fallback for future pure helpers.
     const impl = resolveFunction(ctx, fn)
     if (!impl) return err('UNKNOWN_FUNCTION', `Unknown function: ${fn}`)

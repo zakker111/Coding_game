@@ -130,7 +130,7 @@ export function runMatchToReplay(params) {
     for (const bot of bots) {
       if (!bot.alive) continue
 
-      const observation = buildObservation(bot, bots, powerupState)
+      const observation = buildObservation(bot, bots, bullets, powerupState)
 
       const vmBefore = bot.vm
       const instrBefore = vmBefore?.program?.instructions?.[vmBefore.pc - 1] ?? { kind: 'INVALID' }
@@ -397,9 +397,11 @@ function normalizeHeaderBots(botsInput) {
   })
 }
 
-function buildObservation(bot, bots, powerupState) {
+function buildObservation(bot, bots, bullets, powerupState) {
   const zone = zoneFromPos(bot.pos)
+  const sector = sectorFromPos(bot.pos)
   const closestBotDist = distToClosestBot(bot, bots)
+  const bulletThreat = computeBulletThreat(bot.botId, sector, bullets)
 
   const targetBotId = bot.vm?.target?.botSelector
   const targetBot =
@@ -426,6 +428,10 @@ function buildObservation(bot, bots, powerupState) {
     zone,
     distToClosestBot: closestBotDist,
     timers: { T1: timers[1] ?? 0, T2: timers[2] ?? 0, T3: timers[3] ?? 0 },
+
+    // Bullet threat sensors.
+    bulletInSameSector: bulletThreat.sameSector,
+    bulletInAdjSector: bulletThreat.adjSector,
 
     // Exposed for HAS_TARGET_BOT() (see botVm.js).
     hasTargetBot: () => Boolean(targetBot && targetBot.alive),
@@ -455,6 +461,38 @@ function distToClosestBot(bot, bots) {
     if (d < best) best = d
   }
   return best
+}
+
+function computeBulletThreat(selfBotId, selfSector, bullets) {
+  let sameSector = false
+  let adjSector = false
+
+  for (const b of bullets) {
+    if (!b) continue
+    if (b.ownerBotId === selfBotId) continue
+
+    const s = sectorFromPos(b.pos)
+
+    if (s === selfSector) {
+      sameSector = true
+      break
+    }
+
+    if (isAdjSector(selfSector, s)) adjSector = true
+  }
+
+  return { sameSector, adjSector }
+}
+
+function isAdjSector(a, b) {
+  if (a === b) return false
+
+  const ax = ((a - 1) % 3) + 1
+  const ay = Math.floor((a - 1) / 3) + 1
+  const bx = ((b - 1) % 3) + 1
+  const by = Math.floor((b - 1) / 3) + 1
+
+  return Math.abs(ax - bx) <= 1 && Math.abs(ay - by) <= 1
 }
 
 function normalizeMoveTargetAtSetTime(target, pos) {

@@ -18,12 +18,12 @@
 ```text
 ; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
-; Summary: patrol zones 1→2→4→3→1 (current sector); back off when too close; detour for HEALTH/AMMO when low; fire at NEAREST_BOT.
+; Summary: patrol zones 1→2→4→3→1 (current sector); sidestep when too close; detour for HEALTH/AMMO when low; fire at NEAREST_BOT.
 
 LABEL LOOP
 
-; If we're about to collide, step away briefly.
-IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+; If we're about to collide, sidestep within our current sector.
+IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal / resupply detours.
 ; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
@@ -41,7 +41,12 @@ IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 NEAREST_BOT
 GOTO LOOP
 
 LABEL BACKOFF
-SET_MOVE_TO_SECTOR 5
+; Step to the opposite zone in our current sector, then resume patrol.
+CLEAR_MOVE
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 1
 WAIT 2
 CLEAR_MOVE
 GOTO LOOP

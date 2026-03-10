@@ -25,12 +25,13 @@ This starter intentionally uses a few core v1 patterns:
 ```text
 ; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
-; Summary: chase+shoot the closest bot; back off when too close; detour for HEALTH/AMMO when low.
+; Summary: chase+shoot the closest bot; sidestep when too close; detour for HEALTH/AMMO when low.
 
 LABEL LOOP
 
-; If we're about to collide, step away briefly.
-IF (DIST_TO_CLOSEST_BOT() <= 20 || BUMPED_BOT()) GOTO BACKOFF
+; If we're about to collide, sidestep within our current sector.
+; (Use a slightly larger threshold than the bot hitbox to avoid repeated bumps.)
+IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
 
 ; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
 ; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
@@ -44,11 +45,15 @@ IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) GOTO RESUPPLY
 TARGET_CLOSEST
 SET_MOVE_TO_TARGET
 IF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET
-
 GOTO LOOP
 
 LABEL BACKOFF
-SET_MOVE_TO_SECTOR 5
+; Break pursuit and step to the opposite zone in our current sector.
+CLEAR_MOVE
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 1
 WAIT 2
 CLEAR_MOVE
 GOTO LOOP
