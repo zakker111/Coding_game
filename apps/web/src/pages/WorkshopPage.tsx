@@ -820,7 +820,7 @@ export function WorkshopPage() {
                 borderRadius: 10,
                 background: 'rgba(0,0,0,0.35)',
                 overflow: 'auto',
-                maxHeight: 240,
+                height: 240,
               }}
             >
               {replay

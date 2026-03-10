@@ -234,14 +234,19 @@ a:hover {
 
 .workshop-grid {
   display: grid;
-  grid-template-columns: 1.05fr 1.3fr 0.95fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.95fr);
   gap: 16px;
   align-items: start;
 }
 
+/* Prevent large <pre>/<textarea> min-content widths from forcing the grid wider. */
+.workshop-grid > .panel {
+  min-width: 0;
+}
+
 @media (max-width: 1080px) {
   .workshop-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .mini-input {
