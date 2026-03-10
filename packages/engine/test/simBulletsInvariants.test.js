@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { runMatchToReplay } from '@coding-game/engine'
+import { BULLET_SPEED_UNITS_PER_TICK } from '../src/sim/constants.js'
 
 test('runMatchToReplay: bullets despawn and ammo only decreases via SHOOT', () => {
   const bots = [
@@ -39,6 +40,13 @@ test('runMatchToReplay: bullets despawn and ammo only decreases via SHOOT', () =
     for (const e of replay.events[t]) {
       if (e.type === 'BULLET_SPAWN') {
         spawnTickByBulletId.set(e.bulletId, t)
+
+        // Regression guard: bullet velocity must not overspeed diagonally.
+        const v2 = e.vel.x * e.vel.x + e.vel.y * e.vel.y
+        assert.ok(
+          v2 <= BULLET_SPEED_UNITS_PER_TICK * BULLET_SPEED_UNITS_PER_TICK,
+          `expected bullet speed^2 <= ${BULLET_SPEED_UNITS_PER_TICK ** 2}, got ${v2} (vel=${e.vel.x},${e.vel.y})`
+        )
       }
 
       if (e.type === 'BULLET_DESPAWN') {

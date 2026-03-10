@@ -8,13 +8,14 @@ import {
   SLOT_IDS,
 } from './constants.js'
 import { bresenhamPoints } from './bresenham.js'
-import { clonePos, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
+import { clonePos, normalizeToLen, pointInBotAabb } from './arenaMath.js'
 
 export function createBullet(shooter, target) {
   const dx = target.pos.x - shooter.pos.x
   const dy = target.pos.y - shooter.pos.y
 
-  const vel = normalizeToMaxAxis(dx, dy, BULLET_SPEED_UNITS_PER_TICK)
+  // Ruleset.md §5.1: Euclidean normalization (direction locked at fire time).
+  const vel = normalizeToLen(dx, dy, BULLET_SPEED_UNITS_PER_TICK)
 
   return {
     bulletId: '',

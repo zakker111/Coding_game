@@ -62,18 +62,7 @@ test('runMatchToReplay: deterministic smoke test (examples bot0..bot3)', () => {
   const execsT1 = r1.events[1].filter((e) => e.type === 'BOT_EXEC')
   assert.equal(execsT1.length, 4)
 
-  // End-to-end sanity: should see at least one move/shoot/powerup/damage.
+  // End-to-end sanity: example bots should shoot at least once.
   const allEvents = r1.events.flat()
-  const hasAnyInterestingEvent = allEvents.some(
-    (e) =>
-      e &&
-      (e.type === 'BOT_MOVED' ||
-        e.type === 'BULLET_SPAWN' ||
-        e.type === 'POWERUP_SPAWN' ||
-        e.type === 'DAMAGE')
-  )
-  assert.ok(
-    hasAnyInterestingEvent,
-    'expected at least one of BOT_MOVED/BULLET_SPAWN/POWERUP_SPAWN/DAMAGE'
-  )
+  assert.ok(allEvents.some((e) => e && e.type === 'BULLET_SPAWN'), 'expected at least one BULLET_SPAWN')
 })

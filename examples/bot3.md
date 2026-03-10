@@ -33,7 +33,8 @@ IF ((HEALTH < 40 && POWERUP_EXISTS(HEALTH)) || (AMMO < 20 && POWERUP_EXISTS(AMMO
 IF (HEALTH >= 40 && AMMO >= 20) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 
 ; Only shoot when something is fairly close (helps conserve ammo).
-IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 3) DO FIRE_SLOT1 NEAREST_BOT
+; DIST_TO_CLOSEST_BOT() is Manhattan distance in world units (0..~400), so 3 is too small.
+IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 120) DO FIRE_SLOT1 NEAREST_BOT
 
 GOTO LOOP
 ```

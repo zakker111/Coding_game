@@ -136,6 +136,51 @@ export function scaleDeltaToMaxLen(dx, dy, maxLen) {
 }
 
 /**
+ * Deterministically normalize a vector to have Euclidean length <= `len`.
+ *
+ * Used for bullet velocity (Ruleset.md §5.1):
+ *   vel = Normalize(targetPos - spawnPos) * bulletSpeedUnitsPerTick
+ *
+ * Notes:
+ * - Uses floating point math (`Math.hypot` + `Math.round`) but returns integers.
+ * - Final vector is clamped so `x^2 + y^2 <= len^2`.
+ */
+export function normalizeToLen(dx, dy, len) {
+  if (dx === 0 && dy === 0) return { x: 0, y: -len }
+
+  const dist = Math.hypot(dx, dy)
+  if (!Number.isFinite(dist) || dist <= 0) return { x: 0, y: -len }
+
+  const scale = len / dist
+
+  let x = Math.round(dx * scale)
+  let y = Math.round(dy * scale)
+
+  // Avoid a zero vector due to rounding.
+  if (x === 0 && y === 0) {
+    if (Math.abs(dx) >= Math.abs(dy)) x = dx < 0 ? -1 : 1
+    else y = dy < 0 ? -1 : 1
+  }
+
+  // Ensure we never exceed the desired speed due to rounding.
+  const max2 = len * len
+  while (x * x + y * y > max2) {
+    if (Math.abs(x) >= Math.abs(y)) x += x < 0 ? 1 : -1
+    else y += y < 0 ? 1 : -1
+
+    // Defensive: don't loop forever.
+    if (x === 0 && y === 0) {
+      y = -1
+      break
+    }
+  }
+
+  return { x, y }
+}
+
+/**
+ * Legacy bullet normalization (L∞) kept for reference. Prefer `normalizeToLen`.
+ *
  * Integer normalization for bullets: returns a vector where
  * max(|vx|,|vy|) == maxAxis (unless dx=dy=0).
  */
