@@ -94,10 +94,16 @@ Key items left:
 
 ## Phase 7 — Deployment unification / reduce duplication
 
+Goal: prevent deploy-time copies drifting from the repo’s authoritative sources.
+
+Current status:
+- `deploy/bot-instructions.md` is currently in sync with `BotInstructions.md`.
+- `deploy/workshop/exampleBots.js` was manually re-synced with `examples/` (notably bot3: removed `IF (...) DO WAIT n`).
+
 Key items left:
-- Auto-generate or validate:
-  - `deploy/bot-instructions.md` vs `BotInstructions.md`
-  - `deploy/workshop/exampleBots.js` vs `examples/bot*.md`
+- Add automation (or CI checks) so deploy-time copies cannot drift:
+  - Validate `deploy/bot-instructions.md` equals `BotInstructions.md` byte-for-byte.
+  - Generate or validate `deploy/workshop/exampleBots.js` from `examples/bot*.md` (scripts-only extraction).
 
 ---
 

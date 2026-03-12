@@ -110,5 +110,7 @@ Primary implementation references:
 
 ## Recommended follow-on cleanups (optional)
 
-- Sync / dedupe `deploy/bot-instructions.md` vs `BotInstructions.md` to avoid drift.
+- Add CI validation so deploy-time copies cannot drift:
+  - assert `deploy/bot-instructions.md` equals `BotInstructions.md`
+  - assert `deploy/workshop/exampleBots.js` matches `examples/` (or generate it)
 - Add a “ruleset constants table” in one place (either `Ruleset.md` or a new `RulesetConstants.md`) if you want a single canonical reference for balance numbers.
