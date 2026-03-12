@@ -16,10 +16,10 @@ Recent gameplay changes already shipped:
 Goal: make docs, engine behavior, and replay schema agree so future work doesn’t create regressions.
 
 Key items left:
-- Replay `DAMAGE` schema alignment (docs vs emitted events)
-- Tick-phase ordering alignment (docs vs sim)
-- Wall clamp + bot collision edge case (docs say wall damage still applies; engine currently suppresses it)
-- DSL semantics mismatch: `IF (...) DO WAIT n` (examples use it; VM likely ignores nested WAIT)
+- Run the QA gates after doc updates and example bot fixes:
+  - `pnpm -C packages/engine test`
+  - `pnpm qa`
+- Optional Phase 1 cleanup: unify/remove legacy docs that still describe the old `packages/replay` sample generator as authoritative.
 
 QA gates:
 - `pnpm -C packages/engine test`

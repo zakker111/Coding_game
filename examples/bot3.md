@@ -1,9 +1,8 @@
-# Built-in bot: Corner Bunker (BULLET + ARMOR)
+# Built-in bot: Corner Bunker (BULLET)
 
-**Suggested v1 loadout**
-- `SLOT1 = BULLET`
-- `SLOT2 = ARMOR`
-- `SLOT3 = (empty)`
+**Current engine note (rulesetVersion `0.1.0`)**
+- The engine does not yet support explicit loadouts.
+- This script does **not** reference `SAW` or `SHIELD`, so it runs as a **BULLET-only** bot.
 
 **Intended behavior**
 - Defaults to a fixed “home” location.
@@ -17,7 +16,6 @@
 
 ```text
 ; bot3 — Corner Bunker
-; Loadout: SLOT1=BULLET, SLOT2=ARMOR
 ; Summary: hold a home corner; avoid bump-lock; dodge bullets; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1
@@ -36,7 +34,8 @@ IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
 IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
 
 ; If we decided to go get a powerup, commit for 2 ticks while the goal keeps moving us.
-IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) DO WAIT 2
+; Note: `WAIT` is control-flow and cannot be nested under `IF (...) DO ...`.
+IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) GOTO COMMIT_POWERUP
 
 ; Otherwise, go back home.
 IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
@@ -44,6 +43,10 @@ IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 ; Only shoot when something is fairly close (helps conserve ammo).
 IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 120) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL COMMIT_POWERUP
+WAIT 2
 GOTO LOOP
 
 LABEL BACKOFF

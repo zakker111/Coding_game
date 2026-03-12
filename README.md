@@ -2,10 +2,11 @@
 
 A competitive programming/bot-fighting game where you write a tiny script to control your bot in a deterministic arena.
 
-This repo is **spec-first**, but includes an initial runnable prototype:
+This repo is **spec-first**, and includes a runnable prototype:
 
-- `packages/replay`: replay schema + deterministic sample replay generator
-- `apps/web`: Vite + React workshop prototype that renders a replay on a Canvas arena
+- `packages/engine`: bot DSL compiler/VM + deterministic simulation + replay generation
+- `apps/web`: Vite + React workshop that runs local matches in a Web Worker and renders the replay
+- `packages/replay`: legacy replay schema + sample generator (not authoritative engine behavior)
 
 ## Running the prototype
 
@@ -24,7 +25,8 @@ Then open the printed URL (usually http://localhost:5173).
 To run tests:
 
 ```bash
-pnpm test
+pnpm test          # apps/web
+pnpm -C packages/engine test
 ```
 
 ## QA (Phase 1)
@@ -63,10 +65,10 @@ Notes:
 - Each bot executes **exactly 1 instruction per tick** in a small DSL (with beginner-friendly aliases like `TARGET_CLOSEST`, `MOVE_TO_ZONE`, `IN_ZONE`, etc.; these are intended to normalize to a small canonical core at parse/compile time and do not affect determinism)
 - Arena is a **3×3 grid of sectors** (1–9). Each sector has **4 zones** (2×2). Bots have continuous world positions (`pos = {x,y}` in a 192×192 arena) and a **16×16 hitbox** (centered at `pos`); sector/zone are UI/rules regions derived from `pos`.
   - Bots do **not** move anchor-to-anchor or snap to sector/zone centers; only powerups use anchor locations for compact encoding.
-- Bots equip up to **3 module slots** (slots may be empty). **More equipped slots = slower movement**.
-- Powerups (`HEALTH|AMMO|ENERGY`) may remain anchored at deterministic centers (seeded RNG) every **10–20 ticks** and are picked up when a bot’s position overlaps the pickup region around that anchor.
+- Module/loadout note (rulesetVersion `0.1.0`): explicit 3-slot loadouts are not implemented yet; the engine infers whether a bot has `SAW`/`SHIELD` by scanning the bot source text.
+- Powerups (`HEALTH|AMMO|ENERGY`) spawn at deterministic anchors (seeded RNG) every **10–20 ticks** and are picked up when a bot’s AABB overlaps the anchor point.
 - Matches end by rules: last bot alive, or `tickCap`, or `STALEMATE` (no bot-vs-bot damage for a configured window) — see `Ruleset.md`.
-- Matches are fully replayable from `(rulesetVersion, matchSeed, bot sources + loadouts)`.
+- Matches are fully replayable from `(rulesetVersion, matchSeed, bot source snapshots)` (and future: explicit loadouts).
 
 ## Where to look (recommended reading order)
 

@@ -19,8 +19,11 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Powerups: add `powerupLifetimeTicks` and despawn expired powerups with `POWERUP_DESPAWN reason=RULES`.
-- Ammo: explicitly specify ammo is consumable (bullet fire consumes ammo), does not regenerate, and is only replenished via `AMMO` powerups (docs + sample generator now demonstrates this via deterministic BOT2 shooting + lower initial ammo).
+- Docs/spec alignment: update `Ruleset.md` and `ReplayViewerPlan.md` to reflect the current engine behavior (`rulesetVersion = 0.1.0`).
+  - `POWERUP_*` events use `powerupType` (not `type`).
+  - Invalid instructions emit `BOT_EXEC { result: "NOP", reason: "INVALID_INSTR" }`.
+  - `DAMAGE` event `source/kind` values documented as currently emitted by the engine.
+- Examples: remove invalid nested control-flow patterns (e.g. `IF (...) DO WAIT n`) from Markdown example bots.
 
 ---
 
