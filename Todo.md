@@ -136,6 +136,7 @@ Damage mitigation (locked direction):
 - Saw: energy drain per tick, damage per tick.
 - Shield: energy drain per tick, mitigation math (flat vs %), future reflection behavior.
 - Armor: damage reduction math (flat vs %), mitigation amount.
+- Bot bump / ramming: `botBumpDamage` amount (v1 default is now small, but still tuneable).
 
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { runMatchToReplay } from '@coding-game/engine'
 import { botsOverlap, oppositeDir } from '../src/sim/arenaMath.js'
 
-test('runMatchToReplay: bot bumps are paired and alive bots never overlap', () => {
+test('runMatchToReplay: bot bumps are paired, deal damage, and alive bots never overlap', () => {
   const bots = [
     { slotId: 'BOT1', sourceText: 'LABEL LOOP\nMOVE RIGHT\nGOTO LOOP\n' },
     { slotId: 'BOT2', sourceText: 'LABEL LOOP\nMOVE LEFT\nGOTO LOOP\n' },
@@ -19,6 +19,19 @@ test('runMatchToReplay: bot bumps are paired and alive bots never overlap', () =
     .filter((e) => e && e.type === 'BUMP_BOT')
 
   assert.ok(bumps.length > 0, 'expected at least one BUMP_BOT event')
+
+  const bumpDamage = replay.events
+    .flat()
+    .filter((e) => e && e.type === 'DAMAGE' && e.kind === 'BUMP_BOT')
+
+  assert.ok(bumpDamage.length > 0, 'expected at least one BUMP_BOT damage event')
+
+  // Expect the colliding bots to have taken at least some damage.
+  const end = replay.state[replay.tickCap]
+  const b1 = end.bots.find((b) => b.botId === 'BOT1')
+  const b2 = end.bots.find((b) => b.botId === 'BOT2')
+  assert.ok(b1 && b1.hp < 100, 'expected BOT1 hp to decrease from bump damage')
+  assert.ok(b2 && b2.hp < 100, 'expected BOT2 hp to decrease from bump damage')
 
   for (let t = 1; t < replay.events.length; t++) {
     const tickBumps = replay.events[t].filter((e) => e && e.type === 'BUMP_BOT')

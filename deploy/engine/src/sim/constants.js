@@ -39,3 +39,6 @@ export const BULLET_AMMO_COST = 1
 export const BULLET_COOLDOWN_TICKS = 4
 
 export const WALL_BUMP_DAMAGE = 2
+
+// Damage dealt to both bots when they collide (bot-to-bot bump / ramming).
+export const BOT_BUMP_DAMAGE = 1

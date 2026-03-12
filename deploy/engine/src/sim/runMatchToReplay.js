@@ -11,6 +11,7 @@ import {
   BULLET_COOLDOWN_TICKS,
   SLOT_IDS,
   WALL_BUMP_DAMAGE,
+  BOT_BUMP_DAMAGE,
 } from './constants.js'
 import {
   botsOverlap,
@@ -735,6 +736,9 @@ function nextTargetId(selfId, currentTargetId) {
 }
 
 function resolveMovement(bots, powerupState, tickEvents) {
+  // Apply at most one bump-damage instance per bot-pair per tick.
+  const bumpDamagePairs = new Set()
+
   for (const bot of bots) {
     if (!bot.alive) continue
 
@@ -822,6 +826,15 @@ function resolveMovement(bots, powerupState, tickEvents) {
       overlapped.bumpedBotThisTick = true
       overlapped.bumpedBotIdThisTick = bot.botId
       overlapped.bumpedBotDirThisTick = oppositeDir(request.dir)
+
+      const a = bot.botId
+      const b = overlapped.botId
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`
+
+      if (!bumpDamagePairs.has(key)) {
+        bumpDamagePairs.add(key)
+        applyBotBumpDamage(bot, overlapped, tickEvents, key)
+      }
     }
 
     bot.pos = finalPos
@@ -877,6 +890,56 @@ function applyWallBumpDamage(bot, dir, tickEvents) {
       type: 'BOT_DIED',
       victimBotId: bot.botId,
       ...(bot.lastDamageByBotId ? { creditedBotId: bot.lastDamageByBotId } : {}),
+    })
+  }
+}
+
+function applyBotBumpDamage(botA, botB, tickEvents, pairKey) {
+  if (!BOT_BUMP_DAMAGE || BOT_BUMP_DAMAGE <= 0) return
+
+  const dmg = BOT_BUMP_DAMAGE
+
+  botA.lastDamageByBotId = botB.botId
+  botA.hp = Math.max(0, botA.hp - dmg)
+
+  tickEvents.push({
+    type: 'DAMAGE',
+    victimBotId: botA.botId,
+    amount: dmg,
+    source: 'BOT',
+    sourceBotId: botB.botId,
+    kind: 'BUMP_BOT',
+    sourceRef: { type: 'BUMP_BOT', id: pairKey },
+  })
+
+  if (botA.hp <= 0 && botA.alive) {
+    botA.alive = false
+    tickEvents.push({
+      type: 'BOT_DIED',
+      victimBotId: botA.botId,
+      creditedBotId: botA.lastDamageByBotId,
+    })
+  }
+
+  botB.lastDamageByBotId = botA.botId
+  botB.hp = Math.max(0, botB.hp - dmg)
+
+  tickEvents.push({
+    type: 'DAMAGE',
+    victimBotId: botB.botId,
+    amount: dmg,
+    source: 'BOT',
+    sourceBotId: botA.botId,
+    kind: 'BUMP_BOT',
+    sourceRef: { type: 'BUMP_BOT', id: pairKey },
+  })
+
+  if (botB.hp <= 0 && botB.alive) {
+    botB.alive = false
+    tickEvents.push({
+      type: 'BOT_DIED',
+      victimBotId: botB.botId,
+      creditedBotId: botB.lastDamageByBotId,
     })
   }
 }

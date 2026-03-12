@@ -230,6 +230,7 @@ The victim receives:
 - `ARMOR` is passive and mitigates **bullet + saw** damage.
 - Environment damage is not mitigable:
   - `BUMP_WALL` damage always applies its full amount.
+- Bot bump / ramming damage (`kind == BUMP_BOT`) is **not mitigated** by `SHIELD` (and is treated as unmitigable in v1 unless explicitly changed later).
 
 > Note: the exact mitigation math (flat vs % reduction, stacking rules) is still a balance parameter.
 
@@ -246,6 +247,7 @@ Walls are gameplay:
 
 Ruleset parameters:
 - `wallBumpDamage` (int; v1 TBD)
+- `botBumpDamage` (int; v1 recommended default: `1`)
 
 Mitigation rule (locked):
 - wall bump damage cannot be mitigated by defensive modules (it always applies its full amount).
@@ -271,8 +273,15 @@ Direction rule (recommended for v1):
 Rendering note:
 - The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_BOT` (purely visual; see `ArenaVisualPlan.md` §5.7).
 
-Damage (to finalize):
-- If you decide that bot-to-bot bumps cause damage, it should be recorded as `source == BOT` with `kind == BUMP_BOT`, so it participates in kill credit via `lastDamageByBotId`.
+Damage (v1):
+- Bot-to-bot bumps deal damage to **both** bots.
+- Ruleset parameter:
+  - `botBumpDamage` (int; recommended default: `1`)
+- Apply at most once per bot-pair per tick (so head-on movement doesn’t double-apply if both bots attempt to move into each other).
+- Record as a `DAMAGE` event with:
+  - `source == BOT`
+  - `kind == BUMP_BOT`
+  - `sourceBotId` set to the *other* bot (so it participates in kill credit via `lastDamageByBotId`).
 
 ---
 
