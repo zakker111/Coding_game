@@ -7,6 +7,7 @@
 
 **Intended behavior**
 - Demonstrates **explicit target selection** using `BOT_ALIVE(...)` + `SET_TARGET`:
+- If bullets are nearby, briefly dodges (so a bullet bot doesn’t just tunnel-vision).
   - target BOT1 if alive; else BOT3; else BOT4
 - If a bot is **very close** (or we just bumped), briefly backs off toward the center before re-engaging.
 - If health is low and a HEALTH powerup exists, commits briefly to a healing run.
@@ -19,12 +20,15 @@
 ```text
 ; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
-; Summary: choose first alive target (BOT1→BOT3→BOT4), chase it, shoot it; sidestep when too close; detour for HEALTH/AMMO when low.
+; Summary: choose a target (BOT1→BOT3→BOT4), chase it, shoot it; avoid bump-lock; detour for HEALTH/AMMO; dodge enemy bullets.
 
 LABEL LOOP
 
 ; If we're about to collide, sidestep within our current sector.
 IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
+
+; If enemy bullets are nearby, dodge for a tick.
+IF (BULLET_IN_SAME_SECTOR() || BULLET_IN_ADJ_SECTOR()) GOTO DODGE_BULLETS
 
 ; Heal / resupply detours.
 ; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
@@ -51,6 +55,17 @@ IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 3
 IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 2
 IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 1
 WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL DODGE_BULLETS
+; Quick evasive step: move to a different zone for 1 tick.
+CLEAR_MOVE
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
+WAIT 1
 CLEAR_MOVE
 GOTO LOOP
 

@@ -190,6 +190,12 @@ Damage mitigation (locked direction):
 - Locked: bots have **global knowledge of powerup locations** (supporting `POWERUP_EXISTS` and `DIST_TO_CLOSEST_POWERUP`).
 - Locked: bots can sense other bots’ **presence + proximity** (see `BotInstructions.md` predicates like `BOT_IN_SAME_SECTOR`, `BOT_IN_ADJ_SECTOR`, `DIST_TO_BOT`, `DIST_TO_CLOSEST_BOT`).
 - Locked: bots can read `TARGET_HEALTH` for their current target bot (evaluates to `0` if no valid target bot exists).
+- Planned (next iteration): **bullet-aware behavior** and optional **bullet targeting**:
+  - keep/extend coarse predicates (`BULLET_IN_SAME_SECTOR()`, `BULLET_IN_ADJ_SECTOR()`)
+  - add a concept of “bullet as a target” (so bots can treat bullets as first-class threats), likely via new APIs like:
+    - `TARGET_CLOSEST_BULLET`
+    - `HAS_TARGET_BULLET()` / `DIST_TO_TARGET_BULLET()`
+    - and a matching evasion primitive like `MOVE_AWAY_FROM_TARGET`
 - Still to define:
   - bullet sensing (near-only vs predictive)
   - whether to expose per-bot resource queries like `BOT_HEALTH(BOTn)` (not part of the stable v1 language today)
@@ -222,6 +228,8 @@ Damage mitigation (locked direction):
   - minimal “stand still + shoot closest” bot
   - navigation goal example (set-and-forget movement while attacking)
   - resource-aware bot (ammo/energy management; shield/saw toggles)
+  - bullet-aware evasive bot (use `BULLET_IN_SAME_SECTOR()` / `BULLET_IN_ADJ_SECTOR()` to dodge)
+  - anti-bump-lock bot (use `DIST_TO_CLOSEST_BOT()` + `BUMPED_BOT()` + a timer/WAIT commitment)
 - Add a lightweight **docs QA checklist** (and later CI) to prevent spec drift:
   - grep checks for merge markers / template artifacts
   - grep checks for known naming foot-guns (`NOOP` vs `NOP`, alias wording, etc.)
@@ -294,10 +302,18 @@ Bot identity/version planning note:
   - bottom: equipment/loadout selection (v1: affects **local preview** only; server-run matches use a fixed default loadout)
   - always a **4-bot match**: `BOT1 = selected bot` + three built-in opponents (`BOT2..BOT4`)
   - built-in opponents’ code is read-only
-- **Built-in opponents (v1)**: ship 3 bundled scripts under `examples/`:
+- **Built-in opponents (v1)**: ship a small pool of bundled scripts under `examples/` (read-only in the Workshop) that demonstrate:
+  - powerup seeking (HEALTH/AMMO/ENERGY)
+  - bullet avoidance (coarse threat sensing)
+  - anti-bump-lock behavior (backoff when too close / after bumps)
+
+  Current pool:
+  - `examples/bot1.md` (Zone Patrol Shooter)
   - `examples/bot2.md` (Chaser Shooter)
   - `examples/bot3.md` (Corner Bunker)
   - `examples/bot4.md` (Saw Rusher)
+  - `examples/bot5.md` (Burst Hunter)
+  - `examples/bot6.md` (Energy Saw Skirmisher)
 - **Starter template (v1)**:
   - `examples/bot0.md` (Aggressive Skirmisher) is the default script used when a bot has no saved draft yet.
 - **Persistence/memory (v1)**:

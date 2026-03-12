@@ -9,6 +9,7 @@ This is the **default BOT1 script** the Workshop should load when the user has *
 
 **Intended behavior**
 - If a bot is **very close**, briefly back off toward the center before re-engaging.
+- If enemy bullets are nearby, briefly dodge to a different zone.
 - If health is low and a HEALTH powerup exists, commit briefly to a healing run.
 - If ammo is low and an AMMO powerup exists (and we’re not currently healing), commit briefly to an ammo run.
 - Otherwise: target the closest bot, chase it (persistent move goal), and shoot when ready.
@@ -25,13 +26,16 @@ This starter intentionally uses a few core v1 patterns:
 ```text
 ; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
-; Summary: chase+shoot the closest bot; sidestep when too close; detour for HEALTH/AMMO when low.
+; Summary: chase+shoot the closest bot; avoid bump-lock; detour for HEALTH/AMMO when low; dodge enemy bullets when threatened.
 
 LABEL LOOP
 
 ; If we're about to collide, sidestep within our current sector.
 ; (Use a slightly larger threshold than the bot hitbox to avoid repeated bumps.)
 IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
+
+; If enemy bullets are nearby, dodge for a tick to reduce face-tanking.
+IF (BULLET_IN_SAME_SECTOR() || BULLET_IN_ADJ_SECTOR()) GOTO DODGE_BULLETS
 
 ; Heal when hurt (clear bot target so MOVE_TO_TARGET prefers the powerup).
 ; (Thresholds are tuned so this behavior is visible in short Workshop runs.)
@@ -55,6 +59,17 @@ IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 3
 IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 2
 IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 1
 WAIT 2
+CLEAR_MOVE
+GOTO LOOP
+
+LABEL DODGE_BULLETS
+; Quick evasive step: move to a different zone for 1 tick.
+CLEAR_MOVE
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
+WAIT 1
 CLEAR_MOVE
 GOTO LOOP
 

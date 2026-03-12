@@ -7,6 +7,7 @@
 
 **Intended behavior**
 - Defaults to holding around the center (`SECTOR 5`).
+- If bullets are nearby, briefly dodges to reduce incoming damage.
 - When an enemy gets close, starts a short **burst window** (timer) where it locks a target and fires repeatedly.
 - When low on health/ammo, targets that powerup type and **commits** for a few ticks using `MOVE_TO_TARGET`.
 
@@ -15,7 +16,7 @@
 ```text
 ; bot5 — Burst Hunter
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
-; Summary: center control + burst windows; detours for HEALTH/AMMO via TARGET_POWERUP.
+; Summary: center control + burst windows; detours for HEALTH/AMMO; avoid bump-lock; dodge bullets when threatened.
 
 ; Default posture: drift toward the center.
 SET_MOVE_TO_SECTOR 5
@@ -24,6 +25,9 @@ LABEL LOOP
 
 ; If we're about to collide, step to a nearby zone briefly.
 IF (DIST_TO_CLOSEST_BOT() <= 32 || BUMPED_BOT()) GOTO BACKOFF
+
+; If enemy bullets are nearby, dodge for a tick (especially important for bullet-based bots).
+IF (BULLET_IN_SAME_SECTOR() || BULLET_IN_ADJ_SECTOR()) GOTO DODGE_BULLETS
 
 ; --- Emergency powerup logic (commit for 3 ticks) ---
 ; Low health → go to HEALTH.
@@ -53,6 +57,17 @@ GOTO LOOP
 LABEL BACKOFF
 SET_MOVE_TO_SECTOR 5 ZONE 1
 WAIT 2
+SET_MOVE_TO_SECTOR 5
+GOTO LOOP
+
+LABEL DODGE_BULLETS
+; Quick evasive step: move to a different zone for 1 tick.
+CLEAR_MOVE
+IF (IN_ZONE(1)) DO SET_MOVE_TO_ZONE 2
+IF (IN_ZONE(2)) DO SET_MOVE_TO_ZONE 4
+IF (IN_ZONE(4)) DO SET_MOVE_TO_ZONE 3
+IF (IN_ZONE(3)) DO SET_MOVE_TO_ZONE 1
+WAIT 1
 SET_MOVE_TO_SECTOR 5
 GOTO LOOP
 ```
