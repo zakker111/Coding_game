@@ -10,6 +10,8 @@ import {
 import { bresenhamPoints } from './bresenham.js'
 import { clonePos, normalizeToLen, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
 
+
+
 export function createBullet(shooter, target) {
   const dx = target.pos.x - shooter.pos.x
   const dy = target.pos.y - shooter.pos.y
@@ -94,21 +96,23 @@ export function stepBullets(bullets, bots, tickEvents) {
     if (hit.kind === 'BOT') {
       const victim = hit.victim
 
+      const damage = victim.shieldActive ? BULLET_DAMAGE - Math.floor(BULLET_DAMAGE / 2) : BULLET_DAMAGE
+
       tickEvents.push({
         type: 'BULLET_HIT',
         bulletId: bullet.bulletId,
         victimBotId: victim.botId,
-        damage: BULLET_DAMAGE,
+        damage,
         hitPos: clonePos(hit.pos),
       })
 
       victim.lastDamageByBotId = bullet.ownerBotId
-      victim.hp = Math.max(0, victim.hp - BULLET_DAMAGE)
+      victim.hp = Math.max(0, victim.hp - damage)
 
       tickEvents.push({
         type: 'DAMAGE',
         victimBotId: victim.botId,
-        amount: BULLET_DAMAGE,
+        amount: damage,
         source: 'BULLET',
         sourceBotId: bullet.ownerBotId,
         kind: 'DIRECT',

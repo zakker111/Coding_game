@@ -64,9 +64,16 @@ const SAW_ENERGY_DRAIN = 1
 const SAW_ATTACK_RANGE = BOT_HALF_SIZE * 2 + 2
 const SAW_ATTACK_RANGE2 = SAW_ATTACK_RANGE * SAW_ATTACK_RANGE
 
+const SHIELD_ENERGY_DRAIN = 1
+
 function botSourceHasSaw(sourceText) {
   if (!sourceText) return false
   return /\bSAW\b/i.test(sourceText)
+}
+
+function botSourceHasShield(sourceText) {
+  if (!sourceText) return false
+  return /\bSHIELD\b/i.test(sourceText)
 }
 
 /**
@@ -82,12 +89,13 @@ export function runMatchToReplay(params) {
   /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any,
   bumpedBotLastTick:boolean, bumpedBotThisTick:boolean, bumpedBotIdLastTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotIdThisTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotDirLastTick:any, bumpedBotDirThisTick:any,
   bumpedWallLastTick:boolean, bumpedWallThisTick:boolean, bumpedWallDirLastTick:any, bumpedWallDirThisTick:any,
-  sawCapable:boolean, sawActive:boolean}>} */
+  sawCapable:boolean, sawActive:boolean, shieldCapable:boolean, shieldActive:boolean}>} */
   const bots = SLOT_IDS.map((botId) => {
     const sourceText = headerBots.find((b) => b.slotId === botId)?.sourceText ?? ''
     const compiled = compileBotSource(sourceText)
 
     const sawCapable = botSourceHasSaw(sourceText)
+    const shieldCapable = botSourceHasShield(sourceText)
 
     return {
       botId,
@@ -117,6 +125,8 @@ export function runMatchToReplay(params) {
 
       sawCapable,
       sawActive: false,
+      shieldCapable,
+      shieldActive: false,
     }
   })
 
@@ -191,22 +201,48 @@ export function runMatchToReplay(params) {
         }
 
         if (eff.kind === 'MODULE_TOGGLE') {
-          if (eff.module !== 'SAW' || !bot.sawCapable) {
-            botExecResult = 'NOP'
-            botExecReason = 'NO_MODULE'
+          if (eff.module === 'SAW') {
+            if (!bot.sawCapable) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_MODULE'
+              continue
+            }
+
+            const wantsOn = Boolean(eff.on)
+
+            if (wantsOn && bot.energy <= 0) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_ENERGY'
+              bot.sawActive = false
+              continue
+            }
+
+            bot.sawActive = wantsOn
             continue
           }
 
-          const wantsOn = Boolean(eff.on)
+          if (eff.module === 'SHIELD') {
+            if (!bot.shieldCapable) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_MODULE'
+              continue
+            }
 
-          if (wantsOn && bot.energy <= 0) {
-            botExecResult = 'NOP'
-            botExecReason = 'NO_ENERGY'
-            bot.sawActive = false
+            const wantsOn = Boolean(eff.on)
+
+            if (wantsOn && bot.energy <= 0) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_ENERGY'
+              bot.shieldActive = false
+              continue
+            }
+
+            bot.shieldActive = wantsOn
             continue
           }
 
-          bot.sawActive = wantsOn
+          botExecResult = 'NOP'
+          botExecReason = 'NO_MODULE'
           continue
         }
 
@@ -216,43 +252,67 @@ export function runMatchToReplay(params) {
             continue
           }
 
+          if (eff.slot === 2 && bot.shieldCapable) {
+            bot.shieldActive = false
+            continue
+          }
+
           botExecResult = 'NOP'
           botExecReason = 'NO_MODULE'
           continue
         }
 
         if (eff.kind === 'USE_SLOT') {
-          if (eff.slot !== 1) {
-            botExecResult = 'NOP'
-            botExecReason = 'NO_MODULE'
-            continue
-          }
+          if (eff.slot === 1) {
+            // v1: if SLOT1 is SAW, USE_SLOT1 behaves like SAW ON (target ignored).
+            if (bot.sawCapable) {
+              if (bot.energy <= 0) {
+                botExecResult = 'NOP'
+                botExecReason = 'NO_ENERGY'
+                bot.sawActive = false
+                continue
+              }
 
-          // v1: if SLOT1 is SAW, USE_SLOT1 behaves like SAW ON (target ignored).
-          if (bot.sawCapable) {
-            if (bot.energy <= 0) {
-              botExecResult = 'NOP'
-              botExecReason = 'NO_ENERGY'
-              bot.sawActive = false
+              bot.sawActive = true
               continue
             }
 
-            bot.sawActive = true
+            const r = attemptUseSlot1(bot, eff.target, bots, bullets, ++bulletCounter, tickEvents)
+
+            if (!r.ok) {
+              botExecResult = 'NOP'
+              botExecReason = r.reason
+              bulletCounter--
+            } else {
+              bullets = r.bullets
+              bot.slot1Cooldown = BULLET_COOLDOWN_TICKS
+              bulletCounter = r.bulletCounter
+            }
+
             continue
           }
 
-          const r = attemptUseSlot1(bot, eff.target, bots, bullets, ++bulletCounter, tickEvents)
+          if (eff.slot === 2) {
+            // v1: if SLOT2 is SHIELD, USE_SLOT2 behaves like SHIELD ON (target ignored).
+            if (!bot.shieldCapable) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_MODULE'
+              continue
+            }
 
-          if (!r.ok) {
-            botExecResult = 'NOP'
-            botExecReason = r.reason
-            bulletCounter--
-          } else {
-            bullets = r.bullets
-            bot.slot1Cooldown = BULLET_COOLDOWN_TICKS
-            bulletCounter = r.bulletCounter
+            if (bot.energy <= 0) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_ENERGY'
+              bot.shieldActive = false
+              continue
+            }
+
+            bot.shieldActive = true
+            continue
           }
 
+          botExecResult = 'NOP'
+          botExecReason = 'NO_MODULE'
           continue
         }
       }
@@ -273,7 +333,7 @@ export function runMatchToReplay(params) {
       })
     }
 
-    // 2) SAW drain
+    // 2) Toggle drains (SAW/SHIELD)
     stepToggleDrains(bots, tickEvents)
 
     // 3) Movement + collision resolution
@@ -535,10 +595,15 @@ function buildObservation(bot, bots, bullets, powerupState) {
     hasTargetBot: () => Boolean(targetBot && targetBot.alive),
 
     // Slots
-    hasModule: (slot) => slot === 1,
+    hasModule: (slot) => {
+      if (slot === 1) return true
+      if (slot === 2) return bot.shieldCapable
+      return false
+    },
     cooldownRemaining: (slot) => (slot === 1 ? bot.slot1Cooldown : 0),
     slotReady: (slot) => {
       if (slot === 1 && bot.sawCapable) return bot.energy > 0
+      if (slot === 2 && bot.shieldCapable) return bot.energy > 0
 
       if (slot !== 1) return false
       if (bot.slot1Cooldown > 0) return false
@@ -546,6 +611,7 @@ function buildObservation(bot, bots, bullets, powerupState) {
     },
     slotActive: (slot) => {
       if (slot === 1 && bot.sawCapable) return bot.sawActive
+      if (slot === 2 && bot.shieldCapable) return bot.shieldActive
       return false
     },
 
@@ -1107,26 +1173,50 @@ function stepToggleDrains(bots, tickEvents) {
   for (const bot of bots) {
     if (!bot.alive) continue
 
-    if (!bot.sawActive) continue
-
     if (bot.energy <= 0) {
       bot.sawActive = false
+      bot.shieldActive = false
       continue
     }
 
-    const drain = Math.min(SAW_ENERGY_DRAIN, bot.energy)
-    bot.energy -= drain
+    if (bot.sawActive) {
+      const drain = Math.min(SAW_ENERGY_DRAIN, bot.energy)
+      bot.energy -= drain
 
-    tickEvents.push({
-      type: 'RESOURCE_DELTA',
-      botId: bot.botId,
-      ammoDelta: 0,
-      energyDelta: -drain,
-      healthDelta: 0,
-      cause: 'SAW_DRAIN',
-    })
+      tickEvents.push({
+        type: 'RESOURCE_DELTA',
+        botId: bot.botId,
+        ammoDelta: 0,
+        energyDelta: -drain,
+        healthDelta: 0,
+        cause: 'SAW_DRAIN',
+      })
 
-    if (bot.energy <= 0) bot.sawActive = false
+      if (bot.energy <= 0) {
+        bot.sawActive = false
+        bot.shieldActive = false
+        continue
+      }
+    }
+
+    if (bot.shieldActive) {
+      const drain = Math.min(SHIELD_ENERGY_DRAIN, bot.energy)
+      bot.energy -= drain
+
+      tickEvents.push({
+        type: 'RESOURCE_DELTA',
+        botId: bot.botId,
+        ammoDelta: 0,
+        energyDelta: -drain,
+        healthDelta: 0,
+        cause: 'SHIELD_DRAIN',
+      })
+
+      if (bot.energy <= 0) {
+        bot.sawActive = false
+        bot.shieldActive = false
+      }
+    }
   }
 }
 
