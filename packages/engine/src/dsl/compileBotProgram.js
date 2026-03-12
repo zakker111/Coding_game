@@ -69,6 +69,9 @@ const OPCODE_ALIASES = new Map([
   ['MOVE_TO_NEAREST_BOT', 'MOVE_TO_CLOSEST_BOT'],
   ['MOVE_TO_WEAKEST_BOT', 'MOVE_TO_LOWEST_HEALTH_BOT'],
   ['MOVE_TO_WALL', 'MOVE_TO_ARENA_EDGE'],
+
+  // Module-type sugar (v1): default weapon is SLOT1, so FIRE_BULLET compiles to USE_SLOT1.
+  ['FIRE_BULLET', 'USE_SLOT1'],
 ])
 
 const TARGET_TOKEN_ALIASES = new Map([
@@ -285,7 +288,12 @@ function parseIfLine(line, lineNo, errors) {
     const instructionText = tail
     const instruction = parseSimpleInstruction(instructionText, lineNo, errors)
 
-    if (instruction.kind === 'GOTO' || instruction.kind === 'IF_GOTO' || instruction.kind === 'IF_DO') {
+    if (
+      instruction.kind === 'GOTO' ||
+      instruction.kind === 'IF_GOTO' ||
+      instruction.kind === 'IF_DO' ||
+      instruction.kind === 'WAIT'
+    ) {
       errors.push({ line: lineNo, message: 'IF ... DO cannot execute a control-flow instruction' })
       return { kind: 'INVALID' }
     }
@@ -564,6 +572,19 @@ function parseSimpleInstruction(line, lineNo, errors) {
     }
 
     return { kind: 'MODULE_TOGGLE', module: op, on: arg === 'ON' }
+  }
+
+  if (op === 'FIRE_TARGET') {
+    const slotTok = (parts[1] ?? '').toUpperCase()
+    const slot = slotTok === 'SLOT1' ? 1 : slotTok === 'SLOT2' ? 2 : slotTok === 'SLOT3' ? 3 : 0
+
+    if (!slot || parts.length !== 2) {
+      errors.push({ line: lineNo, message: 'FIRE_TARGET expects: FIRE_TARGET SLOT1|SLOT2|SLOT3' })
+      return { kind: 'INVALID' }
+    }
+
+    // Convenience: use the current target register.
+    return { kind: 'USE_SLOT', slot: /** @type {1|2|3} */ (slot), target: 'TARGET' }
   }
 
   if (op === 'USE_SLOT1' || op === 'USE_SLOT2' || op === 'USE_SLOT3') {

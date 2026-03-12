@@ -2,6 +2,8 @@ import { compileBotSource } from '../dsl/compileBotSource.js'
 import { initBotVm, stepBotVm } from '../vm/botVm.js'
 
 import {
+  ARENA_MAX,
+  ARENA_MIN,
   BOT_CENTER_MAX,
   BOT_CENTER_MIN,
   BOT_HALF_SIZE,
@@ -79,7 +81,10 @@ export function runMatchToReplay(params) {
 
   const headerBots = normalizeHeaderBots(params.bots)
 
-  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any, bumpedLastTick:boolean, bumpedThisTick:boolean, sawCapable:boolean, sawActive:boolean}>} */
+  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any,
+  bumpedBotLastTick:boolean, bumpedBotThisTick:boolean, bumpedBotIdLastTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotIdThisTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotDirLastTick:any, bumpedBotDirThisTick:any,
+  bumpedWallLastTick:boolean, bumpedWallThisTick:boolean, bumpedWallDirLastTick:any, bumpedWallDirThisTick:any,
+  sawCapable:boolean, sawActive:boolean}>} */
   const bots = SLOT_IDS.map((botId) => {
     const sourceText = headerBots.find((b) => b.slotId === botId)?.sourceText ?? ''
     const compiled = compileBotSource(sourceText)
@@ -97,8 +102,21 @@ export function runMatchToReplay(params) {
       vm: initBotVm(compiled.program),
       slot1Cooldown: 0,
       pendingMove: null,
-      bumpedLastTick: false,
-      bumpedThisTick: false,
+
+      // Bump signals are computed during movement resolution and become visible
+      // to the bot on the next tick (BotInstructions.md §6.3).
+      bumpedBotLastTick: false,
+      bumpedBotThisTick: false,
+      bumpedBotIdLastTick: null,
+      bumpedBotIdThisTick: null,
+      bumpedBotDirLastTick: null,
+      bumpedBotDirThisTick: null,
+
+      bumpedWallLastTick: false,
+      bumpedWallThisTick: false,
+      bumpedWallDirLastTick: null,
+      bumpedWallDirThisTick: null,
+
       sawCapable,
       sawActive: false,
     }
@@ -125,8 +143,15 @@ export function runMatchToReplay(params) {
     /** @type {any[]} */
     const tickEvents = []
 
-    // Reset per-tick bump flags (they become visible next tick via bumpedLastTick).
-    for (const b of bots) b.bumpedThisTick = false
+    // Reset per-tick bump flags (they become visible next tick via *LastTick).
+    for (const b of bots) {
+      b.bumpedBotThisTick = false
+      b.bumpedBotIdThisTick = null
+      b.bumpedBotDirThisTick = null
+
+      b.bumpedWallThisTick = false
+      b.bumpedWallDirThisTick = null
+    }
 
     // 1) Bot VM instruction phase (BOT1..BOT4)
     for (const bot of bots) {
@@ -270,7 +295,12 @@ export function runMatchToReplay(params) {
       bot.pendingMove = null
       if (bot.slot1Cooldown > 0) bot.slot1Cooldown--
 
-      bot.bumpedLastTick = bot.bumpedThisTick
+      bot.bumpedBotLastTick = bot.bumpedBotThisTick
+      bot.bumpedBotIdLastTick = bot.bumpedBotIdThisTick
+      bot.bumpedBotDirLastTick = bot.bumpedBotDirThisTick
+
+      bot.bumpedWallLastTick = bot.bumpedWallThisTick
+      bot.bumpedWallDirLastTick = bot.bumpedWallDirThisTick
     }
 
     stepPowerupMaintenance(powerupState, bots, t, rng, tickEvents)
@@ -406,6 +436,13 @@ function buildObservation(bot, bots, bullets, powerupState) {
 
   const bulletThreat = computeBulletThreat(bot.botId, sector, bullets)
 
+  const botSectors = {
+    BOT1: sectorFromPos(bots[0]?.pos ?? bot.pos),
+    BOT2: sectorFromPos(bots[1]?.pos ?? bot.pos),
+    BOT3: sectorFromPos(bots[2]?.pos ?? bot.pos),
+    BOT4: sectorFromPos(bots[3]?.pos ?? bot.pos),
+  }
+
   const targetBotId = bot.vm?.target?.botSelector
   const targetBot =
     targetBotId === 'BOT1' || targetBotId === 'BOT2' || targetBotId === 'BOT3' || targetBotId === 'BOT4'
@@ -414,6 +451,8 @@ function buildObservation(bot, bots, bullets, powerupState) {
 
   const timers = bot.vm?.timers ?? { 1: 0, 2: 0, 3: 0 }
 
+  const targetPowerupType = bot.vm?.target?.powerupType
+
   return {
     vars: {
       HEALTH: bot.hp,
@@ -421,15 +460,73 @@ function buildObservation(bot, bots, bullets, powerupState) {
       ENERGY: bot.energy,
       TARGET_HEALTH: targetBot && targetBot.alive ? targetBot.hp : 0,
     },
+
+    // Location
+    sector,
+    zone,
+
+    // Bot/sector convenience
+    botSectors,
+
     botsAlive: {
       BOT1: bots[0]?.alive ?? false,
       BOT2: bots[1]?.alive ?? false,
       BOT3: bots[2]?.alive ?? false,
       BOT4: bots[3]?.alive ?? false,
     },
+
     powerupExists: (type) => powerupExists(powerupState, type),
-    zone,
+
+    // Distances (Manhattan)
     distToClosestBot: closestBotDist,
+    distToBot: (botId) => {
+      const other = botsById(bots, botId)
+      if (!other) return 999
+      if (!other.alive) return 999
+      return manhattan(bot.pos, other.pos)
+    },
+    distToTargetBot: () => {
+      if (targetBot && targetBot.alive) return manhattan(bot.pos, targetBot.pos)
+      return 999
+    },
+    distToSector: (s) => {
+      const pos = locToWorld({ sector: Math.floor(s), zone: 0 })
+      return manhattan(bot.pos, pos)
+    },
+    distToSectorZone: (s, z) => {
+      const pos = locToWorld({ sector: Math.floor(s), zone: Math.floor(z) })
+      return manhattan(bot.pos, pos)
+    },
+
+    // Powerups
+    distToClosestPowerup: (type) => {
+      const loc = findClosestPowerupLoc(powerupState, bot.pos, type)
+      if (!loc) return 999
+      return manhattan(bot.pos, locToWorld(loc))
+    },
+    hasTargetPowerup: () => Boolean(targetPowerupType && powerupExists(powerupState, targetPowerupType)),
+    powerupInSector: (type, s, zOrNull) => {
+      const sectorN = Math.floor(s)
+      const zoneN = zOrNull == null ? null : Math.floor(zOrNull)
+      for (const p of powerupState.powerups) {
+        if (!p) continue
+        if (p.type !== type) continue
+        if (p.loc.sector !== sectorN) continue
+        if (zoneN == null) return true
+        if (p.loc.zone === zoneN) return true
+      }
+      return false
+    },
+
+    // Walls / arena edges (distance from bot collision box)
+    distToArenaEdge: (dir) => {
+      if (dir === 'UP') return Math.max(0, bot.pos.y - BOT_HALF_SIZE - ARENA_MIN)
+      if (dir === 'DOWN') return Math.max(0, ARENA_MAX - (bot.pos.y + BOT_HALF_SIZE))
+      if (dir === 'LEFT') return Math.max(0, bot.pos.x - BOT_HALF_SIZE - ARENA_MIN)
+      if (dir === 'RIGHT') return Math.max(0, ARENA_MAX - (bot.pos.x + BOT_HALF_SIZE))
+      return 999
+    },
+
     timers: { T1: timers[1] ?? 0, T2: timers[2] ?? 0, T3: timers[3] ?? 0 },
 
     // Bullet threat sensors.
@@ -439,6 +536,9 @@ function buildObservation(bot, bots, bullets, powerupState) {
     // Exposed for HAS_TARGET_BOT() (see botVm.js).
     hasTargetBot: () => Boolean(targetBot && targetBot.alive),
 
+    // Slots
+    hasModule: (slot) => slot === 1,
+    cooldownRemaining: (slot) => (slot === 1 ? bot.slot1Cooldown : 0),
     slotReady: (slot) => {
       if (slot === 1 && bot.sawCapable) return bot.energy > 0
 
@@ -450,7 +550,13 @@ function buildObservation(bot, bots, bullets, powerupState) {
       if (slot === 1 && bot.sawCapable) return bot.sawActive
       return false
     },
-    bumpedBot: bot.bumpedLastTick,
+
+    // Bumps (visible from last tick)
+    bumpedBot: bot.bumpedBotLastTick,
+    bumpedBotId: bot.bumpedBotIdLastTick,
+    bumpedBotDir: bot.bumpedBotDirLastTick,
+    bumpedWall: bot.bumpedWallLastTick,
+    bumpedWallDir: bot.bumpedWallDirLastTick,
   }
 }
 
@@ -596,7 +702,7 @@ function resolveMovement(bots, powerupState, tickEvents) {
       y: Math.max(BOT_CENTER_MIN, Math.min(BOT_CENTER_MAX, candidate.y)),
     }
 
-    const bumpedWall = clamped.x !== candidate.x || clamped.y !== candidate.y
+    const bumpedWallFromClamp = clamped.x !== candidate.x || clamped.y !== candidate.y
 
     // Bot-bot overlap check along the movement segment.
     /** @type {any | null} */
@@ -628,6 +734,8 @@ function resolveMovement(bots, powerupState, tickEvents) {
       lastSafePos = p
     }
 
+    const bumpedWall = !overlapped && bumpedWallFromClamp
+
     if (overlapped) {
       tickEvents.push({
         type: 'BUMP_BOT',
@@ -643,8 +751,13 @@ function resolveMovement(bots, powerupState, tickEvents) {
         dir: oppositeDir(request.dir),
       })
 
-      bot.bumpedThisTick = true
-      overlapped.bumpedThisTick = true
+      bot.bumpedBotThisTick = true
+      bot.bumpedBotIdThisTick = overlapped.botId
+      bot.bumpedBotDirThisTick = request.dir
+
+      overlapped.bumpedBotThisTick = true
+      overlapped.bumpedBotIdThisTick = bot.botId
+      overlapped.bumpedBotDirThisTick = oppositeDir(request.dir)
     }
 
     bot.pos = finalPos
@@ -674,6 +787,9 @@ function resolveMovement(bots, powerupState, tickEvents) {
 }
 
 function applyWallBumpDamage(bot, dir, tickEvents) {
+  bot.bumpedWallThisTick = true
+  bot.bumpedWallDirThisTick = dir
+
   tickEvents.push({
     type: 'BUMP_WALL',
     botId: bot.botId,

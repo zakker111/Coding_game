@@ -172,6 +172,20 @@ function evalNode(node, ctx) {
       return ok(Boolean(resolveBotAlive(ctx, bot.value)))
     }
 
+    if (fn === 'SECTOR') {
+      if (node.arguments.length !== 0) return err('ARITY', 'SECTOR expects 0 arguments')
+      const v = resolveIntish(ctx?.sector)
+      if (v == null) return err('MISSING', 'SECTOR not available in ctx')
+      return ok(v)
+    }
+
+    if (fn === 'ZONE') {
+      if (node.arguments.length !== 0) return err('ARITY', 'ZONE expects 0 arguments')
+      const v = resolveIntish(ctx?.zone)
+      if (v == null) return err('MISSING', 'ZONE not available in ctx')
+      return ok(v)
+    }
+
     if (fn === 'IN_ZONE') {
       if (node.arguments.length !== 1) return err('ARITY', 'IN_ZONE expects 1 argument')
       const zone = evalInt(node.arguments[0], ctx)
@@ -187,6 +201,207 @@ function evalNode(node, ctx) {
       const d = resolveDistToClosestBot(ctx)
       if (!isInt(d)) return err('MISSING', 'DIST_TO_CLOSEST_BOT not available in ctx')
       return ok(d)
+    }
+
+    if (fn === 'BOT_IN_SAME_SECTOR' || fn === 'BOT_IN_ADJ_SECTOR') {
+      if (node.arguments.length !== 1) return err('ARITY', `${fn} expects 1 argument`)
+      const botTok = evalTokenArg(node.arguments[0])
+      if (!botTok.ok) return botTok
+
+      const selfSector = resolveIntish(ctx?.sector)
+      if (selfSector == null) return err('MISSING', 'SECTOR not available in ctx')
+
+      const otherSector = resolveBotSector(ctx, botTok.value)
+      if (!isInt(otherSector)) return err('MISSING', `BOT sector not available in ctx: ${botTok.value}`)
+
+      if (fn === 'BOT_IN_SAME_SECTOR') return ok(otherSector === selfSector)
+      return ok(isAdjSector(selfSector, otherSector))
+    }
+
+    if (fn === 'DIST_TO_BOT') {
+      if (node.arguments.length !== 1) return err('ARITY', 'DIST_TO_BOT expects 1 argument')
+      const botTok = evalTokenArg(node.arguments[0])
+      if (!botTok.ok) return botTok
+      const d = resolveDistToBot(ctx, botTok.value)
+      if (!isInt(d)) return err('MISSING', `DIST_TO_BOT not available in ctx for: ${botTok.value}`)
+      return ok(d)
+    }
+
+    if (fn === 'DIST_TO_TARGET_BOT') {
+      if (node.arguments.length !== 0) return err('ARITY', 'DIST_TO_TARGET_BOT expects 0 arguments')
+      const d = resolveDistToTargetBot(ctx)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_TARGET_BOT not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'DIST_TO_SECTOR') {
+      if (node.arguments.length !== 1) return err('ARITY', 'DIST_TO_SECTOR expects 1 argument')
+      const s = evalInt(node.arguments[0], ctx)
+      if (!s.ok) return s
+      if (s.value < 1 || s.value > 9) return err('RANGE', 'DIST_TO_SECTOR sector must be 1..9')
+      const d = resolveDistToSector(ctx, s.value)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_SECTOR not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'DIST_TO_SECTOR_ZONE') {
+      if (node.arguments.length !== 2) return err('ARITY', 'DIST_TO_SECTOR_ZONE expects 2 arguments')
+      const s = evalInt(node.arguments[0], ctx)
+      if (!s.ok) return s
+      if (s.value < 1 || s.value > 9) return err('RANGE', 'DIST_TO_SECTOR_ZONE sector must be 1..9')
+
+      const z = evalInt(node.arguments[1], ctx)
+      if (!z.ok) return z
+      if (z.value < 1 || z.value > 4) return err('RANGE', 'DIST_TO_SECTOR_ZONE zone must be 1..4')
+
+      const d = resolveDistToSectorZone(ctx, s.value, z.value)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_SECTOR_ZONE not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'DIST_TO_CLOSEST_POWERUP') {
+      if (node.arguments.length !== 1) return err('ARITY', 'DIST_TO_CLOSEST_POWERUP expects 1 argument')
+      const type = evalTokenArg(node.arguments[0])
+      if (!type.ok) return type
+      const d = resolveDistToClosestPowerup(ctx, type.value)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_CLOSEST_POWERUP not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'HAS_TARGET_POWERUP') {
+      if (node.arguments.length !== 0) return err('ARITY', 'HAS_TARGET_POWERUP expects 0 arguments')
+      const v = resolveBoolish(ctx?.hasTargetPowerup)
+      if (v == null) return err('MISSING', 'HAS_TARGET_POWERUP not available in ctx')
+      return ok(v)
+    }
+
+    if (
+      fn === 'POWERUP_IN_SECTOR' ||
+      fn === 'POWERUP_IN_SECTOR_CENTER' ||
+      fn === 'POWERUP_IN_ZONE' ||
+      fn === 'POWERUP_IN_SAME_SECTOR' ||
+      fn === 'POWERUP_IN_SAME_ZONE'
+    ) {
+      // Token args: TYPE plus optional sector/zone ints.
+      const type = evalTokenArg(node.arguments[0])
+      if (!type.ok) return type
+
+      const selfSector = resolveIntish(ctx?.sector)
+      const selfZone = resolveIntish(ctx?.zone)
+
+      if (fn === 'POWERUP_IN_SAME_SECTOR') {
+        if (node.arguments.length !== 1) return err('ARITY', 'POWERUP_IN_SAME_SECTOR expects 1 argument')
+        if (selfSector == null) return err('MISSING', 'SECTOR not available in ctx')
+        return ok(Boolean(resolvePowerupInSector(ctx, type.value, selfSector, null)))
+      }
+
+      if (fn === 'POWERUP_IN_SAME_ZONE') {
+        if (node.arguments.length !== 1) return err('ARITY', 'POWERUP_IN_SAME_ZONE expects 1 argument')
+        if (selfSector == null || selfZone == null) return err('MISSING', 'SECTOR/ZONE not available in ctx')
+        return ok(Boolean(resolvePowerupInZone(ctx, type.value, selfSector, selfZone)))
+      }
+
+      if (fn === 'POWERUP_IN_SECTOR') {
+        if (node.arguments.length !== 2) return err('ARITY', 'POWERUP_IN_SECTOR expects 2 arguments')
+        const s = evalInt(node.arguments[1], ctx)
+        if (!s.ok) return s
+        if (s.value < 1 || s.value > 9) return err('RANGE', 'POWERUP_IN_SECTOR sector must be 1..9')
+        return ok(Boolean(resolvePowerupInSector(ctx, type.value, s.value, null)))
+      }
+
+      if (fn === 'POWERUP_IN_SECTOR_CENTER') {
+        if (node.arguments.length !== 2) return err('ARITY', 'POWERUP_IN_SECTOR_CENTER expects 2 arguments')
+        const s = evalInt(node.arguments[1], ctx)
+        if (!s.ok) return s
+        if (s.value < 1 || s.value > 9) return err('RANGE', 'POWERUP_IN_SECTOR_CENTER sector must be 1..9')
+        return ok(Boolean(resolvePowerupInSectorCenter(ctx, type.value, s.value)))
+      }
+
+      // POWERUP_IN_ZONE
+      if (node.arguments.length !== 3) return err('ARITY', 'POWERUP_IN_ZONE expects 3 arguments')
+      const s = evalInt(node.arguments[1], ctx)
+      if (!s.ok) return s
+      if (s.value < 1 || s.value > 9) return err('RANGE', 'POWERUP_IN_ZONE sector must be 1..9')
+
+      const z = evalInt(node.arguments[2], ctx)
+      if (!z.ok) return z
+      if (z.value < 1 || z.value > 4) return err('RANGE', 'POWERUP_IN_ZONE zone must be 1..4')
+
+      return ok(Boolean(resolvePowerupInZone(ctx, type.value, s.value, z.value)))
+    }
+
+    if (fn === 'DIST_TO_ARENA_EDGE' || fn === 'DIST_TO_WALL') {
+      if (node.arguments.length !== 1) return err('ARITY', `${fn} expects 1 argument`)
+      const dirTok = evalTokenArg(node.arguments[0])
+      if (!dirTok.ok) return dirTok
+      const dir = parseWallDirToken(dirTok.value)
+      if (!dir) return err('BAD_TOKEN', `Invalid dir token: ${dirTok.value}`)
+      const d = resolveDistToArenaEdge(ctx, dir)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_ARENA_EDGE not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'BUMPED_WALL') {
+      if (node.arguments.length !== 0) return err('ARITY', 'BUMPED_WALL expects 0 arguments')
+      const v = resolveBoolish(ctx?.bumpedWall)
+      if (v == null) return err('MISSING', 'BUMPED_WALL not available in ctx')
+      return ok(v)
+    }
+
+    if (fn === 'BUMPED_WALL_DIR') {
+      if (node.arguments.length !== 1) return err('ARITY', 'BUMPED_WALL_DIR expects 1 argument')
+      const dirTok = evalTokenArg(node.arguments[0])
+      if (!dirTok.ok) return dirTok
+      const dir = parseMoveDirToken(dirTok.value)
+      if (!dir) return err('BAD_TOKEN', `Invalid dir token: ${dirTok.value}`)
+      const bumped = resolveBoolish(ctx?.bumpedWall)
+      const bumpedDir = resolveStringish(ctx?.bumpedWallDir)
+      if (bumped == null || bumpedDir == null) return err('MISSING', 'BUMPED_WALL_DIR not available in ctx')
+      return ok(Boolean(bumped && bumpedDir === dir))
+    }
+
+    if (fn === 'BUMPED_BOT_IS') {
+      if (node.arguments.length !== 1) return err('ARITY', 'BUMPED_BOT_IS expects 1 argument')
+      const botTok = evalTokenArg(node.arguments[0])
+      if (!botTok.ok) return botTok
+      const bumped = resolveBoolish(ctx?.bumpedBot)
+      const otherId = resolveStringish(ctx?.bumpedBotId)
+      if (bumped == null || otherId == null) return err('MISSING', 'BUMPED_BOT_IS not available in ctx')
+      return ok(Boolean(bumped && otherId === botTok.value))
+    }
+
+    if (fn === 'BUMPED_BOT_DIR') {
+      if (node.arguments.length !== 1) return err('ARITY', 'BUMPED_BOT_DIR expects 1 argument')
+      const dirTok = evalTokenArg(node.arguments[0])
+      if (!dirTok.ok) return dirTok
+      const dir = parseMoveDirToken(dirTok.value)
+      if (!dir) return err('BAD_TOKEN', `Invalid dir token: ${dirTok.value}`)
+      const bumped = resolveBoolish(ctx?.bumpedBot)
+      const bumpedDir = resolveStringish(ctx?.bumpedBotDir)
+      if (bumped == null || bumpedDir == null) return err('MISSING', 'BUMPED_BOT_DIR not available in ctx')
+      return ok(Boolean(bumped && bumpedDir === dir))
+    }
+
+    if (fn === 'HAS_MODULE') {
+      if (node.arguments.length !== 1) return err('ARITY', 'HAS_MODULE expects 1 argument')
+      const slotTok = evalTokenArg(node.arguments[0])
+      if (!slotTok.ok) return slotTok
+      const slot = parseSlotToken(slotTok.value)
+      if (!slot) return err('BAD_TOKEN', `Invalid slot token: ${slotTok.value}`)
+      const v = resolveHasModule(ctx, slot)
+      if (v == null) return err('MISSING', 'HAS_MODULE not available in ctx')
+      return ok(Boolean(v))
+    }
+
+    if (fn === 'COOLDOWN_REMAINING') {
+      if (node.arguments.length !== 1) return err('ARITY', 'COOLDOWN_REMAINING expects 1 argument')
+      const slotTok = evalTokenArg(node.arguments[0])
+      if (!slotTok.ok) return slotTok
+      const slot = parseSlotToken(slotTok.value)
+      if (!slot) return err('BAD_TOKEN', `Invalid slot token: ${slotTok.value}`)
+      const v = resolveCooldownRemaining(ctx, slot)
+      if (!isInt(v)) return err('MISSING', 'COOLDOWN_REMAINING not available in ctx')
+      return ok(v)
     }
 
     if (fn === 'SLOT_READY') {
@@ -320,6 +535,64 @@ function resolveBoolish(v) {
   return null
 }
 
+/** @param {unknown} v */
+function resolveIntish(v) {
+  if (isInt(v)) return v
+  if (typeof v === 'function') {
+    const r = v()
+    if (isInt(r)) return r
+  }
+  return null
+}
+
+/** @param {unknown} v */
+function resolveStringish(v) {
+  if (typeof v === 'string') return v.toUpperCase()
+  if (typeof v === 'function') {
+    const r = v()
+    if (typeof r === 'string') return r.toUpperCase()
+  }
+  return null
+}
+
+/**
+ * @param {string} s
+ * @returns {'UP'|'DOWN'|'LEFT'|'RIGHT'|'UP_LEFT'|'UP_RIGHT'|'DOWN_LEFT'|'DOWN_RIGHT'|null}
+ */
+function parseMoveDirToken(s) {
+  const t = (s ?? '').toUpperCase()
+  if (t === 'UP' || t === 'DOWN' || t === 'LEFT' || t === 'RIGHT') return t
+  if (t === 'UP_LEFT' || t === 'UP_RIGHT' || t === 'DOWN_LEFT' || t === 'DOWN_RIGHT') return t
+  return null
+}
+
+/**
+ * @param {string} s
+ * @returns {'UP'|'DOWN'|'LEFT'|'RIGHT'|null}
+ */
+function parseWallDirToken(s) {
+  const t = (s ?? '').toUpperCase()
+  if (t === 'UP' || t === 'DOWN' || t === 'LEFT' || t === 'RIGHT') return t
+  return null
+}
+
+/**
+ * Sector adjacency in the 3x3 sector grid.
+ * @param {number} a
+ * @param {number} b
+ */
+function isAdjSector(a, b) {
+  if (!isInt(a) || !isInt(b)) return false
+  if (a === b) return false
+
+  const ax = ((a - 1) % 3) + 1
+  const ay = Math.floor((a - 1) / 3) + 1
+  const bx = ((b - 1) % 3) + 1
+  const by = Math.floor((b - 1) / 3) + 1
+
+  return Math.abs(ax - bx) <= 1 && Math.abs(ay - by) <= 1
+}
+
 /**
  * @param {EvalCtx} ctx
  * @param {string} name
@@ -414,6 +687,144 @@ function resolveDistToClosestBot(ctx) {
   const v = ctx?.distToClosestBot
   if (typeof v === 'function') return v()
   return v
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} botId
+ */
+function resolveBotSector(ctx, botId) {
+  const b = /** @type {'BOT1'|'BOT2'|'BOT3'|'BOT4'} */ (botId)
+
+  if (typeof /** @type {any} */ (ctx)?.botSector === 'function') {
+    return /** @type {any} */ (ctx).botSector(b)
+  }
+
+  const m = /** @type {any} */ (ctx)?.botSectors
+  if (m && typeof m === 'object') return m[b]
+
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} botId
+ */
+function resolveDistToBot(ctx, botId) {
+  const b = /** @type {'BOT1'|'BOT2'|'BOT3'|'BOT4'} */ (botId)
+
+  if (typeof /** @type {any} */ (ctx)?.distToBot === 'function') {
+    return /** @type {any} */ (ctx).distToBot(b)
+  }
+
+  const m = /** @type {any} */ (ctx)?.distsToBot
+  if (m && typeof m === 'object') return m[b]
+
+  return null
+}
+
+/** @param {EvalCtx} ctx */
+function resolveDistToTargetBot(ctx) {
+  const v = /** @type {any} */ (ctx)?.distToTargetBot
+  if (typeof v === 'function') return v()
+  return v
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {number} sector
+ */
+function resolveDistToSector(ctx, sector) {
+  const v = /** @type {any} */ (ctx)?.distToSector
+  if (typeof v === 'function') return v(sector)
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {number} sector
+ * @param {number} zone
+ */
+function resolveDistToSectorZone(ctx, sector, zone) {
+  const v = /** @type {any} */ (ctx)?.distToSectorZone
+  if (typeof v === 'function') return v(sector, zone)
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} type
+ */
+function resolveDistToClosestPowerup(ctx, type) {
+  const t = /** @type {'HEALTH'|'AMMO'|'ENERGY'} */ (type)
+  const v = /** @type {any} */ (ctx)?.distToClosestPowerup
+  if (typeof v === 'function') return v(t)
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} type
+ * @param {number} sector
+ * @param {number|null} zoneOrNull If null, checks any zone (including center)
+ */
+function resolvePowerupInSector(ctx, type, sector, zoneOrNull) {
+  const t = /** @type {'HEALTH'|'AMMO'|'ENERGY'} */ (type)
+  const v = /** @type {any} */ (ctx)?.powerupInSector
+  if (typeof v === 'function') return v(t, sector, zoneOrNull)
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} type
+ * @param {number} sector
+ */
+function resolvePowerupInSectorCenter(ctx, type, sector) {
+  return resolvePowerupInSector(ctx, type, sector, 0)
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {string} type
+ * @param {number} sector
+ * @param {number} zone
+ */
+function resolvePowerupInZone(ctx, type, sector, zone) {
+  return resolvePowerupInSector(ctx, type, sector, zone)
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {'UP'|'DOWN'|'LEFT'|'RIGHT'} dir
+ */
+function resolveDistToArenaEdge(ctx, dir) {
+  const v = /** @type {any} */ (ctx)?.distToArenaEdge
+  if (typeof v === 'function') return v(dir)
+  if (v && typeof v === 'object') return v[dir]
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {1|2|3} slot
+ */
+function resolveHasModule(ctx, slot) {
+  const v = /** @type {any} */ (ctx)?.hasModule
+  if (typeof v === 'function') return v(slot)
+  if (v && typeof v === 'object') return v[`SLOT${slot}`] ?? v[slot]
+  return null
+}
+
+/**
+ * @param {EvalCtx} ctx
+ * @param {1|2|3} slot
+ */
+function resolveCooldownRemaining(ctx, slot) {
+  const v = /** @type {any} */ (ctx)?.cooldownRemaining
+  if (typeof v === 'function') return v(slot)
+  if (v && typeof v === 'object') return v[`SLOT${slot}`] ?? v[slot]
+  return null
 }
 
 /**

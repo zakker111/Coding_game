@@ -74,6 +74,76 @@ test('evalExpr: DIST_TO_CLOSEST_BOT returns an int', () => {
   assert.deepStrictEqual(r, { ok: true, value: true })
 })
 
+test('evalExpr: extended built-ins (sector/zone/dist/powerups/bumps)', () => {
+  const ctx = {
+    sector: 1,
+    zone: 2,
+    botSectors: { BOT2: 1, BOT3: 2 },
+    distsToBot: { BOT2: 5 },
+    distToTargetBot: 7,
+    distToSector(sector) {
+      return sector === 1 ? 0 : 999
+    },
+    distToSectorZone(sector, zone) {
+      return sector === 1 && zone === 2 ? 11 : 999
+    },
+    distToClosestPowerup(type) {
+      return type === 'HEALTH' ? 13 : 999
+    },
+    powerupInSector(type, sector, zoneOrNull) {
+      if (type !== 'HEALTH') return false
+      if (sector !== 1) return false
+      if (zoneOrNull == null) return true
+      return zoneOrNull === 0 || zoneOrNull === 2
+    },
+    distToArenaEdge: { UP: 3, DOWN: 4, LEFT: 5, RIGHT: 6 },
+
+    bumpedWall: true,
+    bumpedWallDir: 'UP',
+
+    bumpedBot: true,
+    bumpedBotId: 'BOT2',
+    bumpedBotDir: 'LEFT',
+
+    hasModule(slot) {
+      return slot === 1
+    },
+    cooldownRemaining(slot) {
+      return slot === 1 ? 2 : 0
+    },
+  }
+
+  assert.deepStrictEqual(evalExpr('SECTOR() == 1 && ZONE() == 2', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('BOT_IN_SAME_SECTOR(BOT2)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('BOT_IN_ADJ_SECTOR(BOT3)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('DIST_TO_BOT(BOT2) == 5', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('DIST_TO_TARGET_BOT() == 7', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('DIST_TO_SECTOR(1) == 0', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('DIST_TO_SECTOR_ZONE(1, 2) == 11', ctx), { ok: true, value: true })
+
+  assert.deepStrictEqual(evalExpr('DIST_TO_CLOSEST_POWERUP(HEALTH) == 13', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('POWERUP_IN_SECTOR(HEALTH, 1)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('POWERUP_IN_SECTOR_CENTER(HEALTH, 1)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('POWERUP_IN_ZONE(HEALTH, 1, 2)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('POWERUP_IN_SAME_SECTOR(HEALTH)', ctx), { ok: true, value: true })
+
+  assert.deepStrictEqual(evalExpr('DIST_TO_ARENA_EDGE(UP) == 3 && DIST_TO_WALL(RIGHT) == 6', ctx), {
+    ok: true,
+    value: true,
+  })
+
+  assert.deepStrictEqual(evalExpr('BUMPED_WALL() && BUMPED_WALL_DIR(UP)', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('BUMPED_BOT() && BUMPED_BOT_IS(BOT2) && BUMPED_BOT_DIR(LEFT)', ctx), {
+    ok: true,
+    value: true,
+  })
+
+  assert.deepStrictEqual(evalExpr('HAS_MODULE(SLOT1) && COOLDOWN_REMAINING(SLOT1) == 2', ctx), {
+    ok: true,
+    value: true,
+  })
+})
+
 test('evalExpr: unknown identifier returns {ok:false} (does not throw)', () => {
   assert.doesNotThrow(() => {
     const r = evalExpr('NOT_A_REAL_IDENTIFIER == 1', {})

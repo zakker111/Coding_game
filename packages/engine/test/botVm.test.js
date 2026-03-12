@@ -45,7 +45,7 @@ test('botVm: JUMP sets pc to targetPc', () => {
   assert.equal(r.vm.pc, 2)
 })
 
-test('botVm: WAIT 2 blocks the next 2 ticks and pc stays unchanged while waiting', () => {
+test('botVm: WAIT 2 blocks the next 2 ticks and advances pc when the wait completes', () => {
   const program = { instructions: [{ kind: 'WAIT', ticks: 2 }, { kind: 'NOP' }] }
   let vm = initBotVm(program)
 
@@ -53,23 +53,24 @@ test('botVm: WAIT 2 blocks the next 2 ticks and pc stays unchanged while waiting
   let r = stepBotVm(vm, {})
   vm = r.vm
   assert.equal(vm.waitRemaining, 2)
-  assert.equal(vm.pc, 2)
+  assert.equal(vm.pc, 1)
   assert.equal(r.debug.waiting, false)
+  assert.equal(r.debug.executedKind, 'WAIT')
 
   // Tick 1 waiting.
   r = stepBotVm(vm, {})
   vm = r.vm
   assert.equal(r.debug.waiting, true)
   assert.equal(r.debug.executedKind, null)
-  assert.equal(vm.pc, 2)
+  assert.equal(vm.pc, 1)
   assert.equal(vm.waitRemaining, 1)
 
-  // Tick 2 waiting.
+  // Tick 2 waiting: counter reaches 0, pc advances once.
   r = stepBotVm(vm, {})
   vm = r.vm
   assert.equal(r.debug.waiting, true)
-  assert.equal(vm.pc, 2)
   assert.equal(vm.waitRemaining, 0)
+  assert.equal(vm.pc, 2)
 
   // Next tick executes NOP.
   r = stepBotVm(vm, {})
@@ -262,15 +263,15 @@ test('botVm: timers continue decrementing during WAIT stalls', () => {
   ;({ vm } = stepBotVm(vm, {}))
   assert.equal(vm.timers[1], 1)
   assert.equal(vm.waitRemaining, 2)
-  assert.equal(vm.pc, 3)
+  assert.equal(vm.pc, 2)
 
   // Tick 3: waiting, timer decrements to 0.
   ;({ vm } = stepBotVm(vm, {}))
   assert.equal(vm.timers[1], 0)
   assert.equal(vm.waitRemaining, 1)
-  assert.equal(vm.pc, 3)
+  assert.equal(vm.pc, 2)
 
-  // Tick 4: waiting, timer stays 0.
+  // Tick 4: waiting completes, pc advances to the next instruction.
   ;({ vm } = stepBotVm(vm, {}))
   assert.equal(vm.timers[1], 0)
   assert.equal(vm.waitRemaining, 0)

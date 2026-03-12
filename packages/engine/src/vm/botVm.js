@@ -85,9 +85,16 @@ export function stepBotVm(vm, observation) {
   nextVm.pc = normalizePc(nextVm.pc, len)
 
   // 2) Waiting blocks instruction execution.
+  // Semantics (BotInstructions.md): while waiting, we do not execute instructions.
+  // When the wait counter reaches 0, we advance pc once.
   if ((nextVm.waitRemaining ?? 0) > 0) {
     const pcBefore = nextVm.pc
     nextVm.waitRemaining -= 1
+
+    if (nextVm.waitRemaining <= 0) {
+      nextVm.waitRemaining = 0
+      nextVm.pc = advancePc(nextVm.pc, len)
+    }
 
     return {
       vm: nextVm,
@@ -112,6 +119,10 @@ export function stepBotVm(vm, observation) {
   if (isInvalidKind) {
     // v1 rule: invalid instruction = NOP + pc reset.
     pcAfter = 1
+  } else if (kind === 'WAIT') {
+    // WAIT sets waitRemaining (handled in execInstr) but does not advance pc this tick.
+    execInstr(instr, nextVm, effects)
+    pcAfter = pcBefore
   } else if (kind === 'JUMP') {
     pcAfter = normalizePc(instr.targetPc, len)
   } else if (kind === 'IF_JUMP') {
@@ -205,6 +216,8 @@ function execInstr(instr, vm, effects) {
 
   if (kind === 'WAIT') {
     const ticks = Number.isInteger(instr.ticks) ? instr.ticks : 0
+    // Wait semantics: do NOT advance pc on the same tick the WAIT is executed.
+    // The pc advances once when the wait counter reaches 0.
     vm.waitRemaining = ticks > 0 ? ticks : 0
     return
   }

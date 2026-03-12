@@ -125,7 +125,7 @@ Aliases are for readability and are deterministic.
 | Instruction | Type | Notes |
 |---|---:|---|
 | `WAIT <TICKS>` | blocking | While waiting, bot executes no other instructions (equivalent to repeated `NOP`). Recommended deterministic implementation: store `waitRemaining=<TICKS>` without advancing `pc`; decrement each tick; advance when reaches 0. |
-| `SET_TIMER <TIMER> <TICKS>` | non-blocking | Overwrites remaining ticks. Timers decrement at end of each simulation tick to a minimum of 0. |
+| `SET_TIMER <TIMER> <TICKS>` | non-blocking | Overwrites remaining ticks. Timers decrement at the **start of each bot tick** (before instruction execution), to a minimum of 0. |
 | `CLEAR_TIMER <TIMER>` | non-blocking | Sets remaining ticks to 0. |
 
 ---
