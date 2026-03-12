@@ -94,6 +94,12 @@ Speed/weight (locked direction):
 - Bots have a base movement speed (`baseSpeedUnitsPerTick`), and **each equipped slot reduces speed**.
 - Empty slots make a bot **faster**.
 - The speed system is defined in `Ruleset.md` as a deterministic `speedUnitsPerTick` model (world units per tick).
+- **ARMOR is heavy**: equipping `ARMOR` should impose an additional speed penalty beyond the normal “equipped slot” penalty.
+
+Damage mitigation (locked direction):
+- `SHIELD` mitigates **bullet** damage only (not `SAW`).
+- `ARMOR` is passive and mitigates **bullet + saw** damage.
+- `BUMP_WALL` damage is **consistent and cannot be mitigated** (neither by shield nor armor).
 
 **Future-proofing direction**: prefer extending gameplay via new slot modules that respond to a stable `USE_SLOTn` / `STOP_SLOTn` interface (documented in `FutureProofing.md`).
 
@@ -128,8 +134,8 @@ Speed/weight (locked direction):
 ### Balance numbers
 - Bullet: damage, ammo cost per shot, cooldown (if any), bullet speed (currently “slow”), TTL.
 - Saw: energy drain per tick, damage per tick.
-- Shield: energy drain per tick, mitigation model, future reflection behavior.
-- Armor: damage reduction math (flat vs %), what damage types it applies to.
+- Shield: energy drain per tick, mitigation math (flat vs %), future reflection behavior.
+- Armor: damage reduction math (flat vs %), mitigation amount.
 
 ### Definitions / semantics
 - Define **CLOSE_RANGE** precisely (used in bot logic like “if any bot in close range then saw on”).

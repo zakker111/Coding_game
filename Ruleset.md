@@ -127,7 +127,10 @@ UI note: if the viewer uses `S` pixels per world unit (`ArenaVisualPlan.md`), th
 
 Derived per bot each tick:
 - `equippedSlotCount` = number of non-empty slots in the bot’s 3-slot loadout
-- `speedUnitsPerTick = max(minSpeedUnitsPerTick, baseSpeedUnitsPerTick - equippedSlotCount * perEquippedSlotSpeedPenaltyUnitsPerTick)`
+- **Armor is heavy**:
+  - if the bot has `ARMOR` equipped, treat it as counting for **2** slots for speed purposes
+  - equivalently: `effectiveEquippedSlotCount = equippedSlotCount + (hasArmor ? 1 : 0)`
+- `speedUnitsPerTick = max(minSpeedUnitsPerTick, baseSpeedUnitsPerTick - effectiveEquippedSlotCount * perEquippedSlotSpeedPenaltyUnitsPerTick)`
 
 Rules (movement + collision; v1):
 - Each tick, the engine derives at most one `moveRequest` per bot (from an immediate move instruction or an active move goal).
@@ -221,6 +224,15 @@ The credited bot receives:
 The victim receives:
 - `deaths += 1` in match stats
 
+### 2.3 Defensive damage mitigation (SHIELD + ARMOR) (locked scope)
+
+- `SHIELD` mitigates **bullet** damage only (it does not mitigate `SAW`).
+- `ARMOR` is passive and mitigates **bullet + saw** damage.
+- Environment damage is not mitigable:
+  - `BUMP_WALL` damage always applies its full amount.
+
+> Note: the exact mitigation math (flat vs % reduction, stacking rules) is still a balance parameter.
+
 ---
 
 ## 3) Walls and wall damage
@@ -232,11 +244,11 @@ Walls are gameplay:
 - wall damage **can cause death**
 - if wall damage causes death, kill credit still goes to `lastDamageByBotId` (if present)
 
-Rendering note:
-- The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_WALL` (purely visual; see `ArenaVisualPlan.md` §5.7).
-
 Ruleset parameters:
 - `wallBumpDamage` (int; v1 TBD)
+
+Mitigation rule (locked):
+- wall bump damage cannot be mitigated by defensive modules (it always applies its full amount).
 
 ---
 
