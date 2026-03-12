@@ -12,6 +12,7 @@ const SECTOR_SIZE_WORLD = 64
 const POWERUP_SPAWN_INTERVAL_MIN_TICKS = 10
 const POWERUP_SPAWN_INTERVAL_MAX_TICKS = 20
 const POWERUP_MAX_ACTIVE = 6
+const POWERUP_LIFETIME_TICKS = 30
 
 const POWERUP_HEALTH_AMOUNT = 30
 const POWERUP_AMMO_AMOUNT = 20
@@ -33,6 +34,9 @@ const BULLET_SPEED = 10
 const BULLET_TTL = 18
 const BULLET_DAMAGE = 10
 const SHOOT_COOLDOWN_TICKS = 7
+
+// Keep ammo visibly consumable within a typical sample replay tickCap.
+const BOT2_INITIAL_AMMO = 28
 
 const SAW_ON_RANGE = BOT_HALF_SIZE * 2 + 6
 const SAW_OFF_RANGE = SAW_ON_RANGE + 4
@@ -414,9 +418,10 @@ export function generateSampleReplay(seed, opts = {}) {
   const defaultHeaderBots = /** @type {Replay['bots']} */ ([
     {
       slotId: 'BOT1',
-      displayName: 'Powerup Seeker',
+      displayName: 'Aggressive Skirmisher',
       appearance: { kind: 'COLOR', color: '#4ade80' },
-      sourceText: 'LABEL LOOP\nTARGET_POWERUP HEALTH\nMOVE_TO_TARGET\nGOTO LOOP\n',
+      sourceText:
+        '; bot0 — Aggressive Skirmisher (starter)\nLABEL LOOP\nIF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL\nTARGET_CLOSEST\nSET_MOVE_TO_TARGET\nIF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET\nGOTO LOOP\nLABEL HEAL\nCLEAR_TARGET_BOT\nTARGET_POWERUP HEALTH\nSET_MOVE_TO_TARGET\nWAIT 6\nCLEAR_MOVE\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT2',
@@ -495,7 +500,7 @@ export function generateSampleReplay(seed, opts = {}) {
     botId,
     pos: clonePos(spawnPosById[botId]),
     hp: 100,
-    ammo: 40,
+    ammo: botId === 'BOT2' ? BOT2_INITIAL_AMMO : 40,
     energy: 100,
     alive: true,
     pc: rngInt(rng, 1, 8),
@@ -627,11 +632,11 @@ export function generateSampleReplay(seed, opts = {}) {
         }
       }
 
-      const actionRoll = rng()
-      const doShoot = bot.botId === 'BOT2' && !bot.sawCapable && actionRoll < 0.18
+      const attemptShoot = bot.botId === 'BOT2' && !bot.sawCapable
+      let shotExecuted = false
 
-      if (doShoot) {
-        const target = findNearestLivingBot(bots, bot.botId, bot.pos)
+      if (attemptShoot) {
+        const target = nearest
 
         if (bot.shootCd > 0) {
           tickEvents.push({
@@ -684,6 +689,7 @@ export function generateSampleReplay(seed, opts = {}) {
 
           bot.ammo--
           bot.shootCd = SHOOT_COOLDOWN_TICKS
+          shotExecuted = true
 
           tickEvents.push({
             type: 'BOT_EXEC',
@@ -713,7 +719,9 @@ export function generateSampleReplay(seed, opts = {}) {
             targetPos: clonePos(target.pos),
           })
         }
-      } else {
+      }
+
+      if (!shotExecuted) {
         if (bot.botId === 'BOT2') {
           const target = bots.find((b) => b.alive && b.botId === 'BOT1')
           if (target) bot.moveDir = dirToward(bot.pos, target.pos)
@@ -1047,6 +1055,20 @@ export function generateSampleReplay(seed, opts = {}) {
       }
     }
 
+    // powerup TTL despawn (end-of-tick maintenance)
+    for (let i = powerups.length - 1; i >= 0; i--) {
+      const p = powerups[i]
+      if (p.expiresAtTick > t) continue
+
+      powerups.splice(i, 1)
+
+      tickEvents.push({
+        type: 'POWERUP_DESPAWN',
+        powerupId: p.powerupId,
+        reason: 'RULES',
+      })
+    }
+
     // powerup spawn timer + spawn (end-of-tick maintenance)
     powerupSpawnRemaining--
     const shouldSpawnPowerup = powerupSpawnRemaining <= 0
@@ -1077,7 +1099,12 @@ export function generateSampleReplay(seed, opts = {}) {
           const kind = rngChoice(rng, POWERUP_TYPES)
           const powerupId = `P${++powerupCounter}`
 
-          powerups.push({ powerupId, type: kind, loc: { sector: loc.sector, zone: loc.zone } })
+          powerups.push({
+            powerupId,
+            type: kind,
+            loc: { sector: loc.sector, zone: loc.zone },
+            expiresAtTick: t + POWERUP_LIFETIME_TICKS,
+          })
 
           tickEvents.push({
             type: 'POWERUP_SPAWN',

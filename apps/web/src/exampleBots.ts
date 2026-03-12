@@ -3,8 +3,10 @@ import bot1Md from '../../../examples/bot1.md?raw'
 import bot2Md from '../../../examples/bot2.md?raw'
 import bot3Md from '../../../examples/bot3.md?raw'
 import bot4Md from '../../../examples/bot4.md?raw'
+import bot5Md from '../../../examples/bot5.md?raw'
+import bot6Md from '../../../examples/bot6.md?raw'
 
-export type ExampleBotId = 'bot0' | 'bot1' | 'bot2' | 'bot3' | 'bot4'
+export type ExampleBotId = 'bot0' | 'bot1' | 'bot2' | 'bot3' | 'bot4' | 'bot5' | 'bot6'
 
 export type ExampleBot = {
   id: ExampleBotId
@@ -26,7 +28,7 @@ function extractFirstTextFence(md: string): string {
 export const EXAMPLE_BOTS: Record<ExampleBotId, ExampleBot> = {
   bot0: {
     id: 'bot0',
-    displayName: 'Powerup Seeker (starter)',
+    displayName: 'Aggressive Skirmisher (starter)',
     sourceText: extractFirstTextFence(bot0Md),
   },
   bot1: {
@@ -49,6 +51,16 @@ export const EXAMPLE_BOTS: Record<ExampleBotId, ExampleBot> = {
     displayName: 'Saw Rusher',
     sourceText: extractFirstTextFence(bot4Md),
   },
+  bot5: {
+    id: 'bot5',
+    displayName: 'Burst Hunter',
+    sourceText: extractFirstTextFence(bot5Md),
+  },
+  bot6: {
+    id: 'bot6',
+    displayName: 'Energy Saw Skirmisher',
+    sourceText: extractFirstTextFence(bot6Md),
+  },
 }
 
 export const EXAMPLE_OPPONENT_IDS: Array<Exclude<ExampleBotId, 'bot0'>> = [
@@ -56,4 +68,6 @@ export const EXAMPLE_OPPONENT_IDS: Array<Exclude<ExampleBotId, 'bot0'>> = [
   'bot2',
   'bot3',
   'bot4',
+  'bot5',
+  'bot6',
 ]

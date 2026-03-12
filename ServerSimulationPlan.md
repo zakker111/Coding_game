@@ -139,6 +139,7 @@ Recommended tick phases:
      - v1: derived from the fixed default loadout (see `ServerPlan.md`)
      - future: derived from the bot’s equipped loadout (see `Ruleset.md` §1.2)
    - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps deterministically (see `Ruleset.md` §1.2 and §4)
+     - v1: bot-to-bot bumps also deal damage (`DAMAGE kind=BUMP_BOT`) and can contribute to kill credit
    - emit replay events as needed (`ReplayViewerPlan.md`):
      - `BOT_MOVED { botId, fromPos, toPos, dir? }`
      - `BUMP_WALL { botId, dir, damage }` / `BUMP_BOT { botId, otherBotId, dir }`

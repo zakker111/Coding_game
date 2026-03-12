@@ -1,6 +1,36 @@
-import { generateSampleReplay } from '../replay/generateSampleReplay.js'
 import { attachArenaRenderer } from './arena.js'
 import { DEFAULT_OPPONENT_EXAMPLE_IDS, EXAMPLE_BOTS, OPPONENT_EXAMPLE_POOL_IDS } from './exampleBots.js'
+
+const engineWorker = new Worker(new URL('./engineRunner.worker.js', import.meta.url), { type: 'module' })
+
+let engineRequestId = 0
+const pendingEngineRuns = new Map()
+
+engineWorker.addEventListener('message', (event) => {
+  const msg = event.data
+  if (!msg || typeof msg !== 'object') return
+
+  if (msg.type !== 'RUN_RESULT') return
+
+  const pending = pendingEngineRuns.get(msg.requestId)
+  if (!pending) return
+  pendingEngineRuns.delete(msg.requestId)
+
+  if (msg.ok) {
+    pending.resolve(msg.replay)
+  } else {
+    pending.reject(new Error(msg.error?.message || 'Engine worker error'))
+  }
+})
+
+function runMatchInEngineWorker({ seed, tickCap, bots }) {
+  const requestId = ++engineRequestId
+
+  return new Promise((resolve, reject) => {
+    pendingEngineRuns.set(requestId, { resolve, reject })
+    engineWorker.postMessage({ requestId, seed, tickCap, bots })
+  })
+}
 
 const SLOT_IDS = ['BOT1', 'BOT2', 'BOT3', 'BOT4']
 
@@ -426,6 +456,8 @@ let speed = 1
 let lastRunSignature = 0
 let replayStale = false
 
+let lastRunError = ''
+
 let runInProgress = false
 let randomizeInProgress = false
 
@@ -439,6 +471,10 @@ let lastNow = 0
 let accMs = 0
 
 const render = attachArenaRenderer(canvas)
+
+function clearRunError() {
+  lastRunError = ''
+}
 
 function setActiveTab(container, activeId) {
   for (const btn of container.querySelectorAll('button[data-id]')) {
@@ -494,18 +530,15 @@ function updateMyBotDraftUI() {
     randomizeOpponentsBtn.disabled = runInProgress
   }
 
-  if (replay && replayStale) {
-    runNotice.textContent = 'Replay is stale — click “Run / Preview” to regenerate.'
+  let notice = ''
+  if (lastRunError) {
+    notice = lastRunError
+  } else if (replay && replayStale) {
+    notice = 'Replay is stale — click “Run / Preview” to regenerate.'
   } else if (dirty) {
-    runNotice.textContent = 'BOT1 has unsaved edits. Run uses the draft; click “Update bot” to save.'
-  } else {
-    runNotice.textContent = ''
+    notice = 'BOT1 has unsaved edits. Run uses the draft; click “Update bot” to save.'
   }
-}
-
-function hasUnappliedMyBotChanges() {
-  const bot = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
-  return isMyBotDirty(bot)
+  runNotice.textContent = notice
 }
 
 function updateMyBotsUI() {
@@ -753,6 +786,7 @@ function seekTo(t) {
 
 async function run() {
   stop()
+  clearRunError()
 
   myBots = readMyBots()
   if (!myBots.length) myBots = ensureInitialMyBots()
@@ -804,14 +838,27 @@ async function run() {
     },
   ]
 
-  replay = generateSampleReplay(mixed, { tickCap, bots: headerBots })
-  lastRunSignature = computeRunSignature(seed, tickCap, sources)
-  replayStale = false
+  try {
+    const replayFromWorker = await runMatchInEngineWorker({
+      seed: mixed,
+      tickCap,
+      bots: headerBots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText })),
+    })
 
-  tick = 0
-  alpha = 1
+    replay = { ...replayFromWorker, bots: headerBots }
+    lastRunSignature = computeRunSignature(seed, tickCap, sources)
+    replayStale = false
 
-  draw()
+    tick = 0
+    alpha = 1
+
+    draw()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    lastRunError = `Run failed: ${message}`
+    updateMyBotDraftUI()
+    draw()
+  }
 }
 
 function randomizeOpponents() {
@@ -850,16 +897,19 @@ renderTabs(inspectTabs, selectedBotId, (id) => {
 })
 
 seedInput.addEventListener('input', () => {
+  clearRunError()
   markReplayStale()
   updateMyBotDraftUI()
 })
 
 tickCapInput.addEventListener('input', () => {
+  clearRunError()
   markReplayStale()
   updateMyBotDraftUI()
 })
 
 myBotsSelect.addEventListener('change', () => {
+  clearRunError()
   selectedMyBotId = myBotsSelect.value
   writeSelectedMyBotId(selectedMyBotId)
   updateMyBotsUI()
@@ -868,6 +918,7 @@ myBotsSelect.addEventListener('change', () => {
 })
 
 myBotRenameBtn.addEventListener('click', () => {
+  clearRunError()
   const bot = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
   if (!bot) return
 
@@ -880,6 +931,7 @@ myBotRenameBtn.addEventListener('click', () => {
 })
 
 myBotNewBtn.addEventListener('click', () => {
+  clearRunError()
   const id = allocateMyBotId()
   const name = `Bot ${id}`
 
@@ -895,6 +947,7 @@ myBotNewBtn.addEventListener('click', () => {
 })
 
 myBotDeleteBtn.addEventListener('click', () => {
+  clearRunError()
   const bot = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
   if (!bot) return
   if (myBots.length <= 1) return
@@ -918,6 +971,7 @@ myBotDeleteBtn.addEventListener('click', () => {
 })
 
 myBotApplyBtn.addEventListener('click', () => {
+  clearRunError()
   const bot = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
   if (!bot) return
 
@@ -936,6 +990,7 @@ myBotApplyBtn.addEventListener('click', () => {
 })
 
 botEditor.addEventListener('input', () => {
+  clearRunError()
   const bot = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
   if (!bot) return
 
@@ -956,6 +1011,7 @@ botEditor.addEventListener('input', () => {
 })
 
 opponent2Select.addEventListener('change', () => {
+  clearRunError()
   opponentSelections.BOT2 = opponent2Select.value
   updateOpponentsUI()
   markReplayStale()
@@ -963,6 +1019,7 @@ opponent2Select.addEventListener('change', () => {
 })
 
 opponent3Select.addEventListener('change', () => {
+  clearRunError()
   opponentSelections.BOT3 = opponent3Select.value
   updateOpponentsUI()
   markReplayStale()
@@ -970,6 +1027,7 @@ opponent3Select.addEventListener('change', () => {
 })
 
 opponent4Select.addEventListener('change', () => {
+  clearRunError()
   opponentSelections.BOT4 = opponent4Select.value
   updateOpponentsUI()
   markReplayStale()
@@ -977,6 +1035,7 @@ opponent4Select.addEventListener('change', () => {
 })
 
 randomizeOpponentsBtn.addEventListener('click', () => {
+  clearRunError()
   randomizeInProgress = true
   runInProgress = true
 
@@ -987,6 +1046,7 @@ randomizeOpponentsBtn.addEventListener('click', () => {
   Promise.resolve()
     .then(() => randomizeOpponents())
     .then(run)
+    .catch((err) => console.error(err))
     .finally(() => {
       randomizeInProgress = false
       runInProgress = false
@@ -998,11 +1058,13 @@ randomizeOpponentsBtn.addEventListener('click', () => {
 })
 
 runBtn.addEventListener('click', () => {
+  clearRunError()
   runInProgress = true
   updateMyBotDraftUI()
 
   Promise.resolve()
     .then(run)
+    .catch((err) => console.error(err))
     .finally(() => {
       runInProgress = false
       updateMyBotDraftUI()

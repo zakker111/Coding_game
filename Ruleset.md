@@ -92,6 +92,11 @@ Initial values (v1 recommended defaults; may become ruleset parameters later):
 - `ammo = 100`
 - `energy = 100`
 
+Ammo rules (v1):
+- Firing a bullet consumes ammo.
+- Ammo does not regenerate.
+- Only `AMMO` powerups increase ammo (see §7).
+
 New (locked direction): bots also have:
 - `botBaseArmor` (integer or small fixed-point; exact reduction math is defined elsewhere)
   - v1 recommended default: `0`
@@ -122,7 +127,10 @@ UI note: if the viewer uses `S` pixels per world unit (`ArenaVisualPlan.md`), th
 
 Derived per bot each tick:
 - `equippedSlotCount` = number of non-empty slots in the bot’s 3-slot loadout
-- `speedUnitsPerTick = max(minSpeedUnitsPerTick, baseSpeedUnitsPerTick - equippedSlotCount * perEquippedSlotSpeedPenaltyUnitsPerTick)`
+- **Armor is heavy**:
+  - if the bot has `ARMOR` equipped, treat it as counting for **2** slots for speed purposes
+  - equivalently: `effectiveEquippedSlotCount = equippedSlotCount + (hasArmor ? 1 : 0)`
+- `speedUnitsPerTick = max(minSpeedUnitsPerTick, baseSpeedUnitsPerTick - effectiveEquippedSlotCount * perEquippedSlotSpeedPenaltyUnitsPerTick)`
 
 Rules (movement + collision; v1):
 - Each tick, the engine derives at most one `moveRequest` per bot (from an immediate move instruction or an active move goal).
@@ -136,16 +144,18 @@ Rules (movement + collision; v1):
   3) **Wall clamp**: clamp `candidateToPos` so the entire 16×16 bot hitbox stays inside the arena.
      - using `ArenaPlan.md` bounds, this is equivalent to clamping bot centers to `x ∈ [8,184]`, `y ∈ [8,184]`.
      - if clamping changed `candidateToPos`, emit `BUMP_WALL` and apply `wallBumpDamage`.
-  4) **Bot–bot collision**: if moving to `candidateToPos` would make this bot’s hitbox overlap any other alive bot’s hitbox, the movement is canceled:
-     - set `toPos = fromPos` (no movement)
-     - choose the collided bot deterministically:
-       - lowest `otherBotId` among the overlapping bots
-     - emit `BUMP_BOT` for **both** bots (`dir` and `OPPOSITE(dir)`), with `dir` being the bot’s requested move direction for the tick.
+  4) **Bot–bot collision**: treat the movement as a swept segment `fromPos → candidateToPos`.
+     - If at any point along that segment this bot’s hitbox would overlap any other alive bot’s hitbox, the bot “bumps”.
+     - Choose the collided bot deterministically:
+       - lowest `otherBotId` among the overlapping bots at the first colliding point.
+     - Set `toPos` to the **last non-overlapping point** along the segment (may equal `fromPos`).
+     - Emit `BUMP_BOT` for **both** bots (`dir` and `OPPOSITE(dir)`), with `dir` being the bot’s requested move direction for the tick.
   5) Otherwise, movement succeeds: set `toPos = candidateToPos` and emit `BOT_MOVED { fromPos, toPos, dir? }`.
 
 Notes:
-- This “cancel on overlap” rule is intentionally simple; future rulesets can add sliding/pushing without changing the DSL.
-- If a bot both hits a wall and would overlap another bot after wall-clamp, the bot–bot collision rule wins (movement canceled), but the wall bump/damage still applies if the request attempted to cross the wall.
+- This “stop before overlap” rule is intentionally simple; future rulesets can add sliding/pushing without changing the DSL.
+- If a bot both hits a wall and would overlap another bot after wall-clamp, the bot–bot collision rule wins (movement stops before overlap), but the wall bump/damage still applies if the request attempted to cross the wall.
+
 
 Effect (intended gameplay):
 - empty slots ⇒ smaller `equippedSlotCount` ⇒ **faster movement**
@@ -214,6 +224,16 @@ The credited bot receives:
 The victim receives:
 - `deaths += 1` in match stats
 
+### 2.3 Defensive damage mitigation (SHIELD + ARMOR) (locked scope)
+
+- `SHIELD` mitigates **bullet** damage only (it does not mitigate `SAW`).
+- `ARMOR` is passive and mitigates **bullet + saw** damage.
+- Environment damage is not mitigable:
+  - `BUMP_WALL` damage always applies its full amount.
+- Bot bump / ramming damage (`kind == BUMP_BOT`) is **not mitigated** by `SHIELD` (and is treated as unmitigable in v1 unless explicitly changed later).
+
+> Note: the exact mitigation math (flat vs % reduction, stacking rules) is still a balance parameter.
+
 ---
 
 ## 3) Walls and wall damage
@@ -225,11 +245,12 @@ Walls are gameplay:
 - wall damage **can cause death**
 - if wall damage causes death, kill credit still goes to `lastDamageByBotId` (if present)
 
-Rendering note:
-- The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_WALL` (purely visual; see `ArenaVisualPlan.md` §5.7).
-
 Ruleset parameters:
 - `wallBumpDamage` (int; v1 TBD)
+- `botBumpDamage` (int; v1 recommended default: `1`)
+
+Mitigation rule (locked):
+- wall bump damage cannot be mitigated by defensive modules (it always applies its full amount).
 
 ---
 
@@ -252,8 +273,15 @@ Direction rule (recommended for v1):
 Rendering note:
 - The UI/replay viewer should show a small deterministic “bounce” effect on `BUMP_BOT` (purely visual; see `ArenaVisualPlan.md` §5.7).
 
-Damage (to finalize):
-- If you decide that bot-to-bot bumps cause damage, it should be recorded as `source == BOT` with `kind == BUMP_BOT`, so it participates in kill credit via `lastDamageByBotId`.
+Damage (v1):
+- Bot-to-bot bumps deal damage to **both** bots.
+- Ruleset parameter:
+  - `botBumpDamage` (int; recommended default: `1`)
+- Apply at most once per bot-pair per tick (so head-on movement doesn’t double-apply if both bots attempt to move into each other).
+- Record as a `DAMAGE` event with:
+  - `source == BOT`
+  - `kind == BUMP_BOT`
+  - `sourceBotId` set to the *other* bot (so it participates in kill credit via `lastDamageByBotId`).
 
 ---
 
@@ -371,6 +399,8 @@ Ruleset parameters (must be stored with `rulesetVersion`):
     - this guarantees **at least one spawn per simulated minute** (as long as there is an empty spawn anchor)
   - with v1 values, the spawn interval is **10–20 seconds** (10–20 ticks)
 - `powerupMaxActive` (optional cap; prevents arena clutter)
+- `powerupLifetimeTicks` (int; if a powerup isn't picked up in time, it despawns; see §7.5)
+  - v1 recommended default: `30` (the current sample generator uses `30` ticks)
 - `powerupTypeWeights` (optional; if not provided, use uniform)
 
 State:
@@ -426,6 +456,20 @@ Ruleset parameters:
 
 Deterministic ordering:
 - If multiple pickups would occur in the same tick (different bots at different powerups), process bots in `BOT1..BOT4` order.
+
+### 7.5 Lifetime + despawn
+
+Powerups are not permanent.
+
+Ruleset parameter:
+- `powerupLifetimeTicks` (int): powerups despawn if they aren't picked up within this many ticks of `POWERUP_SPAWN`.
+  - v1 recommended default: `30`
+
+Timing + replay semantics:
+- `POWERUP_SPAWN` occurs during end-of-tick maintenance, after pickups.
+  - A powerup spawned on tick `t` is first eligible to be picked up on tick `t+1`.
+- If a powerup reaches its lifetime without being picked up, remove it and emit `POWERUP_DESPAWN { powerupId, reason: RULES }`.
+  - `reason = RULES` means the powerup was removed by simulation rules (not by a pickup).
 
 
 

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 
 import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
@@ -342,8 +343,20 @@ export function WorkshopPage() {
 
     const prevById = new Map(prev.bullets.map((b) => [b.bulletId, b]))
 
+    const spawnsByBulletId = new Map(
+      (replay.events[t] ?? [])
+        .filter((e) => e.type === 'BULLET_SPAWN')
+        .map((e) => [e.bulletId, e])
+    )
+
     return next.bullets.map((b) => {
-      const p = prevById.get(b.bulletId) ?? b
+      const prevBullet = prevById.get(b.bulletId)
+      const spawn = spawnsByBulletId.get(b.bulletId)
+
+      // Newly spawned bullets won't exist in prev. Prefer BULLET_SPAWN.pos as the
+      // start position so bullets spawn from the muzzle and move immediately.
+      const p = prevBullet ?? (spawn ? { ...b, pos: spawn.pos } : { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } })
+
       return {
         bulletId: b.bulletId,
         ownerBotId: b.ownerBotId,
@@ -819,7 +832,7 @@ export function WorkshopPage() {
                 borderRadius: 10,
                 background: 'rgba(0,0,0,0.35)',
                 overflow: 'auto',
-                maxHeight: 240,
+                height: 240,
               }}
             >
               {replay
@@ -839,8 +852,10 @@ export function WorkshopPage() {
 
           <div style={{ marginTop: 18 }}>
             <div className="panel-title">Instruction reference</div>
-            <div className="muted" style={{ marginTop: 8 }}>
-              See <code>BotInstructions.md</code> for the full DSL.
+            <div style={{ marginTop: 10 }}>
+              <Link className="ui-button ui-button-secondary" to="/docs">
+                Open bot instructions
+              </Link>
             </div>
           </div>
         </section>

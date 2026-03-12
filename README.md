@@ -27,6 +27,18 @@ To run tests:
 pnpm test
 ```
 
+## QA (Phase 1)
+
+Phase 1 QA is intended to be fully reproducible in CI and locally.
+
+```bash
+pnpm qa:phase1
+```
+
+This runs workspace-wide tests + builds (including `apps/web`).
+
+Note: `site/` is a legacy prototype and is intentionally excluded from the pnpm workspace + CI.
+
 ## Deploying (static)
 
 Build the client-only app:
@@ -68,11 +80,13 @@ Notes:
 
 Supporting docs:
 
-- `examples/bot0.md` — bot0 starter (Workshop starter template): Powerup Seeker
+- `examples/bot0.md` — bot0 starter (Workshop starter template): Aggressive Skirmisher
 - `examples/bot1.md` — bot1: Zone Patrol Shooter
 - `examples/bot2.md` — bot2: Chaser Shooter
 - `examples/bot3.md` — bot3: Corner Bunker
 - `examples/bot4.md` — bot4: Saw Rusher
+- `examples/bot5.md` — bot5: Burst Hunter
+- `examples/bot6.md` — bot6: Energy Saw Skirmisher
 - `CombatPlan.md` — weapons/projectiles planning
 - `FutureProofing.md` / `BotLanguageDesign.md` — extensibility direction (modules, targeting, future DSL)
 - `DailyCompetition.md` — daily/season competition format

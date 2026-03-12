@@ -12,6 +12,7 @@
       <nav class="nav">
         <a href="./">Home</a>
         <a href="./workshop/">Workshop</a>
+        <a href="./docs.html">Docs</a>
       </nav>
     </header>
 
@@ -21,6 +22,21 @@
         <p class="muted">A deterministic bot-fighting coding game. Write bots, run matches, inspect replays tick-by-tick.</p>
         <div class="actions">
           <a class="button primary" href="./workshop/">Start Game</a>
+          <a class="button" href="./docs.html">Bot instructions</a>
+        </div>
+
+        <div style="margin-top: 18px">
+          <div class="feature-title">A tiny bot script</div>
+          <div class="muted" style="margin-top: 6px">
+            Starter bot is now more aggressive. Built-ins include Burst Hunter and Energy Saw Skirmisher.
+          </div>
+          <pre class="pre" style="margin-top: 10px; max-height: 260px">; Aggressive starter (BULLET in SLOT1)
+LABEL LOOP
+IF (HEALTH &lt; 45 &amp;&amp; POWERUP_EXISTS(HEALTH)) DO MOVE_TO_POWERUP HEALTH
+TARGET_CLOSEST
+SET_MOVE_TO_TARGET
+IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET
+GOTO LOOP</pre>
         </div>
 
         <div class="grid3" style="margin-top: 18px">
@@ -33,8 +49,8 @@
             <div class="muted">Per-tick state + events.</div>
           </div>
           <div class="feature">
-            <div class="feature-title">Safe DSL (planned)</div>
-            <div class="muted">Bots will run in a constrained sandbox.</div>
+            <div class="feature-title">Bot DSL</div>
+            <div class="muted">Loops, IFs, movement, targeting, and module actions.</div>
           </div>
         </div>
       </section>

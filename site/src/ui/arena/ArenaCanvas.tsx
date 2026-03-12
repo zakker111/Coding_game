@@ -261,7 +261,11 @@ export function ArenaCanvas({ replay, tick, p, className, style }: Props) {
       const b1 = endBullets.get(bulletId)
       if (!b0 && !b1) continue
 
-      const from = b0?.pos ?? b1!.pos
+      const from =
+        !b0 && b1
+          ? { x: b1.pos.x - b1.vel.x, y: b1.pos.y - b1.vel.y }
+          : b0?.pos ?? b1!.pos
+
       const to = b1?.pos ?? b0!.pos
 
       bullets.push({
