@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { runMatchToReplay } from '@coding-game/engine'
 import { botsOverlap, oppositeDir } from '../src/sim/arenaMath.js'
+import { BOT_BUMP_DAMAGE } from '../src/sim/constants.js'
 
 test('runMatchToReplay: bot bumps are paired, deal damage, and alive bots never overlap', () => {
   const bots = [
@@ -25,6 +26,30 @@ test('runMatchToReplay: bot bumps are paired, deal damage, and alive bots never 
     .filter((e) => e && e.type === 'DAMAGE' && e.kind === 'BUMP_BOT')
 
   assert.ok(bumpDamage.length > 0, 'expected at least one BUMP_BOT damage event')
+
+  for (const e of bumpDamage) {
+    assert.equal(e.amount, BOT_BUMP_DAMAGE)
+    assert.ok(typeof e.sourceBotId === 'string')
+    assert.notEqual(e.sourceBotId, e.victimBotId)
+  }
+
+  // Ensure bot-to-bot bump damage is applied at most once per bot-pair per tick.
+  for (let t = 1; t < replay.events.length; t++) {
+    const tickDamage = replay.events[t].filter((e) => e && e.type === 'DAMAGE' && e.kind === 'BUMP_BOT')
+
+    /** @type {Map<string, number>} */
+    const countByPairKey = new Map()
+
+    for (const e of tickDamage) {
+      const key = e.sourceRef?.id
+      assert.ok(typeof key === 'string', `expected bump damage at t=${t} to have sourceRef.id`)
+      countByPairKey.set(key, (countByPairKey.get(key) ?? 0) + 1)
+    }
+
+    for (const [key, count] of countByPairKey) {
+      assert.equal(count, 2, `expected exactly 2 BUMP_BOT damage events at t=${t} for pair ${key}`)
+    }
+  }
 
   // Expect the colliding bots to have taken at least some damage.
   const end = replay.state[replay.tickCap]
