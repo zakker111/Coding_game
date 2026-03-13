@@ -1,29 +1,65 @@
 import { attachArenaRenderer } from './arena.js'
 import { DEFAULT_OPPONENT_EXAMPLE_IDS, EXAMPLE_BOTS, OPPONENT_EXAMPLE_POOL_IDS } from './exampleBots.js'
 
-const engineWorker = new Worker(new URL('./engineRunner.worker.js', import.meta.url), { type: 'module' })
+let engineWorker = null
+let engineWorkerFailure = null
+
+try {
+  engineWorker = new Worker(new URL('./engineRunner.worker.js', import.meta.url), { type: 'module' })
+} catch (err) {
+  engineWorkerFailure = err instanceof Error ? err : new Error(String(err))
+}
 
 let engineRequestId = 0
 const pendingEngineRuns = new Map()
 
-engineWorker.addEventListener('message', (event) => {
-  const msg = event.data
-  if (!msg || typeof msg !== 'object') return
+function rejectAllPendingEngineRuns(err) {
+  for (const pending of pendingEngineRuns.values()) pending.reject(err)
+  pendingEngineRuns.clear()
+}
 
-  if (msg.type !== 'RUN_RESULT') return
+function markEngineWorkerFailed(err) {
+  if (engineWorkerFailure) return
+  engineWorkerFailure = err instanceof Error ? err : new Error(String(err))
+  rejectAllPendingEngineRuns(engineWorkerFailure)
+}
 
-  const pending = pendingEngineRuns.get(msg.requestId)
-  if (!pending) return
-  pendingEngineRuns.delete(msg.requestId)
+if (engineWorker) {
+  engineWorker.addEventListener('error', (event) => {
+    const msg = typeof event?.message === 'string' && event.message ? event.message : 'Engine worker error'
+    markEngineWorkerFailed(new Error(msg))
+  })
 
-  if (msg.ok) {
-    pending.resolve(msg.replay)
-  } else {
-    pending.reject(new Error(msg.error?.message || 'Engine worker error'))
-  }
-})
+  engineWorker.addEventListener('messageerror', () => {
+    markEngineWorkerFailed(new Error('Engine worker message error'))
+  })
+
+  engineWorker.addEventListener('message', (event) => {
+    const msg = event.data
+    if (!msg || typeof msg !== 'object') return
+
+    if (msg.type !== 'RUN_RESULT') return
+
+    const pending = pendingEngineRuns.get(msg.requestId)
+    if (!pending) return
+    pendingEngineRuns.delete(msg.requestId)
+
+    if (msg.ok) {
+      pending.resolve(msg.replay)
+    } else {
+      pending.reject(new Error(msg.error?.message || 'Engine worker error'))
+    }
+  })
+}
 
 function runMatchInEngineWorker({ seed, tickCap, bots }) {
+  if (!engineWorker) {
+    return Promise.reject(engineWorkerFailure || new Error('Engine worker unavailable'))
+  }
+  if (engineWorkerFailure) {
+    return Promise.reject(engineWorkerFailure)
+  }
+
   const requestId = ++engineRequestId
 
   return new Promise((resolve, reject) => {
