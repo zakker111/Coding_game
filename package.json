@@ -9,6 +9,9 @@
     "preview": "pnpm -C apps/web preview",
     "test": "pnpm -C apps/web test",
 
+    "sync:deploy": "node scripts/sync-deploy.mjs",
+    "check:deploy": "node scripts/sync-deploy.mjs --check",
+
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test",
     "qa:phase1": "pnpm test:all && pnpm build:all",

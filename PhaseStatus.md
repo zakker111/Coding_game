@@ -96,14 +96,13 @@ Key items left:
 
 Goal: prevent deploy-time copies drifting from the repo’s authoritative sources.
 
-Current status:
-- `deploy/bot-instructions.md` is currently in sync with `BotInstructions.md`.
-- `deploy/workshop/exampleBots.js` was manually re-synced with `examples/` (notably bot3: removed `IF (...) DO WAIT n`).
-
-Key items left:
-- Add automation (or CI checks) so deploy-time copies cannot drift:
-  - Validate `deploy/bot-instructions.md` equals `BotInstructions.md` byte-for-byte.
-  - Generate or validate `deploy/workshop/exampleBots.js` from `examples/bot*.md` (scripts-only extraction).
+Implemented:
+- CI validation (via `packages/engine/test/deploySync.test.js`) that fails if:
+  - `deploy/bot-instructions.md` drifts from `BotInstructions.md`
+  - `deploy/workshop/exampleBots.js` drifts from `examples/bot*.md`
+- In-repo tooling:
+  - `pnpm sync:deploy` (regenerates deploy-time copies)
+  - `pnpm check:deploy` (fails fast if deploy-time copies drift)
 
 ---
 
