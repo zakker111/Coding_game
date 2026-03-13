@@ -280,7 +280,7 @@ GOTO LOOP
     displayName: 'Saw Rusher',
     sourceText: `; bot4 — Saw Rusher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
-; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep to avoid bump-lock.
+; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep when too close.
 
 SET_MOVE_TO_BOT CLOSEST_BOT
 
@@ -384,7 +384,7 @@ GOTO LOOP
     displayName: 'Energy Saw Skirmisher',
     sourceText: `; bot6 — Energy Saw Skirmisher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
-; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY; sidestep to avoid bump-lock.
+; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY.
 
 SET_MOVE_TO_BOT CLOSEST_BOT
 

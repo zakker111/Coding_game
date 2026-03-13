@@ -1,23 +1,43 @@
 import { chromium } from 'playwright'
+import { spawn } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function parseArgs(argv) {
-  let baseUrl = 'http://127.0.0.1:8787'
+  const baseUrls = ['http://127.0.0.1:8787']
   let headless = true
+  let serve = false
+
+  let sawUrl = false
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '--url' && argv[i + 1]) {
-      baseUrl = argv[++i]
-    } else if (a.startsWith('--url=')) {
-      baseUrl = a.slice('--url='.length)
-    } else if (a === '--headed') {
-      headless = false
+
+    if ((a === '--url' && argv[i + 1]) || a.startsWith('--url=')) {
+      const v = a === '--url' ? argv[++i] : a.slice('--url='.length)
+      if (!v) continue
+
+      if (!sawUrl) {
+        baseUrls.length = 0
+        sawUrl = true
+      }
+
+      baseUrls.push(v)
+      continue
     }
+
+    if (a === '--headed') headless = false
+    if (a === '--serve') serve = true
   }
 
-  baseUrl = baseUrl.replace(/\/$/, '')
-
-  return { baseUrl, headless }
+  return {
+    baseUrls: baseUrls.map((u) => u.replace(/\/$/, '')),
+    headless,
+    serve,
+  }
 }
 
 function formatLocation(loc) {
@@ -36,9 +56,87 @@ function asText(err) {
   return String(err)
 }
 
-async function main() {
-  const { baseUrl, headless } = parseArgs(process.argv.slice(2))
+function parseBaseUrl(baseUrl) {
+  const u = new URL(baseUrl)
+  return {
+    host: u.hostname,
+    port: Number(u.port || (u.protocol === 'https:' ? 443 : 80)),
+  }
+}
 
+async function waitForServerReady(proc, { timeoutMs }) {
+  const startedAt = Date.now()
+
+  let stdout = ''
+  let stderr = ''
+
+  return await new Promise((resolve, reject) => {
+    const onData = (buf, which) => {
+      const s = buf.toString('utf8')
+      if (which === 'stdout') stdout += s
+      else stderr += s
+
+      if (/Workshop:\s+http:\/\//.test(stdout + stderr)) {
+        cleanup()
+        resolve(undefined)
+      }
+    }
+
+    const onExit = (code) => {
+      cleanup()
+      reject(new Error(`Static server exited early (code=${code ?? 'null'}).\n${stdout}\n${stderr}`))
+    }
+
+    const t = setInterval(() => {
+      if (Date.now() - startedAt > timeoutMs) {
+        cleanup()
+        reject(new Error(`Timed out waiting for static server to start.\n${stdout}\n${stderr}`))
+      }
+    }, 50)
+
+    const cleanup = () => {
+      clearInterval(t)
+      proc.stdout?.off('data', onStdout)
+      proc.stderr?.off('data', onStderr)
+      proc.off('exit', onExit)
+    }
+
+    const onStdout = (buf) => onData(buf, 'stdout')
+    const onStderr = (buf) => onData(buf, 'stderr')
+
+    proc.stdout?.on('data', onStdout)
+    proc.stderr?.on('data', onStderr)
+    proc.on('exit', onExit)
+  })
+}
+
+function startStaticServer(baseUrl) {
+  const { host, port } = parseBaseUrl(baseUrl)
+
+  const proc = spawn(
+    process.execPath,
+    [path.join(__dirname, 'serve-deploy.mjs'), '--host', host, '--port', String(port)],
+    { stdio: ['ignore', 'pipe', 'pipe'] }
+  )
+
+  return { proc, host, port }
+}
+
+async function safeGoto(page, url) {
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded' })
+  } catch (err) {
+    const msg = asText(err)
+
+    // If the document triggers a client-side redirect early in parsing, Playwright
+    // can throw "Navigation ... is interrupted by another navigation".
+    if (/interrupted by another navigation/i.test(msg)) return
+
+    throw err
+  }
+}
+
+async function runWorkshopQa({ baseUrl, headless }) {
   const failures = []
 
   /** @type {Array<{text: string, location: string}>} */
@@ -47,16 +145,10 @@ async function main() {
   const pageErrors = []
   /** @type {Array<{url: string, method: string, failure: string}>} */
   const requestFailures = []
-  /** @type {Array<{url: string, status: number, statusText: string}>} */
-  const badResponses = []
 
   /** @type {Array<{key: string, url: string, status: number, headers: Record<string, string>}>} */
   const keyResourceHeaders = []
 
-  /**
-   * Collect headers for these specific files to catch MIME issues (e.g. server
-   * responding with text/html for a .js URL).
-   */
   const keyPaths = [
     { key: 'workshop.js', path: '/workshop/workshop.js' },
     { key: 'engineRunner.worker.js', path: '/workshop/engineRunner.worker.js' },
@@ -134,19 +226,27 @@ async function main() {
   const workshopSlash = `${baseUrl}/workshop/`
 
   console.log(`[qa:workshop] Loading ${workshopNoSlash}`)
-  await page.goto(workshopNoSlash, { waitUntil: 'domcontentloaded' })
+  await safeGoto(page, workshopNoSlash)
+  await page.waitForURL('**/workshop/', { timeout: 10_000 })
   await page.waitForSelector('#runBtn')
 
-  assert(page.url().endsWith('/workshop/'), `Expected redirect to trailing slash, got: ${page.url()}`)
+  assert(
+    page.url().endsWith('/workshop/'),
+    `Expected redirect to trailing slash, got: ${page.url()} (loaded from ${workshopNoSlash})`
+  )
 
   console.log(`[qa:workshop] Loading ${workshopSlash}`)
   await page.goto(workshopSlash, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#runBtn')
 
-  // (2) Opponent selects populated
+  // (2) Opponent selects populated (and include example bots)
   for (const id of ['opponent2Select', 'opponent3Select', 'opponent4Select']) {
-    const count = await page.locator(`#${id} option`).count()
-    assert(count > 0, `Expected #${id} to have options, but it was empty.`)
+    const texts = await page.locator(`#${id} option`).evaluateAll((els) =>
+      els.map((e) => (e.textContent || '').trim())
+    )
+
+    assert(texts.length >= 6, `Expected #${id} to have >=6 options, got ${texts.length}.`)
+    assert(texts.some((t) => /^Example:\s*/.test(t)), `Expected #${id} to include "Example:" options.`)
   }
 
   // (3) Run / Preview produces a replay
@@ -174,9 +274,15 @@ async function main() {
 
   assert(totalTicks > 0, `Expected tick cap > 0 after run; got tick label: ${tickLabelText}`)
   assert(scrubMaxAfter > 0, `Expected scrub max > 0 after run; got: ${scrubMaxAfter}`)
-  assert(scrubMaxAfter !== scrubMaxBefore, `Expected scrub max to update after run; before=${scrubMaxBefore} after=${scrubMaxAfter}`)
+  assert(
+    scrubMaxAfter !== scrubMaxBefore,
+    `Expected scrub max to update after run; before=${scrubMaxBefore} after=${scrubMaxAfter}`
+  )
   assert(!/^Run failed:/i.test(runNoticeText), `Expected run to succeed, got notice: ${runNoticeText}`)
-  assert(/\bHP\b/.test(inspectText) && /\bAmmo\b/.test(inspectText), `Expected inspector to show bot stats; got: ${inspectText}`)
+  assert(
+    /\bHP\b/.test(inspectText) && /\bAmmo\b/.test(inspectText),
+    `Expected inspector to show bot stats; got: ${inspectText}`
+  )
 
   // (4) Randomize opponents changes selections and successfully runs
   const beforeOpponents = {
@@ -222,49 +328,102 @@ async function main() {
 
   await browser.close()
 
-  // Reporting
-  if (keyResourceHeaders.length) {
-    console.log('\n[qa:workshop] Key resource response headers:')
-    for (const r of keyResourceHeaders) {
+  return {
+    failures,
+    consoleErrors,
+    pageErrors,
+    requestFailures,
+    keyResourceHeaders,
+    suspiciousJsResponses,
+  }
+}
+
+function printReport({ baseUrl, result }) {
+  const prefix = `[qa:workshop] (${baseUrl})`
+
+  if (result.keyResourceHeaders.length) {
+    console.log(`\n${prefix} Key resource response headers:`)
+    for (const r of result.keyResourceHeaders) {
       console.log(`- ${r.key}: ${r.status} ${r.url}`)
       console.log(JSON.stringify(r.headers, null, 2))
     }
   } else {
-    console.log('\n[qa:workshop] Key resource response headers: (none captured)')
+    console.log(`\n${prefix} Key resource response headers: (none captured)`) // eslint-disable-line no-console
   }
 
-  if (suspiciousJsResponses.length) {
-    console.log('\n[qa:workshop] Suspicious JS responses (status>=400 or text/html):')
-    for (const r of suspiciousJsResponses) {
+  if (result.suspiciousJsResponses.length) {
+    console.log(`\n${prefix} Suspicious JS responses (status>=400 or text/html):`)
+    for (const r of result.suspiciousJsResponses) {
       console.log(`- ${r.status} ${r.url} (content-type: ${r.contentType || '(none)'})`)
     }
   }
 
-  if (consoleErrors.length) {
-    console.log('\n[qa:workshop] Console errors:')
-    for (const e of consoleErrors) {
+  if (result.consoleErrors.length) {
+    console.log(`\n${prefix} Console errors:`)
+    for (const e of result.consoleErrors) {
       console.log(`- ${e.text}${e.location ? ` (${e.location})` : ''}`)
     }
   }
 
-  if (pageErrors.length) {
-    console.log('\n[qa:workshop] Unhandled page errors:')
-    for (const e of pageErrors) console.log(`- ${e}`)
+  if (result.pageErrors.length) {
+    console.log(`\n${prefix} Unhandled page errors:`)
+    for (const e of result.pageErrors) console.log(`- ${e}`)
   }
 
-  if (requestFailures.length) {
-    console.log('\n[qa:workshop] Network request failures:')
-    for (const r of requestFailures) {
+  if (result.requestFailures.length) {
+    console.log(`\n${prefix} Network request failures:`)
+    for (const r of result.requestFailures) {
       console.log(`- ${r.method} ${r.url}: ${r.failure}`)
     }
   }
 
-  if (failures.length) {
-    console.log('\n[qa:workshop] FAILURES:')
-    for (const f of failures) console.log(`- ${f}`)
-    process.exitCode = 1
+  if (result.failures.length) {
+    console.log(`\n${prefix} FAILURES:`)
+    for (const f of result.failures) console.log(`- ${f}`)
   } else {
-    console.log('\n[qa:workshop] OK')
+    console.log(`\n${prefix} OK`)
+  }
+}
+
+async function main() {
+  const { baseUrls, headless, serve } = parseArgs(process.argv.slice(2))
+
+  /** @type {import('node:child_process').ChildProcess | null} */
+  let serverProc = null
+
+  if (serve) {
+    const localUrl = baseUrls.find((u) => {
+      try {
+        const p = new URL(u)
+        return p.hostname === '127.0.0.1' || p.hostname === 'localhost'
+      } catch {
+        return false
+      }
+    })
+
+    if (!localUrl) {
+      throw new Error(`--serve requires a local base URL (got: ${baseUrls.join(', ')})`)
+    }
+
+    const started = startStaticServer(localUrl)
+    serverProc = started.proc
+    await waitForServerReady(serverProc, { timeoutMs: 10_000 })
+  }
+
+  try {
+    let anyFailures = false
+
+    for (const baseUrl of baseUrls) {
+      const result = await runWorkshopQa({ baseUrl, headless })
+      printReport({ baseUrl, result })
+      if (result.failures.length) anyFailures = true
+    }
+
+    if (anyFailures) process.exitCode = 1
+  } finally {
+    if (serverProc) {
+      serverProc.kill('SIGTERM')
+    }
   }
 }
 

@@ -37,7 +37,15 @@ Phase 1 QA is intended to be fully reproducible in CI and locally.
 pnpm qa:phase1
 ```
 
-This runs workspace-wide tests + builds (including `apps/web`).
+This runs workspace-wide tests + builds (including `apps/web` and `packages/engine`).
+
+Additional recommended checks (deploy/workshop):
+
+```bash
+pnpm check:deploy          # ensure deploy-time copies match repo sources
+pnpm check:deploy:imports  # ensure deploy JS relative imports resolve to files
+pnpm qa:workshop -- --serve --url http://127.0.0.1:8787
+```
 
 Note: `site/` is a legacy prototype and is intentionally excluded from the pnpm workspace + CI.
 

@@ -19,11 +19,16 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Docs/spec alignment: update `Ruleset.md` and `ReplayViewerPlan.md` to reflect the current engine behavior (`rulesetVersion = 0.1.0`).
-  - `POWERUP_*` events use `powerupType` (not `type`).
-  - Invalid instructions emit `BOT_EXEC { result: "NOP", reason: "INVALID_INSTR" }`.
-  - `DAMAGE` event `source/kind` values documented as currently emitted by the engine.
-- Examples: remove invalid nested control-flow patterns (e.g. `IF (...) DO WAIT n`) from Markdown example bots.
+- Phase 1 spec/schema alignment (rulesetVersion `0.1.0`):
+  - `Ruleset.md`, `ReplayViewerPlan.md`, `ServerSimulationPlan.md` updated to match the current engine.
+  - Examples updated to avoid invalid nested control-flow (e.g. `IF (...) DO WAIT n`).
+- Deploy drift guardrails:
+  - `packages/engine/test/deploySync.test.js` enforces:
+    - `deploy/bot-instructions.md` matches `BotInstructions.md`
+    - `deploy/workshop/exampleBots.js` matches `examples/bot*.md`
+- Workshop QA:
+  - `scripts/qa-workshop.mjs` supports local serve (`--serve`) and multi-URL checks.
+  - Deploy Workshop “Randomize opponents” de-flaked to guarantee a change.
 
 ---
 
@@ -34,9 +39,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Added
 - Monorepo workspace:
   - `apps/web` (Nowt web app)
-  - `packages/replay` (deterministic replay generator + typings)
+  - `packages/engine` (bot DSL compiler/VM + deterministic simulation + replay generation)
+  - `packages/replay` (legacy replay generator + typings; not used by the Workshop)
   - `deploy/` (buildless static workshop prototype)
-- Deterministic replay generation (`generateSampleReplay(seed, { tickCap, bots? })`) including:
+- Deterministic simulation + replay generation (engine-driven) including:
   - stable PRNG (no `Math.random()`)
   - continuous positions in a 192×192 arena
   - bots spawning in the four corners
@@ -60,7 +66,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Workspace configuration (`pnpm-workspace.yaml`) includes `apps/*` and `packages/*`, excluding legacy `site/`.
 
 ### Notes
-- `packages/replay` currently provides a **sample replay generator** used by the Workshop. The full DSL VM + ruleset-accurate simulation engine remains planned work.
+- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.1.0`.
+- `packages/replay` remains a legacy/sample generator and should not be treated as authoritative.
 
 ## 0.0.1
 

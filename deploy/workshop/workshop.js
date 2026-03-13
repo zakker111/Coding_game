@@ -900,6 +900,12 @@ async function run() {
 function randomizeOpponents() {
   const pool = opponentPoolOptions(myBots, selectedMyBotId)
 
+  const before = {
+    BOT2: opponentSelections.BOT2,
+    BOT3: opponentSelections.BOT3,
+    BOT4: opponentSelections.BOT4,
+  }
+
   const nonce = readOpponentNonce()
   const bot1 = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
 
@@ -911,6 +917,11 @@ function randomizeOpponents() {
 
   const nextU32 = xorshift32(seed)
   const values = shuffleInPlaceDeterministic(pool.map((p) => p.value), nextU32).slice(0, 3)
+
+  const same = values[0] === before.BOT2 && values[1] === before.BOT3 && values[2] === before.BOT4
+  if (same) {
+    values.push(values.shift())
+  }
 
   opponentSelections = {
     ...opponentSelections,
