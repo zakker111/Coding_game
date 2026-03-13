@@ -15,18 +15,17 @@ Recent gameplay changes already shipped:
 
 Goal: make docs, engine behavior, and replay schema agree so future work doesn’t create regressions.
 
-Key items left:
-- Run the QA gates after doc updates and example bot fixes:
+Completion criteria (Phase 1 is “done” once these are green):
+- QA gates:
   - `pnpm -C packages/engine test`
   - `pnpm qa`
-- Recommended deploy/workshop smoke checks:
-  - `pnpm check:deploy:imports`
-  - `pnpm qa:workshop -- --serve --url http://127.0.0.1:8787`
-- Optional Phase 1 cleanup: unify/remove legacy docs that still describe the old `packages/replay` sample generator as authoritative.
 
-QA gates:
-- `pnpm -C packages/engine test`
-- `pnpm qa`
+Recommended (but optional) smoke checks:
+- `pnpm check:deploy:imports`
+- `pnpm qa:workshop -- --serve --url http://127.0.0.1:8787`
+
+Optional cleanup:
+- Unify/remove legacy docs that still describe the old `packages/replay` sample generator as authoritative.
 
 ---
 
