@@ -104,8 +104,14 @@ export async function generateWorkshopExampleBotsJs(repoRoot) {
   lines.push('')
 
   const poolIds = bots.map((b) => b.id).filter((id) => id !== 'bot0')
+  const defaultOpponentIds = ['bot2', 'bot3', 'bot4']
+
+  for (const id of defaultOpponentIds) {
+    if (!poolIds.includes(id)) throw new Error(`DEFAULT_OPPONENT_EXAMPLE_IDS contains ${id}, but it is not in the pool`)
+  }
+
   lines.push(`export const OPPONENT_EXAMPLE_POOL_IDS = [${poolIds.map((id) => `'${id}'`).join(', ')}]`)
-  lines.push(`export const DEFAULT_OPPONENT_EXAMPLE_IDS = ['bot2', 'bot3', 'bot4']`)
+  lines.push(`export const DEFAULT_OPPONENT_EXAMPLE_IDS = [${defaultOpponentIds.map((id) => `'${id}'`).join(', ')}]`)
   lines.push('')
 
   // Keep a trailing newline (matches repo style in deploy files).
@@ -153,7 +159,7 @@ export async function checkDeployFiles(repoRoot) {
    * @param {string} s
    */
   function unescapeSingleQuotedJsString(s) {
-    return s.replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+    return s.replace(/\\\\/g, '\\').replace(/\\'/g, "'")
   }
 
   /** @type {Record<string, { displayName: string, sourceText: string }>} */
@@ -170,21 +176,57 @@ export async function checkDeployFiles(repoRoot) {
     }
   }
 
-  const expectedBots = []
-  for (let i = 0; i <= 99; i++) {
-    const botId = `bot${i}`
-    try {
-      expectedBots.push(await readExampleBot(repoRoot, botId))
-    } catch (err) {
-      // stop at the first missing file (bots are contiguous in v1)
-      if (err && typeof err === 'object' && err.code === 'ENOENT') break
-      throw err
-    }
+  /**
+   * @param {string} exportName
+   */
+  function parseExportedStringArray(exportName) {
+    const m = exampleBotsJs.match(new RegExp(`export const ${exportName} = \\[([\\s\\S]*?)\\]`))
+    if (!m) throw new Error(`deploy/workshop/exampleBots.js is missing export: ${exportName}`)
+
+    const body = m[1]
+    const items = []
+    for (const mm of body.matchAll(/'((?:\\'|[^'])*)'/g)) items.push(unescapeSingleQuotedJsString(mm[1]))
+    return items
   }
+
+  const exampleDir = path.join(repoRoot, 'examples')
+  const exampleEntries = await fs.readdir(exampleDir)
+
+  const expectedBotIds = exampleEntries
+    .filter((f) => /^bot\d+\.md$/.test(f))
+    .map((f) => f.replace(/\.md$/, ''))
+    .sort((a, b) => {
+      const an = Number(a.replace(/^bot/, ''))
+      const bn = Number(b.replace(/^bot/, ''))
+      return an - bn
+    })
+
+  const expectedBots = []
+  for (const botId of expectedBotIds) expectedBots.push(await readExampleBot(repoRoot, botId))
 
   const expectedIds = new Set(expectedBots.map((b) => b.id))
   for (const botId of Object.keys(parsed)) {
     if (!expectedIds.has(botId)) throw new Error(`deploy/workshop/exampleBots.js has unexpected bot id: ${botId}`)
+  }
+
+  const expectedPoolIds = expectedBots.map((b) => b.id).filter((id) => id !== 'bot0')
+  const defaultOpponentIds = ['bot2', 'bot3', 'bot4']
+
+  const poolIdsFromFile = parseExportedStringArray('OPPONENT_EXAMPLE_POOL_IDS')
+  const defaultIdsFromFile = parseExportedStringArray('DEFAULT_OPPONENT_EXAMPLE_IDS')
+
+  if (poolIdsFromFile.join(',') !== expectedPoolIds.join(',')) {
+    throw new Error('deploy/workshop/exampleBots.js OPPONENT_EXAMPLE_POOL_IDS does not match expected bot list')
+  }
+
+  if (defaultIdsFromFile.join(',') !== defaultOpponentIds.join(',')) {
+    throw new Error('deploy/workshop/exampleBots.js DEFAULT_OPPONENT_EXAMPLE_IDS does not match expected defaults')
+  }
+
+  for (const id of defaultIdsFromFile) {
+    if (!poolIdsFromFile.includes(id)) {
+      throw new Error(`deploy/workshop/exampleBots.js default opponent ${id} is not in OPPONENT_EXAMPLE_POOL_IDS`)
+    }
   }
 
   for (const b of expectedBots) {
