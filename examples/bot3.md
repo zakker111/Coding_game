@@ -34,7 +34,7 @@ IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
 IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
 
 ; If we decided to go get a powerup, commit for 2 ticks while the goal keeps moving us.
-; Note: `WAIT` is control-flow and cannot be nested under `IF (...) DO ...`.
+; Note: WAIT is control-flow and cannot be nested under IF (...) DO ....
 IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) GOTO COMMIT_POWERUP
 
 ; Otherwise, go back home.
