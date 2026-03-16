@@ -185,6 +185,8 @@ export function WorkshopPage() {
   const [runError, setRunError] = React.useState<string | null>(null)
   const [appliedRun, setAppliedRun] = React.useState<AppliedRunInfo | null>(null)
 
+  const [showRawTickEvents, setShowRawTickEvents] = React.useState(false)
+
   const [playback, dispatch] = React.useReducer(playbackReducer, initialPlaybackState)
   const [alpha, setAlpha] = React.useState(1)
 
@@ -463,6 +465,133 @@ export function WorkshopPage() {
     const t = clamp(playback.tick, 0, replay.tickCap)
     return (replay.events[t] ?? []).filter((e) => isRelevantEvent(e, selectedBotId))
   }, [playback.tick, replay, selectedBotId])
+
+  const selectedTickEventLines = React.useMemo(() => {
+    if (!selectedTickEvents.length) return []
+
+    const lines: Array<{ key: string; label: string; detail?: string; tone?: 'muted' | 'bad' | 'good' }> = []
+
+    for (const e of selectedTickEvents) {
+      switch (e.type) {
+        case 'BOT_EXEC': {
+          const tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
+          lines.push({
+            key: `BOT_EXEC:${e.botId}:${e.pcBefore}:${e.pcAfter}`,
+            label: `${e.botId} BOT_EXEC`,
+            detail: `${e.instrText}  (pc ${e.pcBefore}→${e.pcAfter}, ${e.result}${e.reason ? `, ${e.reason}` : ''})`,
+            tone,
+          })
+          break
+        }
+        case 'BOT_MOVED':
+          lines.push({
+            key: `BOT_MOVED:${e.botId}:${e.fromPos.x},${e.fromPos.y}->${e.toPos.x},${e.toPos.y}`,
+            label: `${e.botId} moved`,
+            detail: `${e.fromPos.x},${e.fromPos.y} → ${e.toPos.x},${e.toPos.y}${e.dir ? ` (${e.dir})` : ''}`,
+          })
+          break
+        case 'BUMP_WALL':
+          lines.push({
+            key: `BUMP_WALL:${e.botId}:${e.dir}`,
+            label: `${e.botId} bumped wall`,
+            detail: `${e.dir} (damage ${e.damage})`,
+            tone: e.damage > 0 ? 'bad' : 'muted',
+          })
+          break
+        case 'BUMP_BOT':
+          lines.push({
+            key: `BUMP_BOT:${e.botId}:${e.otherBotId}:${e.dir}`,
+            label: `bump`,
+            detail: `${e.botId} ↔ ${e.otherBotId} (${e.dir})`,
+          })
+          break
+        case 'RESOURCE_DELTA': {
+          const parts = []
+          if (e.healthDelta) parts.push(`HP ${e.healthDelta > 0 ? '+' : ''}${e.healthDelta}`)
+          if (e.ammoDelta) parts.push(`AMMO ${e.ammoDelta > 0 ? '+' : ''}${e.ammoDelta}`)
+          if (e.energyDelta) parts.push(`ENERGY ${e.energyDelta > 0 ? '+' : ''}${e.energyDelta}`)
+          lines.push({
+            key: `RESOURCE_DELTA:${e.botId}:${e.cause}:${parts.join(',')}`,
+            label: `${e.botId} resources`,
+            detail: `${parts.join(', ') || '(no delta)'} (${e.cause})`,
+            tone: e.healthDelta < 0 ? 'bad' : e.healthDelta > 0 ? 'good' : 'muted',
+          })
+          break
+        }
+        case 'DAMAGE':
+          lines.push({
+            key: `DAMAGE:${e.victimBotId}:${e.amount}:${e.source}:${e.sourceBotId ?? ''}`,
+            label: `damage`,
+            detail: `${e.victimBotId} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${e.sourceBotId}` : ''}, ${e.kind})`,
+            tone: 'bad',
+          })
+          break
+        case 'BOT_DIED':
+          lines.push({
+            key: `BOT_DIED:${e.victimBotId}:${e.creditedBotId ?? ''}`,
+            label: `death`,
+            detail: `${e.victimBotId} died${e.creditedBotId ? ` (credited ${e.creditedBotId})` : ''}`,
+            tone: 'bad',
+          })
+          break
+        case 'BULLET_SPAWN':
+          lines.push({
+            key: `BULLET_SPAWN:${e.bulletId}`,
+            label: `bullet spawn`,
+            detail: `${e.ownerBotId} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`,
+          })
+          break
+        case 'BULLET_HIT':
+          lines.push({
+            key: `BULLET_HIT:${e.bulletId}:${e.victimBotId}`,
+            label: `bullet hit`,
+            detail: `${e.bulletId} hit ${e.victimBotId} (${e.damage})`,
+            tone: 'bad',
+          })
+          break
+        case 'BULLET_DESPAWN':
+          lines.push({
+            key: `BULLET_DESPAWN:${e.bulletId}:${e.reason}`,
+            label: `bullet despawn`,
+            detail: `${e.bulletId} (${e.reason})`,
+            tone: 'muted',
+          })
+          break
+        case 'POWERUP_PICKUP':
+          lines.push({
+            key: `POWERUP_PICKUP:${e.powerupId}:${e.botId}`,
+            label: `powerup pickup`,
+            detail: `${e.botId} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`,
+            tone: 'good',
+          })
+          break
+        case 'POWERUP_SPAWN':
+          lines.push({
+            key: `POWERUP_SPAWN:${e.powerupId}`,
+            label: `powerup spawn`,
+            detail: `${e.powerupType} at ${e.loc.sector}/${e.loc.zone}`,
+            tone: 'muted',
+          })
+          break
+        case 'POWERUP_DESPAWN':
+          lines.push({
+            key: `POWERUP_DESPAWN:${e.powerupId}:${e.reason}`,
+            label: `powerup despawn`,
+            detail: `${e.powerupId} (${e.reason})`,
+            tone: 'muted',
+          })
+          break
+        case 'MATCH_END':
+          lines.push({ key: 'MATCH_END', label: 'match end', detail: e.endReason, tone: 'muted' })
+          break
+        default:
+          lines.push({ key: `${e.type}:${Math.random()}`, label: e.type, detail: JSON.stringify(e), tone: 'muted' })
+          break
+      }
+    }
+
+    return lines
+  }, [selectedTickEvents])
 
   function createNewBot() {
     setMyBots((prev) => {
@@ -919,23 +1048,76 @@ export function WorkshopPage() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <div className="panel-title">Tick events</div>
-            <pre
-              style={{
-                marginTop: 8,
-                padding: 10,
-                borderRadius: 10,
-                background: 'rgba(0,0,0,0.35)',
-                overflow: 'auto',
-                height: 240,
-              }}
-            >
-              {replay
-                ? selectedTickEvents.length
-                  ? JSON.stringify(selectedTickEvents, null, 2)
-                  : '(no events)'
-                : 'Run a match to see events.'}
-            </pre>
+            <div className="panel-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Tick events</span>
+              <button
+                type="button"
+                className={['chip', showRawTickEvents ? 'active' : ''].join(' ')}
+                onClick={() => setShowRawTickEvents((v) => !v)}
+                disabled={!replay}
+                title="Toggle raw JSON"
+              >
+                Raw
+              </button>
+            </div>
+
+            {replay ? (
+              showRawTickEvents ? (
+                <pre
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: 'rgba(0,0,0,0.35)',
+                    overflow: 'auto',
+                    height: 240,
+                  }}
+                >
+                  {selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)'}
+                </pre>
+              ) : (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: 'rgba(0,0,0,0.35)',
+                    overflow: 'auto',
+                    height: 240,
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {selectedTickEventLines.length ? (
+                    selectedTickEventLines.map((l) => {
+                      const color =
+                        l.tone === 'bad'
+                          ? '#fecaca'
+                          : l.tone === 'good'
+                            ? 'rgba(134, 239, 172, 0.95)'
+                            : 'rgba(148, 163, 184, 0.95)'
+
+                      return (
+                        <div key={l.key} style={{ marginBottom: 6 }}>
+                          <div style={{ color }}>
+                            <strong style={{ color: 'var(--text)' }}>{l.label}</strong>
+                            {l.detail ? <span style={{ marginLeft: 8 }}>{l.detail}</span> : null}
+                          </div>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="muted">(no events)</div>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="muted" style={{ marginTop: 8 }}>
+                Run a match to see events.
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: 18 }}>

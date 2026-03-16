@@ -113,8 +113,8 @@ function locToWorld(loc) {
 
 function getInterpolatedBots(replay, tick, a) {
   const t = clamp(tick, 0, replay.tickCap)
-  const next = replay.state[t]
-  const prev = t > 0 ? replay.state[t - 1] : next
+  const next = replay.state?.[t]
+  const prev = t > 0 ? replay.state?.[t - 1] : next
   const prevById = new Map((prev?.bots || []).map((b) => [b.botId, b]))
 
   const out = []
@@ -137,42 +137,91 @@ function getInterpolatedBots(replay, tick, a) {
 
 function getInterpolatedBullets(replay, tick, a) {
   const t = clamp(tick, 0, replay.tickCap)
-  const next = replay.state[t]
-  const prev = t > 0 ? replay.state[t - 1] : next
+  const next = replay.state?.[t]
+  const prev = t > 0 ? replay.state?.[t - 1] : next
+
+  if (!next || !prev) return []
+
   const prevById = new Map((prev?.bullets || []).map((b) => [b.bulletId, b]))
+  const nextById = new Map((next?.bullets || []).map((b) => [b.bulletId, b]))
+
+  const bulletIds = new Set()
+  for (const b of prev?.bullets || []) bulletIds.add(b.bulletId)
+  for (const b of next?.bullets || []) bulletIds.add(b.bulletId)
 
   // If a bullet is new at tick t, it won't exist in the previous snapshot (t-1).
   // Prefer the BULLET_SPAWN event position as the "from" point so bullets appear
   // to spawn at the muzzle and start moving immediately.
+  const tickEvents = (replay.events && replay.events[t]) || []
+
   const spawnsByBulletId = new Map(
-    ((replay.events && replay.events[t]) || [])
-      .filter((e) => e && e.type === 'BULLET_SPAWN' && e.bulletId)
-      .map((e) => [e.bulletId, e])
+    tickEvents.filter((e) => e && e.type === 'BULLET_SPAWN' && e.bulletId).map((e) => [e.bulletId, e])
+  )
+
+  const despawnsByBulletId = new Map(
+    tickEvents.filter((e) => e && e.type === 'BULLET_DESPAWN' && e.bulletId).map((e) => [e.bulletId, e])
   )
 
   const out = []
-  for (const b of next?.bullets || []) {
-    const prevBullet = prevById.get(b.bulletId)
-    const spawn = spawnsByBulletId.get(b.bulletId)
+  for (const bulletId of bulletIds) {
+    const b0 = prevById.get(bulletId)
+    const b1 = nextById.get(bulletId)
+    if (!b0 && !b1) continue
 
-    const p =
-      prevBullet ||
-      (spawn && spawn.pos
-        ? { ...b, pos: spawn.pos }
-        : b.vel
-          ? { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } }
-          : b)
+    // Despawn: bullet present in prev, missing in next.
+    if (b0 && !b1) {
+      if (a >= 1) continue
+
+      const despawn = despawnsByBulletId.get(bulletId)
+      const to = despawn?.pos ?? b0.pos
+
+      out.push({
+        bulletId,
+        ownerBotId: b0.ownerBotId,
+        vel: b0.vel,
+        pos: {
+          x: b0.pos.x + (to.x - b0.pos.x) * a,
+          y: b0.pos.y + (to.y - b0.pos.y) * a,
+        },
+        alpha: 1 - a,
+      })
+      continue
+    }
+
+    // Spawn: bullet missing in prev, present in next.
+    if (!b0 && b1) {
+      const spawn = spawnsByBulletId.get(bulletId)
+      const from =
+        spawn?.pos ??
+        (b1.vel ? { x: b1.pos.x - b1.vel.x, y: b1.pos.y - b1.vel.y } : { x: b1.pos.x, y: b1.pos.y })
+
+      out.push({
+        bulletId,
+        ownerBotId: b1.ownerBotId,
+        vel: b1.vel,
+        pos: {
+          x: from.x + (b1.pos.x - from.x) * a,
+          y: from.y + (b1.pos.y - from.y) * a,
+        },
+      })
+      continue
+    }
+
+    // Normal movement.
+    const from = b0?.pos ?? b1.pos
+    const to = b1?.pos ?? b0.pos
 
     out.push({
-      bulletId: b.bulletId,
-      ownerBotId: b.ownerBotId,
+      bulletId,
+      ownerBotId: b1?.ownerBotId ?? b0.ownerBotId,
+      vel: b1?.vel ?? b0.vel,
       pos: {
-        x: p.pos.x + (b.pos.x - p.pos.x) * a,
-        y: p.pos.y + (b.pos.y - p.pos.y) * a,
+        x: from.x + (to.x - from.x) * a,
+        y: from.y + (to.y - from.y) * a,
       },
-      vel: b.vel,
     })
   }
+
   return out
 }
 
@@ -270,6 +319,9 @@ function draw(ctx, cssSize, scale, renderState, selectedBotId) {
     const y = b.pos.y * scale
     const r = Math.max(2, Math.floor(1.2 * scale))
 
+    ctx.save()
+    if (typeof b.alpha === 'number') ctx.globalAlpha = clamp(b.alpha, 0, 1)
+
     ctx.beginPath()
     ctx.arc(x, y, r, 0, Math.PI * 2)
     ctx.fillStyle = slotFallbackColor(b.ownerBotId)
@@ -285,6 +337,8 @@ function draw(ctx, cssSize, scale, renderState, selectedBotId) {
       ctx.lineWidth = Math.max(1, Math.floor(0.25 * scale))
       ctx.stroke()
     }
+
+    ctx.restore()
   }
 
   // Bots
