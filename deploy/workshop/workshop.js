@@ -650,31 +650,42 @@ function isRelevantEvent(e, botId) {
   }
 }
 
-function formatTickEventLine(e) {
+function botDisplayName(replay, botId) {
+  const headerBot = (replay?.bots || []).find((b) => b && b.slotId === botId)
+  const displayName = headerBot && typeof headerBot.displayName === 'string' ? headerBot.displayName : botId
+  return displayName || botId
+}
+
+function botLabel(replay, botId) {
+  const name = botDisplayName(replay, botId)
+  return name && name !== botId ? `${botId} (${name})` : botId
+}
+
+function formatTickEventLine(replay, e) {
   const line = { label: e?.type ?? 'EVENT', detail: '', tone: 'muted' }
 
   switch (e?.type) {
     case 'BOT_EXEC': {
-      line.label = `${e.botId} BOT_EXEC`
+      line.label = `${botLabel(replay, e.botId)} BOT_EXEC`
       line.detail = `${e.instrText}  (pc ${e.pcBefore}→${e.pcAfter}, ${e.result}${e.reason ? `, ${e.reason}` : ''})`
       line.tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
       return line
     }
     case 'BOT_MOVED':
-      line.label = `${e.botId} moved`
+      line.label = `${botLabel(replay, e.botId)} moved`
       line.detail = `${e.fromPos.x},${e.fromPos.y} → ${e.toPos.x},${e.toPos.y}${e.dir ? ` (${e.dir})` : ''}`
       return line
     case 'BUMP_WALL':
-      line.label = `${e.botId} bumped wall`
+      line.label = `${botLabel(replay, e.botId)} bumped wall`
       line.detail = `${e.dir} (damage ${e.damage})`
       line.tone = e.damage > 0 ? 'bad' : 'muted'
       return line
     case 'BUMP_BOT':
       line.label = `bump`
-      line.detail = `${e.botId} ↔ ${e.otherBotId} (${e.dir})`
+      line.detail = `${botLabel(replay, e.botId)} ↔ ${botLabel(replay, e.otherBotId)} (${e.dir})`
       return line
     case 'RESOURCE_DELTA': {
-      line.label = `${e.botId} resources`
+      line.label = `${botLabel(replay, e.botId)} resources`
       const parts = []
       if (e.healthDelta) parts.push(`HP ${e.healthDelta > 0 ? '+' : ''}${e.healthDelta}`)
       if (e.ammoDelta) parts.push(`AMMO ${e.ammoDelta > 0 ? '+' : ''}${e.ammoDelta}`)
@@ -685,21 +696,21 @@ function formatTickEventLine(e) {
     }
     case 'DAMAGE':
       line.label = `damage`
-      line.detail = `${e.victimBotId} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${e.sourceBotId}` : ''}, ${e.kind})`
+      line.detail = `${botLabel(replay, e.victimBotId)} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${botLabel(replay, e.sourceBotId)}` : ''}, ${e.kind})`
       line.tone = 'bad'
       return line
     case 'BOT_DIED':
       line.label = `death`
-      line.detail = `${e.victimBotId} died${e.creditedBotId ? ` (credited ${e.creditedBotId})` : ''}`
+      line.detail = `${botLabel(replay, e.victimBotId)} died${e.creditedBotId ? ` (credited ${botLabel(replay, e.creditedBotId)})` : ''}`
       line.tone = 'bad'
       return line
     case 'BULLET_SPAWN':
       line.label = `bullet spawn`
-      line.detail = `${e.ownerBotId} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`
+      line.detail = `${botLabel(replay, e.ownerBotId)} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`
       return line
     case 'BULLET_HIT':
       line.label = `bullet hit`
-      line.detail = `${e.bulletId} hit ${e.victimBotId} (${e.damage})`
+      line.detail = `${e.bulletId} hit ${botLabel(replay, e.victimBotId)} (${e.damage})`
       line.tone = 'bad'
       return line
     case 'BULLET_DESPAWN':
@@ -708,7 +719,7 @@ function formatTickEventLine(e) {
       return line
     case 'POWERUP_PICKUP':
       line.label = `powerup pickup`
-      line.detail = `${e.botId} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`
+      line.detail = `${botLabel(replay, e.botId)} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`
       line.tone = 'good'
       return line
     case 'POWERUP_SPAWN':
@@ -764,12 +775,26 @@ function updateInspector() {
   // Execution box: show the selected bot's BOT_EXEC, prominently.
   if (execBox) {
     execBox.innerHTML = ''
+
+    const displayName = botDisplayName(replay, selectedBotId)
+    execBox.appendChild(
+      createEl('div', {
+        text: displayName && displayName !== selectedBotId ? `${selectedBotId} — ${displayName}` : selectedBotId,
+        style: 'font-weight: 800; color: var(--text)',
+      }),
+    )
+
     const exec = selectedTickEvents.find((e) => e?.type === 'BOT_EXEC' && e.botId === selectedBotId)
 
     if (!exec) {
-      execBox.appendChild(createEl('div', { class: 'muted', text: '(no BOT_EXEC)' }))
+      execBox.appendChild(createEl('div', { class: 'muted', text: '(no BOT_EXEC)', style: 'margin-top: 6px' }))
     } else {
-      execBox.appendChild(createEl('div', { text: exec.instrText || '(no instruction)', style: 'font-weight: 800; color: var(--text)' }))
+      execBox.appendChild(
+        createEl('div', {
+          text: exec.instrText || '(no instruction)',
+          style: 'margin-top: 6px; font-weight: 800; color: var(--text)',
+        }),
+      )
       const meta = createEl('div', { class: 'muted', style: 'margin-top: 6px; line-height: 1.5' })
       meta.appendChild(document.createTextNode(`pc ${exec.pcBefore} → ${exec.pcAfter} • result `))
       meta.appendChild(createEl('strong', { text: exec.result, style: 'color: var(--text)' }))
@@ -799,7 +824,7 @@ function updateInspector() {
         tickEventsList.appendChild(createEl('div', { class: 'muted', text: '(no events)' }))
       } else {
         for (const e of selectedTickEvents) {
-          const { label, detail, tone } = formatTickEventLine(e)
+          const { label, detail, tone } = formatTickEventLine(replay, e)
           const color = tone === 'bad' ? '#fecaca' : tone === 'good' ? 'rgba(134, 239, 172, 0.95)' : 'rgba(148, 163, 184, 0.95)'
 
           const row = createEl('div', { style: 'margin-bottom: 6px; color: ' + color })
