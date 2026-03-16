@@ -17,6 +17,25 @@ Implemented:
 Legacy:
 - `packages/replay` is a sample replay generator and is not authoritative.
 
+### Checklist (done vs. not done)
+
+Done (shipped)
+- [x] Deploy Workshop build tag chip (`WORKSHOP_BUILD`) visible in `/workshop/`.
+- [x] Inspector shows bot display names (beyond `BOT1/BOT2…`).
+- [x] Tick events list grouped by category (Movement/Combat/Resources/Other) with collapsible headers.
+- [x] Tick events modes: **All** toggle (scope), **Raw** toggle.
+- [x] Tick events filter/search (affects list + raw) + status line.
+- [x] Raw tick events include `nameMap` + `eventsWithNames`.
+- [x] `pnpm qa:workshop` Playwright smoke covers: run/preview, opponent selects, randomize opponents, tick-events All/Raw/Filter + raw JSON shape.
+
+Not done yet (next milestones)
+- [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
+- [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
+- [ ] Phase 2: replace “infer modules from source text” with explicit per-bot 3-slot `loadout`.
+- [ ] Phase 2.1: implement ARMOR (mitigation + any speed penalty) + tests.
+- [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
+- [ ] Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
+
 ---
 
 ## Current engine contract (rulesetVersion `0.1.0`)
@@ -111,7 +130,7 @@ Workshop QA contract (keep stable or update the QA script alongside UI changes):
 
 ---
 
-## Phase 0.2+ — Post-0.0.2 hardening (keep `rulesetVersion = 0.1.0`)
+## Phase 0.3+ — Post-0.0.2 hardening (keep `rulesetVersion = 0.1.0`)
 
 Goal: close out alignment work, reduce drift, and make the existing loop “boringly reliable” before adding new mechanics.
 

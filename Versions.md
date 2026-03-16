@@ -19,19 +19,26 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Phase 1 spec/schema alignment (rulesetVersion `0.1.0`):
-  - `Ruleset.md`, `ReplayViewerPlan.md`, `ServerSimulationPlan.md` updated to match the current engine.
-  - Examples updated to avoid invalid nested control-flow (e.g. `IF (...) DO WAIT n`).
-- Deploy drift guardrails:
-  - `packages/engine/test/deploySync.test.js` enforces:
-    - `deploy/bot-instructions.md` matches `BotInstructions.md`
-    - `deploy/workshop/exampleBots.js` matches `examples/bot*.md`
+- (none)
+
+---
+
+## 0.0.3 — 2026-03-16T00:00:00Z
+
+> Marketing version: **0.03** (SemVer: `0.0.3`).
+
+### Added
 - Deploy Workshop (buildless static):
-  - Visible build tag in header (`WORKSHOP_BUILD`), currently **v0.2**.
-  - Inspector tick events: grouped view + All/Raw toggles + filter + names in raw (`eventsWithNames`).
-- Workshop QA:
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.2**.
+  - Inspector improvements:
+    - bot display names shown in Inspector + event formatting
+    - tick events grouped (Movement/Combat/Resources/Other)
+    - tick events modes: **All** toggle + **Raw** toggle
+    - tick events filter/search + match count status
+    - raw tick events JSON includes `nameMap` and `eventsWithNames` (and includes query metadata when filtered)
+- Workshop QA smoke:
   - `scripts/qa-workshop.mjs` supports local serve (`--serve`) and multi-URL checks.
-  - Covers tick-events filtering + raw JSON shape + randomize opponents.
+  - Covers run/preview + opponent selection/randomize + tick-events All/Raw/Filter + raw JSON shape.
 
 ---
 
