@@ -1,5 +1,5 @@
 export function stableStringify(value) {
-  return JSON.stringify(stableClone(value))
+  return JSON.stringify(stableClone(value)) ?? 'null'
 }
 
 function stableClone(value) {

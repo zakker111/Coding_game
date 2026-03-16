@@ -15,7 +15,7 @@ const repoRoot = path.resolve(__dirname, '../../../..')
 
 function extractTextFence(md) {
   const normalized = md.replace(/\r\n?/g, '\n')
-  const m = normalized.match(/```text\s*\n([\s\S]*?)\n```/)
+  const m = normalized.match(/```text\s*\n([\s\S]*?)\n?```/)
   if (!m) throw new Error('No ```text code fence found')
   return `${m[1]}\n`
 }
@@ -28,12 +28,13 @@ function loadExampleBot(n) {
 
 function stripHeaderSourceText(replay) {
   // Exclude header.sourceText blobs to keep the golden stable when comments change.
-  const headerBots = (replay.header?.bots ?? []).map((b) => ({
-    ...b,
-    ...(b && typeof b === 'object' && 'sourceText' in b ? { sourceText: undefined } : {}),
-  }))
+  const headerBots = (replay.header?.bots ?? []).map((b) => {
+    if (!b || typeof b !== 'object') return b
+    if ('sourceText' in b) return { ...b, sourceText: undefined }
+    return b
+  })
 
-  return { ...replay.header, bots: headerBots }
+  return { ...(replay.header ?? {}), bots: headerBots }
 }
 
 function hashReplayCore(replay) {
@@ -55,7 +56,9 @@ function hashTicks(arr) {
 }
 
 function assertTickHashesEqual(kind, got, expected) {
-  if (!Array.isArray(expected)) return
+  if (!Array.isArray(expected)) {
+    assert.fail(`${kind} fixture is missing an array of per-tick hashes (run \`pnpm golden:update\`)`)
+  }
 
   if (got.length !== expected.length) {
     assert.fail(`${kind} hash length mismatch: got ${got.length}, expected ${expected.length}`)
@@ -97,17 +100,24 @@ function runScenarioExampleBots({ seed, tickCap, botNums }) {
   }
 }
 
-test('golden: examples smoke (bot0..bot3)', () => {
+test('golden: examples smoke (bot0..bot3)', (t) => {
   const fixture = loadFixture('examples_smoke_seed123')
   if (!fixture) {
-    test.skip('golden fixture missing: examples_smoke_seed123.json')
+    t.skip('golden fixture missing: examples_smoke_seed123.json')
     return
   }
 
   if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
+    t.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
     return
   }
+
+  assert.equal(fixture.name, 'examples_smoke_seed123')
+  assert.deepStrictEqual(fixture.params, { seed: 123, tickCap: 50, bots: [0, 1, 2, 3] })
+  assert.ok(Array.isArray(fixture.stateTickSha256), 'fixture.stateTickSha256 must be an array')
+  assert.ok(Array.isArray(fixture.eventsTickSha256), 'fixture.eventsTickSha256 must be an array')
+  assert.ok(fixture.stateTickSha256.length > 0, 'fixture.stateTickSha256 must be non-empty')
+  assert.ok(fixture.eventsTickSha256.length > 0, 'fixture.eventsTickSha256 must be non-empty')
 
   const got = runScenarioExampleBots({ seed: 123, tickCap: 50, botNums: [0, 1, 2, 3] })
 
@@ -116,17 +126,24 @@ test('golden: examples smoke (bot0..bot3)', () => {
   assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
 })
 
-test('golden: modules + powerups (bot0,bot5,bot6,bot4)', () => {
+test('golden: modules + powerups (bot0,bot5,bot6,bot4)', (t) => {
   const fixture = loadFixture('modules_powerups_seed999')
   if (!fixture) {
-    test.skip('golden fixture missing: modules_powerups_seed999.json')
+    t.skip('golden fixture missing: modules_powerups_seed999.json')
     return
   }
 
   if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
+    t.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
     return
   }
+
+  assert.equal(fixture.name, 'modules_powerups_seed999')
+  assert.deepStrictEqual(fixture.params, { seed: 999, tickCap: 120, bots: [0, 5, 6, 4] })
+  assert.ok(Array.isArray(fixture.stateTickSha256), 'fixture.stateTickSha256 must be an array')
+  assert.ok(Array.isArray(fixture.eventsTickSha256), 'fixture.eventsTickSha256 must be an array')
+  assert.ok(fixture.stateTickSha256.length > 0, 'fixture.stateTickSha256 must be non-empty')
+  assert.ok(fixture.eventsTickSha256.length > 0, 'fixture.eventsTickSha256 must be non-empty')
 
   const got = runScenarioExampleBots({ seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
 
@@ -134,3 +151,4 @@ test('golden: modules + powerups (bot0,bot5,bot6,bot4)', () => {
   assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
   assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
 })
+  

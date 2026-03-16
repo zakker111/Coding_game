@@ -13,7 +13,7 @@ const repoRoot = path.resolve(__dirname, '../../../..')
 
 function extractTextFence(md) {
   const normalized = md.replace(/\r\n?/g, '\n')
-  const m = normalized.match(/```text\s*\n([\s\S]*?)\n```/)
+  const m = normalized.match(/```text\s*\n([\s\S]*?)\n?```/)
   if (!m) throw new Error('No ```text code fence found')
   return `${m[1]}\n`
 }
@@ -25,12 +25,13 @@ function loadExampleBot(n) {
 }
 
 function stripHeaderSourceText(replay) {
-  const headerBots = (replay.header?.bots ?? []).map((b) => ({
-    ...b,
-    ...(b && typeof b === 'object' && 'sourceText' in b ? { sourceText: undefined } : {}),
-  }))
+  const headerBots = (replay.header?.bots ?? []).map((b) => {
+    if (!b || typeof b !== 'object') return b
+    if ('sourceText' in b) return { ...b, sourceText: undefined }
+    return b
+  })
 
-  return { ...replay.header, bots: headerBots }
+  return { ...(replay.header ?? {}), bots: headerBots }
 }
 
 function hashReplayCore(replay) {
@@ -51,13 +52,22 @@ function hashTicks(arr) {
   return arr.map((v) => sha256Hex(stableStringify(v)))
 }
 
+function stablePrettyJson(obj) {
+  // Ensure stable key ordering across runs/Node versions.
+  return JSON.stringify(JSON.parse(stableStringify(obj)), null, 2)
+}
+
 function writeFixture(name, obj) {
   const outPath = path.join(__dirname, 'fixtures', `${name}.json`)
-  writeFileSync(outPath, `${JSON.stringify(obj, null, 2)}\n`)
+  writeFileSync(outPath, `${stablePrettyJson(obj)}\n`)
   process.stdout.write(`wrote ${path.relative(repoRoot, outPath)}\n`)
 }
 
 function buildScenario({ name, seed, tickCap, botNums }) {
+  if (!Array.isArray(botNums) || botNums.length !== 4) {
+    throw new Error(`expected botNums to be an array of 4 bot indices; got: ${JSON.stringify(botNums)}`)
+  }
+
   const sources = botNums.map((n) => loadExampleBot(n))
   for (let i = 0; i < sources.length; i++) {
     const compiled = compileBotSource(sources[i])
@@ -77,7 +87,7 @@ function buildScenario({ name, seed, tickCap, botNums }) {
 
   return {
     name,
-    params: { seed, tickCap, bots: botNums },
+    params: { seed, tickCap, bots: [...botNums] },
     coreReplaySha256: hashReplayCore(replay),
     stateTickSha256: hashTicks(replay.state),
     eventsTickSha256: hashTicks(replay.events),

@@ -1,6 +1,6 @@
 # Golden determinism tests
 
-This folder contains cross-commit determinism tests for `runMatchToReplay()`.
+Cross-commit determinism tests for `runMatchToReplay()`.
 
 ## Workflow
 
@@ -10,7 +10,13 @@ This folder contains cross-commit determinism tests for `runMatchToReplay()`.
 pnpm golden:update
 ```
 
-2) Run just the golden tests:
+2) Validate fixtures:
+
+```sh
+pnpm golden:check
+```
+
+3) Run the golden tests:
 
 ```sh
 pnpm test:golden
@@ -18,4 +24,4 @@ pnpm test:golden
 
 Notes:
 - Fixtures store hashes (plus per-tick hash arrays) rather than full replay JSON, to keep diffs small.
-- If fixtures are not generated yet, tests will skip.
+- If fixtures are not generated yet, golden tests will skip.

@@ -88,9 +88,17 @@ Key items left:
 
 ## Phase 6 — Determinism “golden replay” tests
 
+Status:
+- Scaffolded: golden tests + fixture generator exist.
+- Remaining: run the generator once and check in the generated fixture hashes.
+
+Commands:
+- Generate fixtures: `pnpm golden:update`
+- Run golden-only tests: `pnpm test:golden`
+
 Key items left:
-- Add golden replay fixtures (or stable replay hashes)
-- Ensure CI runs engine tests (not only `apps/web` tests)
+- Commit the generated fixture JSON under `packages/engine/test/golden/fixtures/`.
+- (After fixtures are committed) flip placeholder handling from “skip” to “fail” so CI enforces goldens.
 
 ---
 

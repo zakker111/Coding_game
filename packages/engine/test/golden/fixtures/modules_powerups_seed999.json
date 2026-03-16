@@ -6,6 +6,6 @@
     "bots": [0, 5, 6, 4]
   },
   "coreReplaySha256": "__REPLACE_BY_RUNNING_pnpm_golden_update__",
-  "stateTickSha256": "__REPLACE_BY_RUNNING_pnpm_golden_update__",
-  "eventsTickSha256": "__REPLACE_BY_RUNNING_pnpm_golden_update__"
+  "stateTickSha256": [],
+  "eventsTickSha256": []
 }
