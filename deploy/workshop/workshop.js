@@ -812,7 +812,15 @@ function updateInspector() {
     if (tickEventsList) tickEventsList.style.display = 'none'
     if (eventLog) {
       eventLog.style.display = ''
-      eventLog.textContent = selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)'
+
+      const nameMap = {}
+      for (const hb of replay?.bots || []) {
+        if (hb && typeof hb.slotId === 'string' && typeof hb.displayName === 'string') nameMap[hb.slotId] = hb.displayName
+      }
+
+      eventLog.textContent = selectedTickEvents.length
+        ? JSON.stringify({ nameMap, events: selectedTickEvents }, null, 2)
+        : '(no events)'
     }
   } else {
     if (eventLog) eventLog.style.display = 'none'
