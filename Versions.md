@@ -26,9 +26,12 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `packages/engine/test/deploySync.test.js` enforces:
     - `deploy/bot-instructions.md` matches `BotInstructions.md`
     - `deploy/workshop/exampleBots.js` matches `examples/bot*.md`
+- Deploy Workshop (buildless static):
+  - Visible build tag in header (`WORKSHOP_BUILD`), currently **v0.2**.
+  - Inspector tick events: grouped view + All/Raw toggles + filter + names in raw (`eventsWithNames`).
 - Workshop QA:
   - `scripts/qa-workshop.mjs` supports local serve (`--serve`) and multi-URL checks.
-  - Deploy Workshop “Randomize opponents” de-flaked to guarantee a change.
+  - Covers tick-events filtering + raw JSON shape + randomize opponents.
 
 ---
 

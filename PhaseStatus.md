@@ -31,7 +31,9 @@ Optional cleanup:
 
 ## Phase 2 — Real loadouts + module model (v1 completeness)
 
-Goal: remove the sim shortcut that infers module</old_code><new_code>Key items left:
+Goal: remove the sim shortcut that infers module availability from source text.
+
+Key items left:
 - Add explicit per-bot loadout input (`SLOT1..SLOT3`)
 - Enforce v1 constraints (no duplicates; at most one weapon)
 - Implement ARMOR fully:

@@ -482,7 +482,7 @@ const scrub = document.getElementById('scrub')
 
 const canvas = document.getElementById('arenaCanvas')
 
-const WORKSHOP_BUILD = '0.1'
+const WORKSHOP_BUILD = '0.2'
 if (workshopBuildTag) workshopBuildTag.textContent = `v${WORKSHOP_BUILD}`
 
 // State
@@ -1028,42 +1028,6 @@ function updateInspector() {
           const collapsed = Boolean(tickEventGroupCollapsed[key])
 
           const header = createEl('div', { style: 'margin: 10px 0 6px; color: rgba(148, 163, 184, 0.95)' })
-          header.appendChild(
-            createEl('button', {
-              type: 'button',
-              'data-group': key,
-              style:
-                'width: 100%; text-align: left; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; font-weight: 800;',
-              onClick: () => {
-                tickEventGroupCollapsed[key] = !Boolean(tickEventGroupCollapsed[key])
-                updateInspector()
-              },
-              text: `${collapsed ? '▶' : '▼'} ${label} (${events.length})`,
-            })
-          )
-          tickEventsList.appendChild(header)
-
-          if (collapsed) continue
-
-          for (const e of events) {
-            const { label, detail, tone } = formatTickEventLine(replay, e)
-            const color =
-              tone === 'bad'
-                ? '#fecaca'
-                : tone === 'good'
-                  ? 'rgba(134, 239, 172, 0.95)'
-                  : 'rgba(148, 163, 184, 0.95)'
-
-            const row = createEl('div', { style: 'margin: 0 0 6px 12px; color: ' + color })
-            row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
-            if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
-            tickEventsList.appendChild(row)
-          }
-        }
-      }
-    }
-  }
-})
           header.appendChild(
             createEl('button', {
               type: 'button',
