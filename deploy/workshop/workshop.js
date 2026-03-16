@@ -818,8 +818,33 @@ function updateInspector() {
         if (hb && typeof hb.slotId === 'string' && typeof hb.displayName === 'string') nameMap[hb.slotId] = hb.displayName
       }
 
+      function withNameFields(e) {
+        if (!e || typeof e !== 'object') return e
+
+        const out = { ...e }
+
+        const add = (idKey, nameKey) => {
+          const id = e[idKey]
+          if (typeof id !== 'string') return
+          const name = nameMap[id]
+          if (typeof name === 'string' && name) out[nameKey] = name
+        }
+
+        add('botId', 'botName')
+        add('otherBotId', 'otherBotName')
+        add('ownerBotId', 'ownerBotName')
+        add('targetBotId', 'targetBotName')
+        add('victimBotId', 'victimBotName')
+        add('sourceBotId', 'sourceBotName')
+        add('creditedBotId', 'creditedBotName')
+
+        return out
+      }
+
+      const eventsWithNames = selectedTickEvents.map(withNameFields)
+
       eventLog.textContent = selectedTickEvents.length
-        ? JSON.stringify({ nameMap, events: selectedTickEvents }, null, 2)
+        ? JSON.stringify({ nameMap, events: selectedTickEvents, eventsWithNames }, null, 2)
         : '(no events)'
     }
   } else {
