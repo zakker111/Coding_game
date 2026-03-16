@@ -452,6 +452,7 @@ const opponent4Select = document.getElementById('opponent4Select')
 const randomizeOpponentsBtn = document.getElementById('randomizeOpponentsBtn')
 const runBtn = document.getElementById('runBtn')
 const runNotice = document.getElementById('runNotice')
+const workshopBuildTag = document.getElementById('workshopBuildTag')
 
 const myBotsSelect = document.getElementById('myBotsSelect')
 const myBotNameInput = document.getElementById('myBotNameInput')
@@ -478,6 +479,9 @@ const speedSelect = document.getElementById('speedSelect')
 const scrub = document.getElementById('scrub')
 
 const canvas = document.getElementById('arenaCanvas')
+
+const WORKSHOP_BUILD = '0.1'
+if (workshopBuildTag) workshopBuildTag.textContent = `v${WORKSHOP_BUILD}`
 
 // State
 let myBots = ensureInitialMyBots()
