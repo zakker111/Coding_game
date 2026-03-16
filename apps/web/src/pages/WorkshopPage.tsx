@@ -342,31 +342,88 @@ export function WorkshopPage() {
     if (!next || !prev) return []
 
     const prevById = new Map(prev.bullets.map((b) => [b.bulletId, b]))
+    const nextById = new Map(next.bullets.map((b) => [b.bulletId, b]))
+
+    const bulletIds = new Set<string>()
+    for (const b of prev.bullets) bulletIds.add(b.bulletId)
+    for (const b of next.bullets) bulletIds.add(b.bulletId)
 
     const spawnsByBulletId = new Map(
-      (replay.events[t] ?? [])
-        .filter((e) => e.type === 'BULLET_SPAWN')
-        .map((e) => [e.bulletId, e])
+      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_SPAWN').map((e) => [e.bulletId, e]),
     )
 
-    return next.bullets.map((b) => {
-      const prevBullet = prevById.get(b.bulletId)
-      const spawn = spawnsByBulletId.get(b.bulletId)
+    const despawnsByBulletId = new Map(
+      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_DESPAWN').map((e) => [e.bulletId, e]),
+    )
 
-      // Newly spawned bullets won't exist in prev. Prefer BULLET_SPAWN.pos as the
-      // start position so bullets spawn from the muzzle and move immediately.
-      const p = prevBullet ?? (spawn ? { ...b, pos: spawn.pos } : { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } })
+    const out = [] as Array<{
+      bulletId: string
+      ownerBotId: SlotId
+      pos: { x: number; y: number }
+      vel: { x: number; y: number }
+      alpha?: number
+    }>
 
-      return {
-        bulletId: b.bulletId,
-        ownerBotId: b.ownerBotId,
-        pos: {
-          x: p.pos.x + (b.pos.x - p.pos.x) * a,
-          y: p.pos.y + (b.pos.y - p.pos.y) * a,
-        },
-        vel: b.vel,
+    for (const bulletId of bulletIds) {
+      const b0 = prevById.get(bulletId)
+      const b1 = nextById.get(bulletId)
+      if (!b0 && !b1) continue
+
+      // Despawn: bullet present in prev, missing in next.
+      if (b0 && !b1) {
+        if (a >= 1) continue
+
+        const despawn = despawnsByBulletId.get(bulletId)
+        const to = despawn?.pos ?? b0.pos
+
+        out.push({
+          bulletId,
+          ownerBotId: b0.ownerBotId,
+          vel: b0.vel,
+          pos: {
+            x: b0.pos.x + (to.x - b0.pos.x) * a,
+            y: b0.pos.y + (to.y - b0.pos.y) * a,
+          },
+          alpha: 1 - a,
+        })
+        continue
       }
-    })
+
+      // Spawn: bullet missing in prev, present in next.
+      if (!b0 && b1) {
+        const spawn = spawnsByBulletId.get(bulletId)
+        const from = spawn?.pos ?? { x: b1.pos.x - b1.vel.x, y: b1.pos.y - b1.vel.y }
+
+        out.push({
+          bulletId,
+          ownerBotId: b1.ownerBotId,
+          vel: b1.vel,
+          pos: {
+            x: from.x + (b1.pos.x - from.x) * a,
+            y: from.y + (b1.pos.y - from.y) * a,
+          },
+        })
+        continue
+      }
+
+      // Normal movement.
+      const from = b0?.pos ?? b1!.pos
+      const to = b1?.pos ?? b0!.pos
+      const vel = b1?.vel ?? b0!.vel
+      const ownerBotId = b1?.ownerBotId ?? b0!.ownerBotId
+
+      out.push({
+        bulletId,
+        ownerBotId,
+        vel,
+        pos: {
+          x: from.x + (to.x - from.x) * a,
+          y: from.y + (to.y - from.y) * a,
+        },
+      })
+    }
+
+    return out
   }, [alpha, playback.playing, playback.tick, replay])
 
   const powerupsForRender = React.useMemo(() => {
@@ -821,6 +878,44 @@ export function WorkshopPage() {
             ) : (
               'Run a replay to inspect bots.'
             )}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div className="panel-title">Execution</div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: 10,
+                borderRadius: 10,
+                background: 'rgba(0,0,0,0.35)',
+              }}
+            >
+              {(() => {
+                if (!replay) return <div className="muted">Run a match to inspect execution.</div>
+
+                const exec = selectedTickEvents.find((e) => e.type === 'BOT_EXEC')
+                if (!exec || exec.type !== 'BOT_EXEC') return <div className="muted">(no BOT_EXEC)</div>
+
+                return (
+                  <div className="muted" style={{ lineHeight: 1.5 }}>
+                    <div>
+                      <strong style={{ color: 'var(--text)' }}>{exec.instrText}</strong>
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      pc {exec.pcBefore} → {exec.pcAfter}
+                      {' • '}
+                      result <strong style={{ color: 'var(--text)' }}>{exec.result}</strong>
+                      {exec.reason ? (
+                        <>
+                          {' • '}
+                          reason <strong style={{ color: '#fecaca' }}>{exec.reason}</strong>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
           </div>
 
           <div style={{ marginTop: 18 }}>
