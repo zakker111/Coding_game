@@ -171,12 +171,20 @@
           <div style="margin-top: 14px">
             <div class="row" style="justify-content: space-between; align-items: center; gap: 10px">
               <div class="card-title">Tick events</div>
-              <div class="row" style="gap: 6px; align-items: center">
+              <div class="row" style="gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end">
                 <button id="tickEventsAllBtn" class="tab" type="button" title="Toggle all events vs selected bot">All</button>
                 <button id="tickEventsRawBtn" class="tab" type="button" title="Toggle raw JSON">Raw</button>
+                <input
+                  id="tickEventsFilterInput"
+                  type="text"
+                  placeholder="Filter…"
+                  autocomplete="off"
+                  style="width: 180px; padding: 7px 10px"
+                />
               </div>
             </div>
 
+            <div id="tickEventsFilterStatus" class="muted" style="margin-top: 6px; font-size: 12px; display: none"></div>
             <div id="tickEventsList" class="pre" style="margin-top: 8px"></div>
             <pre id="eventLog" class="pre" style="margin-top: 8px; display: none"></pre>
           </div>

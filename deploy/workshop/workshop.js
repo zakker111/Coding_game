@@ -468,6 +468,8 @@ const execBox = document.getElementById('execBox')
 const tickEventsList = document.getElementById('tickEventsList')
 const tickEventsAllBtn = document.getElementById('tickEventsAllBtn')
 const tickEventsRawBtn = document.getElementById('tickEventsRawBtn')
+const tickEventsFilterInput = document.getElementById('tickEventsFilterInput')
+const tickEventsFilterStatus = document.getElementById('tickEventsFilterStatus')
 const eventLog = document.getElementById('eventLog')
 
 const tickLabel = document.getElementById('tickLabel')
@@ -503,6 +505,7 @@ let randomizeInProgress = false
 
 let showRawTickEvents = false
 let showAllTickEvents = false
+let tickEventsFilter = ''
 
 const tickEventGroupCollapsed = {}
 
@@ -782,15 +785,40 @@ function groupTickEvents(events) {
   return groups
 }
 
+function tickEventSearchText(replay, e) {
+  const { label, detail } = formatTickEventLine(replay, e)
+
+  const parts = [label, detail]
+  const botIdKeys = ['botId', 'otherBotId', 'ownerBotId', 'targetBotId', 'victimBotId', 'sourceBotId', 'creditedBotId']
+
+  for (const k of botIdKeys) {
+    const id = e?.[k]
+    if (typeof id !== 'string') continue
+    parts.push(botDisplayName(replay, id))
+  }
+
+  return parts.filter(Boolean).join(' ')
+}
+
+function tickEventMatchesFilter(replay, e, q) {
+  const qq = typeof q === 'string' ? q.trim().toLowerCase() : ''
+  if (!qq) return true
+  return tickEventSearchText(replay, e).toLowerCase().includes(qq)
+}
+
 function updateInspector() {
-  setActiveTab(inspectTabs, selectedBotId)
+  if (inspectTabs) setActiveTab(inspectTabs, selectedBotId)
 
   if (tickEventsAllBtn) tickEventsAllBtn.classList.toggle('active', showAllTickEvents)
   if (tickEventsRawBtn) tickEventsRawBtn.classList.toggle('active', showRawTickEvents)
 
   if (!replay) {
-    inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
+    if (inspectStats) inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
     if (execBox) execBox.textContent = ''
+    if (tickEventsFilterStatus) {
+      tickEventsFilterStatus.style.display = 'none'
+      tickEventsFilterStatus.textContent = ''
+    }
 
     if (showRawTickEvents) {
       if (tickEventsList) tickEventsList.style.display = 'none'
@@ -810,27 +838,30 @@ function updateInspector() {
   }
 
   const t = clamp(tick, 0, replay.tickCap)
-  const snap = replay.state[t]
+  const snap = replay.state?.[t]
   const bot = snap?.bots?.find((b) => b.botId === selectedBotId)
 
-  if (!bot) {
-    inspectStats.innerHTML = '<div class="muted">Bot not found in replay.</div>'
-  } else {
-    inspectStats.innerHTML = ''
-    const displayName = botDisplayName(replay, bot.botId)
+  if (inspectStats) {
+    if (!bot) {
+      inspectStats.innerHTML = '<div class="muted">Bot not found in replay.</div>'
+    } else {
+      inspectStats.innerHTML = ''
+      const displayName = botDisplayName(replay, bot.botId)
 
-    inspectStats.appendChild(kvRow('Bot', bot.botId))
-    inspectStats.appendChild(kvRow('Name', displayName))
-    inspectStats.appendChild(kvRow('HP', String(bot.hp)))
-    inspectStats.appendChild(kvRow('Ammo', String(bot.ammo)))
-    inspectStats.appendChild(kvRow('Energy', String(bot.energy)))
-    inspectStats.appendChild(kvRow('Alive', bot.alive ? 'yes' : 'no'))
-    inspectStats.appendChild(kvRow('PC', String(bot.pc)))
-    inspectStats.appendChild(kvRow('Pos', `${bot.pos.x.toFixed(3)}, ${bot.pos.y.toFixed(3)}`))
+      inspectStats.appendChild(kvRow('Bot', bot.botId))
+      inspectStats.appendChild(kvRow('Name', displayName))
+      inspectStats.appendChild(kvRow('HP', String(bot.hp)))
+      inspectStats.appendChild(kvRow('Ammo', String(bot.ammo)))
+      inspectStats.appendChild(kvRow('Energy', String(bot.energy)))
+      inspectStats.appendChild(kvRow('Alive', bot.alive ? 'yes' : 'no'))
+      inspectStats.appendChild(kvRow('PC', String(bot.pc)))
+      inspectStats.appendChild(kvRow('Pos', `${bot.pos.x.toFixed(3)}, ${bot.pos.y.toFixed(3)}`))
+    }
   }
 
-  const allTickEvents = replay.events[t] ?? []
+  const allTickEvents = replay.events?.[t] ?? []
   const scopedTickEvents = showAllTickEvents ? allTickEvents : allTickEvents.filter((e) => isRelevantEvent(e, selectedBotId))
+  const tickEventsQuery = tickEventsFilter.trim()
 
   // Execution box: show the selected bot's BOT_EXEC, prominently.
   if (execBox) {
@@ -867,6 +898,21 @@ function updateInspector() {
   }
 
   if (showRawTickEvents) {
+    const qRaw = typeof tickEventsFilter === 'string' ? tickEventsFilter.trim() : ''
+    const filteredTickEvents = qRaw
+      ? scopedTickEvents.filter((e) => tickEventMatchesFilter(replay, e, qRaw))
+      : scopedTickEvents
+
+    if (tickEventsFilterStatus) {
+      if (qRaw) {
+        tickEventsFilterStatus.style.display = ''
+        tickEventsFilterStatus.textContent = `${filteredTickEvents.length} / ${scopedTickEvents.length} match “${qRaw}”`
+      } else {
+        tickEventsFilterStatus.style.display = 'none'
+        tickEventsFilterStatus.textContent = ''
+      }
+    }
+
     if (tickEventsList) tickEventsList.style.display = 'none'
     if (eventLog) {
       eventLog.style.display = ''
@@ -899,15 +945,38 @@ function updateInspector() {
         return out
       }
 
-      const eventsWithNames = scopedTickEvents.map(withNameFields)
+      if (!qRaw) {
+        const eventsWithNames = scopedTickEvents.map(withNameFields)
 
-      eventLog.textContent = scopedTickEvents.length
-        ? JSON.stringify(
-            { scope: showAllTickEvents ? 'all' : selectedBotId, nameMap, events: scopedTickEvents, eventsWithNames },
-            null,
-            2
-          )
-        : '(no events)'
+        eventLog.textContent = scopedTickEvents.length
+          ? JSON.stringify(
+              {
+                scope: showAllTickEvents ? 'all' : selectedBotId,
+                nameMap,
+                events: scopedTickEvents,
+                eventsWithNames,
+              },
+              null,
+              2,
+            )
+          : '(no events)'
+      } else {
+        const eventsWithNames = filteredTickEvents.map(withNameFields)
+
+        eventLog.textContent = JSON.stringify(
+          {
+            scope: showAllTickEvents ? 'all' : selectedBotId,
+            nameMap,
+            query: qRaw,
+            totalCount: scopedTickEvents.length,
+            matchedCount: filteredTickEvents.length,
+            events: filteredTickEvents,
+            eventsWithNames,
+          },
+          null,
+          2,
+        )
+      }
     }
   } else {
     if (eventLog) eventLog.style.display = 'none'
@@ -921,10 +990,25 @@ function updateInspector() {
         return e.botId !== selectedBotId
       })
 
-      if (!listTickEvents.length) {
+      const qRaw = typeof tickEventsFilter === 'string' ? tickEventsFilter.trim() : ''
+      const filteredListTickEvents = qRaw
+        ? listTickEvents.filter((e) => tickEventMatchesFilter(replay, e, qRaw))
+        : listTickEvents
+
+      if (tickEventsFilterStatus) {
+        if (!qRaw) {
+          tickEventsFilterStatus.style.display = 'none'
+          tickEventsFilterStatus.textContent = ''
+        } else {
+          tickEventsFilterStatus.style.display = ''
+          tickEventsFilterStatus.textContent = `${filteredListTickEvents.length} / ${listTickEvents.length} match “${qRaw}”`
+        }
+      }
+
+      if (!filteredListTickEvents.length) {
         tickEventsList.appendChild(createEl('div', { class: 'muted', text: '(no events)' }))
       } else {
-        const groups = groupTickEvents(listTickEvents)
+        const groups = groupTickEvents(filteredListTickEvents)
 
         const order = [
           { key: 'movement', label: 'Movement' },
@@ -940,6 +1024,42 @@ function updateInspector() {
           const collapsed = Boolean(tickEventGroupCollapsed[key])
 
           const header = createEl('div', { style: 'margin: 10px 0 6px; color: rgba(148, 163, 184, 0.95)' })
+          header.appendChild(
+            createEl('button', {
+              type: 'button',
+              'data-group': key,
+              style:
+                'width: 100%; text-align: left; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; font-weight: 800;',
+              onClick: () => {
+                tickEventGroupCollapsed[key] = !Boolean(tickEventGroupCollapsed[key])
+                updateInspector()
+              },
+              text: `${collapsed ? '▶' : '▼'} ${label} (${events.length})`,
+            })
+          )
+          tickEventsList.appendChild(header)
+
+          if (collapsed) continue
+
+          for (const e of events) {
+            const { label, detail, tone } = formatTickEventLine(replay, e)
+            const color =
+              tone === 'bad'
+                ? '#fecaca'
+                : tone === 'good'
+                  ? 'rgba(134, 239, 172, 0.95)'
+                  : 'rgba(148, 163, 184, 0.95)'
+
+            const row = createEl('div', { style: 'margin: 0 0 6px 12px; color: ' + color })
+            row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
+            if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
+            tickEventsList.appendChild(row)
+          }
+        }
+      }
+    }
+  }
+})
           header.appendChild(
             createEl('button', {
               type: 'button',
@@ -1266,11 +1386,13 @@ function randomizeOpponents() {
 }
 
 // Wire up UI
-renderTabs(inspectTabs, selectedBotId, (id) => {
-  selectedBotId = id
-  updateInspector()
-  draw()
-})
+if (inspectTabs) {
+  renderTabs(inspectTabs, selectedBotId, (id) => {
+    selectedBotId = id
+    updateInspector()
+    draw()
+  })
+}
 
 if (tickEventsAllBtn) {
   tickEventsAllBtn.addEventListener('click', () => {
@@ -1282,6 +1404,15 @@ if (tickEventsAllBtn) {
 if (tickEventsRawBtn) {
   tickEventsRawBtn.addEventListener('click', () => {
     showRawTickEvents = !showRawTickEvents
+    updateInspector()
+  })
+}
+
+if (tickEventsFilterInput) {
+  tickEventsFilter = tickEventsFilterInput.value
+
+  tickEventsFilterInput.addEventListener('input', () => {
+    tickEventsFilter = tickEventsFilterInput.value
     updateInspector()
   })
 }
