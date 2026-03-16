@@ -466,6 +466,7 @@ const inspectTabs = document.getElementById('inspectTabs')
 const inspectStats = document.getElementById('inspectStats')
 const execBox = document.getElementById('execBox')
 const tickEventsList = document.getElementById('tickEventsList')
+const tickEventsAllBtn = document.getElementById('tickEventsAllBtn')
 const tickEventsRawBtn = document.getElementById('tickEventsRawBtn')
 const eventLog = document.getElementById('eventLog')
 
@@ -501,6 +502,9 @@ let runInProgress = false
 let randomizeInProgress = false
 
 let showRawTickEvents = false
+let showAllTickEvents = false
+
+const tickEventGroupCollapsed = {}
 
 // We interpret tick as end-of-tick snapshot index.
 // When playing, render tick `t` with alpha in [0,1] interpolating from state[t-1] -> state[t].
@@ -741,14 +745,67 @@ function formatTickEventLine(replay, e) {
   }
 }
 
+function groupTickEvents(events) {
+  const groups = {
+    movement: [],
+    combat: [],
+    resources: [],
+    other: [],
+  }
+
+  for (const e of events) {
+    switch (e?.type) {
+      case 'BOT_MOVED':
+      case 'BUMP_WALL':
+      case 'BUMP_BOT':
+        groups.movement.push(e)
+        break
+      case 'BULLET_SPAWN':
+      case 'BULLET_HIT':
+      case 'BULLET_DESPAWN':
+      case 'DAMAGE':
+      case 'BOT_DIED':
+        groups.combat.push(e)
+        break
+      case 'RESOURCE_DELTA':
+      case 'POWERUP_PICKUP':
+      case 'POWERUP_SPAWN':
+      case 'POWERUP_DESPAWN':
+        groups.resources.push(e)
+        break
+      default:
+        groups.other.push(e)
+        break
+    }
+  }
+
+  return groups
+}
+
 function updateInspector() {
   setActiveTab(inspectTabs, selectedBotId)
+
+  if (tickEventsAllBtn) tickEventsAllBtn.classList.toggle('active', showAllTickEvents)
+  if (tickEventsRawBtn) tickEventsRawBtn.classList.toggle('active', showRawTickEvents)
 
   if (!replay) {
     inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
     if (execBox) execBox.textContent = ''
-    if (tickEventsList) tickEventsList.textContent = ''
-    if (eventLog) eventLog.textContent = ''
+
+    if (showRawTickEvents) {
+      if (tickEventsList) tickEventsList.style.display = 'none'
+      if (eventLog) {
+        eventLog.style.display = ''
+        eventLog.textContent = ''
+      }
+    } else {
+      if (eventLog) eventLog.style.display = 'none'
+      if (tickEventsList) {
+        tickEventsList.style.display = ''
+        tickEventsList.textContent = ''
+      }
+    }
+
     return
   }
 
@@ -760,7 +817,10 @@ function updateInspector() {
     inspectStats.innerHTML = '<div class="muted">Bot not found in replay.</div>'
   } else {
     inspectStats.innerHTML = ''
+    const displayName = botDisplayName(replay, bot.botId)
+
     inspectStats.appendChild(kvRow('Bot', bot.botId))
+    inspectStats.appendChild(kvRow('Name', displayName))
     inspectStats.appendChild(kvRow('HP', String(bot.hp)))
     inspectStats.appendChild(kvRow('Ammo', String(bot.ammo)))
     inspectStats.appendChild(kvRow('Energy', String(bot.energy)))
@@ -770,7 +830,7 @@ function updateInspector() {
   }
 
   const allTickEvents = replay.events[t] ?? []
-  const selectedTickEvents = allTickEvents.filter((e) => isRelevantEvent(e, selectedBotId))
+  const scopedTickEvents = showAllTickEvents ? allTickEvents : allTickEvents.filter((e) => isRelevantEvent(e, selectedBotId))
 
   // Execution box: show the selected bot's BOT_EXEC, prominently.
   if (execBox) {
@@ -784,7 +844,7 @@ function updateInspector() {
       }),
     )
 
-    const exec = selectedTickEvents.find((e) => e?.type === 'BOT_EXEC' && e.botId === selectedBotId)
+    const exec = scopedTickEvents.find((e) => e?.type === 'BOT_EXEC' && e.botId === selectedBotId)
 
     if (!exec) {
       execBox.appendChild(createEl('div', { class: 'muted', text: '(no BOT_EXEC)', style: 'margin-top: 6px' }))
@@ -805,8 +865,6 @@ function updateInspector() {
       execBox.appendChild(meta)
     }
   }
-
-  if (tickEventsRawBtn) tickEventsRawBtn.classList.toggle('active', showRawTickEvents)
 
   if (showRawTickEvents) {
     if (tickEventsList) tickEventsList.style.display = 'none'
@@ -841,10 +899,14 @@ function updateInspector() {
         return out
       }
 
-      const eventsWithNames = selectedTickEvents.map(withNameFields)
+      const eventsWithNames = scopedTickEvents.map(withNameFields)
 
-      eventLog.textContent = selectedTickEvents.length
-        ? JSON.stringify({ nameMap, events: selectedTickEvents, eventsWithNames }, null, 2)
+      eventLog.textContent = scopedTickEvents.length
+        ? JSON.stringify(
+            { scope: showAllTickEvents ? 'all' : selectedBotId, nameMap, events: scopedTickEvents, eventsWithNames },
+            null,
+            2
+          )
         : '(no events)'
     }
   } else {
@@ -853,17 +915,62 @@ function updateInspector() {
       tickEventsList.style.display = ''
       tickEventsList.innerHTML = ''
 
-      if (!selectedTickEvents.length) {
+      const listTickEvents = scopedTickEvents.filter((e) => {
+        if (e?.type !== 'BOT_EXEC') return true
+        if (!showAllTickEvents) return false
+        return e.botId !== selectedBotId
+      })
+
+      if (!listTickEvents.length) {
         tickEventsList.appendChild(createEl('div', { class: 'muted', text: '(no events)' }))
       } else {
-        for (const e of selectedTickEvents) {
-          const { label, detail, tone } = formatTickEventLine(replay, e)
-          const color = tone === 'bad' ? '#fecaca' : tone === 'good' ? 'rgba(134, 239, 172, 0.95)' : 'rgba(148, 163, 184, 0.95)'
+        const groups = groupTickEvents(listTickEvents)
 
-          const row = createEl('div', { style: 'margin-bottom: 6px; color: ' + color })
-          row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
-          if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
-          tickEventsList.appendChild(row)
+        const order = [
+          { key: 'movement', label: 'Movement' },
+          { key: 'combat', label: 'Combat' },
+          { key: 'resources', label: 'Resources' },
+          { key: 'other', label: 'Other' },
+        ]
+
+        for (const { key, label } of order) {
+          const events = groups[key]
+          if (!events.length) continue
+
+          const collapsed = Boolean(tickEventGroupCollapsed[key])
+
+          const header = createEl('div', { style: 'margin: 10px 0 6px; color: rgba(148, 163, 184, 0.95)' })
+          header.appendChild(
+            createEl('button', {
+              type: 'button',
+              'data-group': key,
+              style:
+                'width: 100%; text-align: left; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; font-weight: 800;',
+              onClick: () => {
+                tickEventGroupCollapsed[key] = !Boolean(tickEventGroupCollapsed[key])
+                updateInspector()
+              },
+              text: `${collapsed ? '▶' : '▼'} ${label} (${events.length})`,
+            })
+          )
+          tickEventsList.appendChild(header)
+
+          if (collapsed) continue
+
+          for (const e of events) {
+            const { label, detail, tone } = formatTickEventLine(replay, e)
+            const color =
+              tone === 'bad'
+                ? '#fecaca'
+                : tone === 'good'
+                  ? 'rgba(134, 239, 172, 0.95)'
+                  : 'rgba(148, 163, 184, 0.95)'
+
+            const row = createEl('div', { style: 'margin: 0 0 6px 12px; color: ' + color })
+            row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
+            if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
+            tickEventsList.appendChild(row)
+          }
         }
       }
     }
@@ -1164,6 +1271,13 @@ renderTabs(inspectTabs, selectedBotId, (id) => {
   updateInspector()
   draw()
 })
+
+if (tickEventsAllBtn) {
+  tickEventsAllBtn.addEventListener('click', () => {
+    showAllTickEvents = !showAllTickEvents
+    updateInspector()
+  })
+}
 
 if (tickEventsRawBtn) {
   tickEventsRawBtn.addEventListener('click', () => {
