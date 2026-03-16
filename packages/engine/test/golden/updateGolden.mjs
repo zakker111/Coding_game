@@ -24,23 +24,31 @@ function loadExampleBot(n) {
   return extractTextFence(md)
 }
 
-function hashReplayCore(replay) {
+function stripHeaderSourceText(replay) {
   const headerBots = (replay.header?.bots ?? []).map((b) => ({
     ...b,
     ...(b && typeof b === 'object' && 'sourceText' in b ? { sourceText: undefined } : {}),
   }))
 
+  return { ...replay.header, bots: headerBots }
+}
+
+function hashReplayCore(replay) {
   const core = {
     schemaVersion: replay.schemaVersion,
     rulesetVersion: replay.rulesetVersion,
     matchSeed: replay.matchSeed,
     tickCap: replay.tickCap,
-    header: { ...replay.header, bots: headerBots },
+    header: stripHeaderSourceText(replay),
     state: replay.state,
     events: replay.events,
   }
 
   return sha256Hex(stableStringify(core))
+}
+
+function hashTicks(arr) {
+  return arr.map((v) => sha256Hex(stableStringify(v)))
 }
 
 function writeFixture(name, obj) {
@@ -49,12 +57,12 @@ function writeFixture(name, obj) {
   process.stdout.write(`wrote ${path.relative(repoRoot, outPath)}\n`)
 }
 
-function scenarioExamplesSmokeSeed123() {
-  const sources = [0, 1, 2, 3].map((n) => loadExampleBot(n))
+function buildScenario({ name, seed, tickCap, botNums }) {
+  const sources = botNums.map((n) => loadExampleBot(n))
   for (let i = 0; i < sources.length; i++) {
     const compiled = compileBotSource(sources[i])
     if ((compiled.errors ?? []).length) {
-      throw new Error(`expected bot${i} to compile; got errors: ${JSON.stringify(compiled.errors)}`)
+      throw new Error(`expected bot${botNums[i]} to compile; got errors: ${JSON.stringify(compiled.errors)}`)
     }
   }
 
@@ -65,14 +73,23 @@ function scenarioExamplesSmokeSeed123() {
     { slotId: 'BOT4', sourceText: sources[3] },
   ]
 
-  const params = { seed: 123, tickCap: 50, bots }
-  const replay = runMatchToReplay(params)
+  const replay = runMatchToReplay({ seed, tickCap, bots })
 
   return {
-    name: 'examples_smoke_seed123',
-    params: { seed: 123, tickCap: 50, bots: [0, 1, 2, 3] },
+    name,
+    params: { seed, tickCap, bots: botNums },
     coreReplaySha256: hashReplayCore(replay),
+    stateTickSha256: hashTicks(replay.state),
+    eventsTickSha256: hashTicks(replay.events),
   }
 }
 
-writeFixture('examples_smoke_seed123', scenarioExamplesSmokeSeed123())
+writeFixture(
+  'examples_smoke_seed123',
+  buildScenario({ name: 'examples_smoke_seed123', seed: 123, tickCap: 50, botNums: [0, 1, 2, 3] })
+)
+
+writeFixture(
+  'modules_powerups_seed999',
+  buildScenario({ name: 'modules_powerups_seed999', seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
+)

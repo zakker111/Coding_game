@@ -26,24 +26,46 @@ function loadExampleBot(n) {
   return extractTextFence(md)
 }
 
-function hashReplayCore(replay) {
+function stripHeaderSourceText(replay) {
   // Exclude header.sourceText blobs to keep the golden stable when comments change.
   const headerBots = (replay.header?.bots ?? []).map((b) => ({
     ...b,
     ...(b && typeof b === 'object' && 'sourceText' in b ? { sourceText: undefined } : {}),
   }))
 
+  return { ...replay.header, bots: headerBots }
+}
+
+function hashReplayCore(replay) {
   const core = {
     schemaVersion: replay.schemaVersion,
     rulesetVersion: replay.rulesetVersion,
     matchSeed: replay.matchSeed,
     tickCap: replay.tickCap,
-    header: { ...replay.header, bots: headerBots },
+    header: stripHeaderSourceText(replay),
     state: replay.state,
     events: replay.events,
   }
 
   return sha256Hex(stableStringify(core))
+}
+
+function hashTicks(arr) {
+  return arr.map((v) => sha256Hex(stableStringify(v)))
+}
+
+function assertTickHashesEqual(kind, got, expected) {
+  if (!Array.isArray(expected)) return
+
+  if (got.length !== expected.length) {
+    assert.fail(`${kind} hash length mismatch: got ${got.length}, expected ${expected.length}`)
+  }
+
+  for (let i = 0; i < got.length; i++) {
+    if (got[i] !== expected[i]) {
+      assert.fail(`${kind} first diverged at tick t=${i}: got ${got[i]}, expected ${expected[i]}`)
+    }
+  }
 }
 
 function loadFixture(name) {
@@ -52,17 +74,11 @@ function loadFixture(name) {
   return JSON.parse(readFileSync(fixturePath, 'utf8'))
 }
 
-test('golden: examples smoke (bot0..bot3) replay hash', () => {
-  const fixture = loadFixture('examples_smoke_seed123')
-  if (!fixture) {
-    test.skip('golden fixture missing: examples_smoke_seed123.json')
-    return
-  }
-
-  const sources = [0, 1, 2, 3].map((n) => loadExampleBot(n))
+function runScenarioExampleBots({ seed, tickCap, botNums }) {
+  const sources = botNums.map((n) => loadExampleBot(n))
   for (let i = 0; i < sources.length; i++) {
     const compiled = compileBotSource(sources[i])
-    assert.deepStrictEqual(compiled.errors ?? [], [], `expected bot${i} to compile`)
+    assert.deepStrictEqual(compiled.errors ?? [], [], `expected bot${botNums[i]} to compile`)
   }
 
   const bots = [
@@ -72,14 +88,49 @@ test('golden: examples smoke (bot0..bot3) replay hash', () => {
     { slotId: 'BOT4', sourceText: sources[3] },
   ]
 
-  const params = { seed: 123, tickCap: 50, bots }
-  const replay = runMatchToReplay(params)
+  const replay = runMatchToReplay({ seed, tickCap, bots })
+
+  return {
+    coreReplaySha256: hashReplayCore(replay),
+    stateTickSha256: hashTicks(replay.state),
+    eventsTickSha256: hashTicks(replay.events),
+  }
+}
+
+test('golden: examples smoke (bot0..bot3)', () => {
+  const fixture = loadFixture('examples_smoke_seed123')
+  if (!fixture) {
+    test.skip('golden fixture missing: examples_smoke_seed123.json')
+    return
+  }
 
   if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
     test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
     return
   }
 
-  const got = hashReplayCore(replay)
-  assert.equal(got, fixture.coreReplaySha256)
+  const got = runScenarioExampleBots({ seed: 123, tickCap: 50, botNums: [0, 1, 2, 3] })
+
+  assert.equal(got.coreReplaySha256, fixture.coreReplaySha256)
+  assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
+  assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
+})
+
+test('golden: modules + powerups (bot0,bot5,bot6,bot4)', () => {
+  const fixture = loadFixture('modules_powerups_seed999')
+  if (!fixture) {
+    test.skip('golden fixture missing: modules_powerups_seed999.json')
+    return
+  }
+
+  if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
+    test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
+    return
+  }
+
+  const got = runScenarioExampleBots({ seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
+
+  assert.equal(got.coreReplaySha256, fixture.coreReplaySha256)
+  assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
+  assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
 })
