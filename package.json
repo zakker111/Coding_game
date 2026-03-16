@@ -18,7 +18,8 @@
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test",
     "qa:phase1": "pnpm test:all && pnpm build:all",
-    "qa": "pnpm qa:phase1"
+    "qa": "pnpm qa:phase1",
+    "golden:update": "pnpm -C packages/engine golden:update"
   },
   "devDependencies": {
     "playwright": "1.58.2"

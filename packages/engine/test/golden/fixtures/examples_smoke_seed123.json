@@ -1,0 +1,14 @@
+{
+  "name": "examples_smoke_seed123",
+  "params": {
+    "seed": 123,
+    "tickCap": 50,
+    "bots": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "coreReplaySha256": "__REPLACE_BY_RUNNING_pnpm_golden_update__"
+}
