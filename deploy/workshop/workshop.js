@@ -464,6 +464,9 @@ const botEditor = document.getElementById('botEditor')
 
 const inspectTabs = document.getElementById('inspectTabs')
 const inspectStats = document.getElementById('inspectStats')
+const execBox = document.getElementById('execBox')
+const tickEventsList = document.getElementById('tickEventsList')
+const tickEventsRawBtn = document.getElementById('tickEventsRawBtn')
 const eventLog = document.getElementById('eventLog')
 
 const tickLabel = document.getElementById('tickLabel')
@@ -496,6 +499,8 @@ let lastRunError = ''
 
 let runInProgress = false
 let randomizeInProgress = false
+
+let showRawTickEvents = false
 
 // We interpret tick as end-of-tick snapshot index.
 // When playing, render tick `t` with alpha in [0,1] interpolating from state[t-1] -> state[t].
@@ -618,12 +623,121 @@ function updateOpponentsUI() {
   setSelectOptions(opponent4Select, pool, opponentSelections.BOT4)
 }
 
+function isRelevantEvent(e, botId) {
+  switch (e?.type) {
+    case 'BOT_EXEC':
+    case 'BOT_MOVED':
+    case 'RESOURCE_DELTA':
+    case 'BUMP_WALL':
+      return e.botId === botId
+    case 'BUMP_BOT':
+      return e.botId === botId || e.otherBotId === botId
+    case 'BULLET_SPAWN':
+      return e.ownerBotId === botId || e.targetBotId === botId
+    case 'BULLET_HIT':
+      return e.victimBotId === botId
+    case 'DAMAGE':
+      return e.victimBotId === botId || e.sourceBotId === botId
+    case 'BOT_DIED':
+      return e.victimBotId === botId || e.creditedBotId === botId
+    case 'POWERUP_PICKUP':
+      return e.botId === botId
+    case 'POWERUP_SPAWN':
+    case 'POWERUP_DESPAWN':
+      return true
+    default:
+      return false
+  }
+}
+
+function formatTickEventLine(e) {
+  const line = { label: e?.type ?? 'EVENT', detail: '', tone: 'muted' }
+
+  switch (e?.type) {
+    case 'BOT_EXEC': {
+      line.label = `${e.botId} BOT_EXEC`
+      line.detail = `${e.instrText}  (pc ${e.pcBefore}→${e.pcAfter}, ${e.result}${e.reason ? `, ${e.reason}` : ''})`
+      line.tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
+      return line
+    }
+    case 'BOT_MOVED':
+      line.label = `${e.botId} moved`
+      line.detail = `${e.fromPos.x},${e.fromPos.y} → ${e.toPos.x},${e.toPos.y}${e.dir ? ` (${e.dir})` : ''}`
+      return line
+    case 'BUMP_WALL':
+      line.label = `${e.botId} bumped wall`
+      line.detail = `${e.dir} (damage ${e.damage})`
+      line.tone = e.damage > 0 ? 'bad' : 'muted'
+      return line
+    case 'BUMP_BOT':
+      line.label = `bump`
+      line.detail = `${e.botId} ↔ ${e.otherBotId} (${e.dir})`
+      return line
+    case 'RESOURCE_DELTA': {
+      line.label = `${e.botId} resources`
+      const parts = []
+      if (e.healthDelta) parts.push(`HP ${e.healthDelta > 0 ? '+' : ''}${e.healthDelta}`)
+      if (e.ammoDelta) parts.push(`AMMO ${e.ammoDelta > 0 ? '+' : ''}${e.ammoDelta}`)
+      if (e.energyDelta) parts.push(`ENERGY ${e.energyDelta > 0 ? '+' : ''}${e.energyDelta}`)
+      line.detail = `${parts.join(', ') || '(no delta)'} (${e.cause})`
+      line.tone = e.healthDelta < 0 ? 'bad' : e.healthDelta > 0 ? 'good' : 'muted'
+      return line
+    }
+    case 'DAMAGE':
+      line.label = `damage`
+      line.detail = `${e.victimBotId} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${e.sourceBotId}` : ''}, ${e.kind})`
+      line.tone = 'bad'
+      return line
+    case 'BOT_DIED':
+      line.label = `death`
+      line.detail = `${e.victimBotId} died${e.creditedBotId ? ` (credited ${e.creditedBotId})` : ''}`
+      line.tone = 'bad'
+      return line
+    case 'BULLET_SPAWN':
+      line.label = `bullet spawn`
+      line.detail = `${e.ownerBotId} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`
+      return line
+    case 'BULLET_HIT':
+      line.label = `bullet hit`
+      line.detail = `${e.bulletId} hit ${e.victimBotId} (${e.damage})`
+      line.tone = 'bad'
+      return line
+    case 'BULLET_DESPAWN':
+      line.label = `bullet despawn`
+      line.detail = `${e.bulletId} (${e.reason})`
+      return line
+    case 'POWERUP_PICKUP':
+      line.label = `powerup pickup`
+      line.detail = `${e.botId} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`
+      line.tone = 'good'
+      return line
+    case 'POWERUP_SPAWN':
+      line.label = `powerup spawn`
+      line.detail = `${e.powerupType} at ${e.loc.sector}/${e.loc.zone}`
+      return line
+    case 'POWERUP_DESPAWN':
+      line.label = `powerup despawn`
+      line.detail = `${e.powerupId} (${e.reason})`
+      return line
+    case 'MATCH_END':
+      line.label = 'match end'
+      line.detail = e.endReason
+      return line
+    default:
+      line.label = e?.type ?? 'EVENT'
+      line.detail = ''
+      return line
+  }
+}
+
 function updateInspector() {
   setActiveTab(inspectTabs, selectedBotId)
 
   if (!replay) {
     inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
-    eventLog.textContent = ''
+    if (execBox) execBox.textContent = ''
+    if (tickEventsList) tickEventsList.textContent = ''
+    if (eventLog) eventLog.textContent = ''
     return
   }
 
@@ -644,8 +758,58 @@ function updateInspector() {
     inspectStats.appendChild(kvRow('Pos', `${bot.pos.x.toFixed(3)}, ${bot.pos.y.toFixed(3)}`))
   }
 
-  const tickEvents = replay.events[t] ?? []
-  eventLog.textContent = tickEvents.length ? JSON.stringify(tickEvents, null, 2) : '(no events)'
+  const allTickEvents = replay.events[t] ?? []
+  const selectedTickEvents = allTickEvents.filter((e) => isRelevantEvent(e, selectedBotId))
+
+  // Execution box: show the selected bot's BOT_EXEC, prominently.
+  if (execBox) {
+    execBox.innerHTML = ''
+    const exec = selectedTickEvents.find((e) => e?.type === 'BOT_EXEC' && e.botId === selectedBotId)
+
+    if (!exec) {
+      execBox.appendChild(createEl('div', { class: 'muted', text: '(no BOT_EXEC)' }))
+    } else {
+      execBox.appendChild(createEl('div', { text: exec.instrText || '(no instruction)', style: 'font-weight: 800; color: var(--text)' }))
+      const meta = createEl('div', { class: 'muted', style: 'margin-top: 6px; line-height: 1.5' })
+      meta.appendChild(document.createTextNode(`pc ${exec.pcBefore} → ${exec.pcAfter} • result `))
+      meta.appendChild(createEl('strong', { text: exec.result, style: 'color: var(--text)' }))
+      if (exec.reason) {
+        meta.appendChild(document.createTextNode(' • reason '))
+        meta.appendChild(createEl('strong', { text: exec.reason, style: 'color: #fecaca' }))
+      }
+      execBox.appendChild(meta)
+    }
+  }
+
+  if (tickEventsRawBtn) tickEventsRawBtn.classList.toggle('active', showRawTickEvents)
+
+  if (showRawTickEvents) {
+    if (tickEventsList) tickEventsList.style.display = 'none'
+    if (eventLog) {
+      eventLog.style.display = ''
+      eventLog.textContent = selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)'
+    }
+  } else {
+    if (eventLog) eventLog.style.display = 'none'
+    if (tickEventsList) {
+      tickEventsList.style.display = ''
+      tickEventsList.innerHTML = ''
+
+      if (!selectedTickEvents.length) {
+        tickEventsList.appendChild(createEl('div', { class: 'muted', text: '(no events)' }))
+      } else {
+        for (const e of selectedTickEvents) {
+          const { label, detail, tone } = formatTickEventLine(e)
+          const color = tone === 'bad' ? '#fecaca' : tone === 'good' ? 'rgba(134, 239, 172, 0.95)' : 'rgba(148, 163, 184, 0.95)'
+
+          const row = createEl('div', { style: 'margin-bottom: 6px; color: ' + color })
+          row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
+          if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
+          tickEventsList.appendChild(row)
+        }
+      }
+    }
+  }
 }
 
 function kvRow(k, v) {
@@ -942,6 +1106,13 @@ renderTabs(inspectTabs, selectedBotId, (id) => {
   updateInspector()
   draw()
 })
+
+if (tickEventsRawBtn) {
+  tickEventsRawBtn.addEventListener('click', () => {
+    showRawTickEvents = !showRawTickEvents
+    updateInspector()
+  })
+}
 
 seedInput.addEventListener('input', () => {
   clearRunError()

@@ -164,8 +164,18 @@
           <div id="inspectStats" class="kv" style="margin-top: 10px"></div>
 
           <div style="margin-top: 14px">
-            <div class="card-title">Events @ tick</div>
-            <pre id="eventLog" class="pre"></pre>
+            <div class="card-title">Execution</div>
+            <div id="execBox" class="pre" style="margin-top: 8px; max-height: none"></div>
+          </div>
+
+          <div style="margin-top: 14px">
+            <div class="row" style="justify-content: space-between; align-items: center; gap: 10px">
+              <div class="card-title">Tick events</div>
+              <button id="tickEventsRawBtn" class="tab" type="button" title="Toggle raw JSON">Raw</button>
+            </div>
+
+            <div id="tickEventsList" class="pre" style="margin-top: 8px"></div>
+            <pre id="eventLog" class="pre" style="margin-top: 8px; display: none"></pre>
           </div>
 
           <div style="margin-top: 14px">
