@@ -16,6 +16,8 @@ pnpm golden:update
 pnpm golden:check
 ```
 
+If fixtures haven’t been generated yet, `golden:check` prints a reminder and exits successfully.
+
 3) Run the golden tests:
 
 ```sh

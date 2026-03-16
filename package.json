@@ -17,7 +17,7 @@
 
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test",
-    "qa:phase1": "pnpm test:all && pnpm build:all",
+    "qa:phase1": "pnpm golden:check && pnpm test:all && pnpm build:all",
     "qa": "pnpm qa:phase1",
     "test:golden": "pnpm -C packages/engine test:golden",
     "golden:update": "pnpm -C packages/engine golden:update",
