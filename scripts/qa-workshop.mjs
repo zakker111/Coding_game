@@ -284,7 +284,80 @@ async function runWorkshopQa({ baseUrl, headless }) {
     `Expected inspector to show bot stats; got: ${inspectText}`
   )
 
-  // (4) Randomize opponents changes selections and successfully runs
+  // (4) Tick events filter + raw output (basic smoke)
+  await page.waitForSelector('#tickEventsFilterInput')
+  await page.waitForSelector('#tickEventsFilterStatus')
+
+  // Show all events so we reliably have BOT_EXEC entries for other bots.
+  await page.click('#tickEventsAllBtn')
+  await page.waitForFunction(() => {
+    const t = document.getElementById('tickEventsList')?.textContent || ''
+    return t.length > 0
+  })
+
+  const filterInput = page.locator('#tickEventsFilterInput')
+
+  await filterInput.fill('BOT_EXEC')
+  await page.waitForFunction(() => {
+    const t = document.getElementById('tickEventsList')?.textContent || ''
+    return t.includes('BOT_EXEC')
+  })
+
+  const filterStatus1 = (await page.locator('#tickEventsFilterStatus').innerText()).trim()
+  const listText1 = (await page.locator('#tickEventsList').innerText()).trim()
+
+  assert(/match/i.test(filterStatus1) && /BOT_EXEC/.test(filterStatus1), `Expected filter status to mention BOT_EXEC; got: ${filterStatus1}`)
+  assert(/BOT_EXEC/.test(listText1), `Expected filtered tick events list to contain BOT_EXEC; got: ${listText1.slice(0, 200)}`)
+
+  await filterInput.fill('zzzz-no-match')
+  await page.waitForFunction(() => {
+    const t = document.getElementById('tickEventsList')?.textContent || ''
+    return t.includes('(no events)')
+  })
+
+  const filterStatus2 = (await page.locator('#tickEventsFilterStatus').innerText()).trim()
+  assert(/0\s*\//.test(filterStatus2), `Expected filter status to show 0 matches; got: ${filterStatus2}`)
+
+  // Raw mode should return JSON with query + counts when filter is non-empty.
+  await page.click('#tickEventsRawBtn')
+  await page.waitForSelector('#eventLog', { state: 'visible' })
+
+  const rawText1 = (await page.locator('#eventLog').innerText()).trim()
+  let raw1 = null
+  try {
+    raw1 = JSON.parse(rawText1)
+  } catch (e) {
+    assert(false, `Expected raw output to be JSON; got: ${rawText1.slice(0, 200)}`)
+  }
+
+  if (raw1) {
+    assert(raw1.query === 'zzzz-no-match', `Expected raw JSON query to equal filter input; got: ${raw1.query}`)
+    assert(typeof raw1.totalCount === 'number' && raw1.totalCount >= 0, `Expected raw JSON totalCount number; got: ${raw1.totalCount}`)
+    assert(raw1.matchedCount === 0, `Expected raw JSON matchedCount=0; got: ${raw1.matchedCount}`)
+    assert(Array.isArray(raw1.eventsWithNames), 'Expected raw JSON eventsWithNames to be an array')
+  }
+
+  // Clearing filter should restore backward-compatible raw shape (no query/totalCount).
+  await filterInput.fill('')
+  await page.waitForFunction(() => {
+    const t = document.getElementById('tickEventsFilterStatus')
+    return !t || t.style.display === 'none' || (t.textContent || '').trim() === ''
+  })
+
+  const rawText2 = (await page.locator('#eventLog').innerText()).trim()
+  let raw2 = null
+  try {
+    raw2 = JSON.parse(rawText2)
+  } catch (e) {
+    assert(false, `Expected raw output to be JSON after clearing filter; got: ${rawText2.slice(0, 200)}`)
+  }
+
+  if (raw2) {
+    assert(!('query' in raw2), `Expected raw JSON (unfiltered) to omit query; got keys: ${Object.keys(raw2).join(', ')}`)
+    assert(Array.isArray(raw2.events) && Array.isArray(raw2.eventsWithNames), 'Expected raw JSON to include events and eventsWithNames arrays')
+  }
+
+  // (5) Randomize opponents changes selections and successfully runs
   const beforeOpponents = {
     BOT2: await page.inputValue('#opponent2Select'),
     BOT3: await page.inputValue('#opponent3Select'),
