@@ -105,8 +105,7 @@ test('golden: examples smoke (bot0..bot3)', () => {
   }
 
   if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
-    return
+    assert.fail('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
   }
 
   const got = runScenarioExampleBots({ seed: 123, tickCap: 50, botNums: [0, 1, 2, 3] })
@@ -124,8 +123,7 @@ test('golden: modules + powerups (bot0,bot5,bot6,bot4)', () => {
   }
 
   if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    test.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
-    return
+    assert.fail('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
   }
 
   const got = runScenarioExampleBots({ seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
