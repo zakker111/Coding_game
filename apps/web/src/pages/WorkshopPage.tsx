@@ -471,7 +471,8 @@ export function WorkshopPage() {
 
     const lines: Array<{ key: string; label: string; detail?: string; tone?: 'muted' | 'bad' | 'good' }> = []
 
-    for (const e of selectedTickEvents) {
+    for (let i = 0; i < selectedTickEvents.length; i++) {
+      const e = selectedTickEvents[i]
       switch (e.type) {
         case 'BOT_EXEC': {
           const tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
@@ -585,7 +586,7 @@ export function WorkshopPage() {
           lines.push({ key: 'MATCH_END', label: 'match end', detail: e.endReason, tone: 'muted' })
           break
         default:
-          lines.push({ key: `${e.type}:${Math.random()}`, label: e.type, detail: JSON.stringify(e), tone: 'muted' })
+          lines.push({ key: `${e.type}:${i}`, label: e.type, detail: JSON.stringify(e), tone: 'muted' })
           break
       }
     }
@@ -1121,9 +1122,9 @@ export function WorkshopPage() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <div className="panel-title">Loadout (local-only)</div>
+            <div className="panel-title">Loadout</div>
             <div className="muted" style={{ marginTop: 8 }}>
-              Slot 1 / Slot 2 / Slot 3 (coming soon)
+              Loadouts are not configurable yet (rulesetVersion 0.1.0). Current engine behavior: mentioning <code>SAW</code> enables SAW in SLOT1; mentioning <code>SHIELD</code> enables SHIELD in SLOT2.
             </div>
           </div>
 
