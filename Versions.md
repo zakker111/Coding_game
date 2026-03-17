@@ -23,13 +23,13 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ---
 
-## 0.0.3 — 2026-03-16T00:00:00Z
+## 0.0.3 — 2026-03-17T00:00:00Z
 
 > Marketing version: **0.03** (SemVer: `0.0.3`).
 
 ### Added
 - Deploy Workshop (buildless static):
-  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.2**.
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.3**.
   - Inspector improvements:
     - bot display names shown in Inspector + event formatting
     - tick events grouped (Movement/Combat/Resources/Other)
