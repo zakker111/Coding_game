@@ -19,8 +19,36 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Powerups: add `powerupLifetimeTicks` and despawn expired powerups with `POWERUP_DESPAWN reason=RULES`.
-- Ammo: explicitly specify ammo is consumable (bullet fire consumes ammo), does not regenerate, and is only replenished via `AMMO` powerups (docs + sample generator now demonstrates this via deterministic BOT2 shooting + lower initial ammo).
+- (none)
+
+---
+
+## 0.0.3 — 2026-03-17T00:00:00Z
+
+> Marketing version: **0.03** (SemVer: `0.0.3`).
+
+### Added
+- Deploy Workshop (buildless static):
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.3**.
+  - Inspector improvements:
+    - bot display names shown in Inspector + event formatting
+    - tick events grouped (Movement/Combat/Resources/Other) with collapsible headers
+    - tick events modes: **All** toggle + **Raw** toggle
+    - tick events filter/search + match count status
+    - raw tick events JSON includes `nameMap` and `eventsWithNames` (and includes query metadata when filtered)
+- Deploy drift guardrails:
+  - `pnpm sync:deploy`, `pnpm check:deploy`
+  - `pnpm check:deploy:imports` validates deploy-time JS import targets
+- Workshop QA smoke:
+  - `scripts/qa-workshop.mjs` supports local serve (`--serve`) and multi-URL checks.
+  - Covers run/preview + opponent selection/randomize + tick-events All/Raw/Filter + raw JSON shape.
+
+### Fixed
+- Deploy Workshop now ensures `/workshop` resolves to `/workshop/` to avoid broken relative module imports.
+- Deploy Workshop engine worker boundary: improved failure reporting and rejects in-flight runs on worker errors.
+
+### Changed
+- Bumped workspace package versions to `0.0.3` (`apps/web`, `packages/engine`, `packages/replay`, root, and legacy `site`).
 
 ---
 
@@ -31,9 +59,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Added
 - Monorepo workspace:
   - `apps/web` (Nowt web app)
-  - `packages/replay` (deterministic replay generator + typings)
+  - `packages/engine` (bot DSL compiler/VM + deterministic simulation + replay generation)
+  - `packages/replay` (legacy replay generator + typings; not used by the Workshop)
   - `deploy/` (buildless static workshop prototype)
-- Deterministic replay generation (`generateSampleReplay(seed, { tickCap, bots? })`) including:
+- Deterministic simulation + replay generation (engine-driven) including:
   - stable PRNG (no `Math.random()`)
   - continuous positions in a 192×192 arena
   - bots spawning in the four corners
@@ -57,8 +86,14 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Workspace configuration (`pnpm-workspace.yaml`) includes `apps/*` and `packages/*`, excluding legacy `site/`.
 
 ### Notes
-- `packages/replay` currently provides a **sample replay generator** used by the Workshop. The full DSL VM + ruleset-accurate simulation engine remains planned work.
+- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.1.0`.
+- `packages/replay` remains a legacy/sample generator and should not be treated as authoritative.
 
-## 0.0.1
+---
 
+## 0.0.1 — 2026-03-01T00:00:00Z
+
+> Marketing version: **0.01** (SemVer: `0.0.1`).
+
+### Added
 - Initial repository created (spec-first Markdown + planning docs).

@@ -43,6 +43,17 @@ Optional (non-semantic) UI metadata directives (still comments):
   - v1 suggestion: `#RRGGBB` (hex color)
   - future suggestion: `asset:<id>` or `hash:<contentHash>`
 
+Planned (vNext) **loadout header directives** (still comments):
+- `;@slot1 <MODULE|EMPTY>`
+- `;@slot2 <MODULE|EMPTY>`
+- `;@slot3 <MODULE|EMPTY>`
+
+Rules for these header directives (plan):
+- If present, they must be the **first 3 non-blank lines** of the bot source.
+- Workshop/UI should generate and maintain them; the editor treats them as **locked** (not user-editable).
+- The compiler ignores them as comments; when explicit loadouts are implemented, the match config may use these to populate `loadout`.
+- Default (if omitted): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+
 ---
 
 ## 0.5) Tokens / notation
@@ -76,10 +87,11 @@ Notes:
 - Inline selectors (`CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc.) are resolved deterministically when the instruction executes; they **do not** write the target register.
 - A deferred aim-direction target form (`DIR ...`) is **not** part of stable v1 (see `BotLanguageDesign.md`).
 
-Loadout notes (v1):
-- 3 slots (`SLOT1..SLOT3`), each may be empty.
-- No duplicate modules in a loadout.
-- At most one weapon module in v1 (weapons: `BULLET | SAW`).
+Loadout notes (spec direction):
+- The language supports 3 slots (`SLOT1..SLOT3`) and slot-addressed actions.
+- **Planned default when explicit loadouts land:** `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY` unless provided by match config.
+- Workshop/UI plan: loadout selection will generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0).
+- **Current engine behavior (rulesetVersion `0.1.0`):** explicit per-bot loadouts are not implemented yet; modules are inferred from the bot source text (see `Ruleset.md` §1.1.1).
 
 ---
 
@@ -272,9 +284,10 @@ Collisions:
 |---|---:|---|
 | `FIRE_BULLET <BOT_TARGET>` | ammo | If `AMMO==0`, no-op. Bullets are continuous projectiles and may hit any bot they collide with (16×16 bot hitbox), not only the chosen target. |
 | `SAW ON` / `SAW OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. |
-| `SHIELD ON` / `SHIELD OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. Exact mitigation/reflect behavior deferred. |
+| `SHIELD ON` / `SHIELD OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. Current engine (`rulesetVersion = 0.1.0`): mitigates bullet damage by **50%**. |
 
-Armor is passive (no instruction); see `Ruleset.md` for damage reduction details.
+Armor note:
+- `ARMOR` is not implemented in the current engine ruleset and has no gameplay effect.
 
 Future-proofing note:
 - In v1, these spellings are unambiguous because v1 forbids duplicate modules.
@@ -310,11 +323,11 @@ Compatibility aliases (v1):
 - `FIRE_SLOT2 <TARGET>` (alias of `USE_SLOT2 <TARGET>`)
 - `FIRE_SLOT3 <TARGET>` (alias of `USE_SLOT3 <TARGET>`)
 
-Current v1 module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
+Current engine module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
 - **BULLET**: fires only at bot targets (`<BOT_TARGET>`); non-bot targets are `INVALID_TARGET_KIND` no-ops.
 - **SAW**: same as `SAW ON` (target ignored).
 - **SHIELD**: same as `SHIELD ON` (target ignored).
-- **ARMOR**: no-op (passive).
+- **ARMOR**: not implemented (no-op).
 
 Optional convenience:
 - `FIRE_TARGET <SLOT>`: use the given slot against the current `targetBotId` (no valid bot target → no-op; target powerup → no-op).

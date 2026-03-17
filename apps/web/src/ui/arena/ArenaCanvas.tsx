@@ -27,6 +27,7 @@ export type ArenaRenderBullet = {
   ownerBotId?: SlotId
   pos: { x: number; y: number }
   vel?: { x: number; y: number }
+  alpha?: number
 }
 
 export type ArenaRenderPowerup = {
@@ -301,6 +302,10 @@ export function ArenaCanvas({
 
         const r = Math.max(2, Math.floor(1.2 * s))
         const ownerColor = b.ownerBotId ? slotFallbackColor(b.ownerBotId) : null
+        const alpha = typeof b.alpha === 'number' ? clamp(b.alpha, 0, 1) : 1
+
+        ctx.save()
+        ctx.globalAlpha = alpha
 
         ctx.beginPath()
         ctx.arc(x, y, r, 0, Math.PI * 2)
@@ -313,11 +318,16 @@ export function ArenaCanvas({
           const dy = Math.max(-12, Math.min(12, b.vel.y))
           ctx.beginPath()
           ctx.moveTo(x, y)
-          ctx.lineTo(worldToSnappedCssPx(b.pos.x + dx * 0.1, s, dpr), worldToSnappedCssPx(b.pos.y + dy * 0.1, s, dpr))
+          ctx.lineTo(
+            worldToSnappedCssPx(b.pos.x + dx * 0.1, s, dpr),
+            worldToSnappedCssPx(b.pos.y + dy * 0.1, s, dpr),
+          )
           ctx.strokeStyle = 'rgba(0,0,0,0.45)'
           ctx.lineWidth = Math.max(1, Math.floor(0.25 * s))
           ctx.stroke()
         }
+
+        ctx.restore()
       }
     }
 

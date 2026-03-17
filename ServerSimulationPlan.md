@@ -126,57 +126,48 @@ A minimal engine interface:
 
 This must align with `Todo.md` and the rules documents.
 
-Recommended tick phases:
+Implemented tick phases (must match `packages/engine/src/sim/runMatchToReplay.js`):
 
 1) **Bot VM instruction phase** (`BOT1..BOT4`)
    - each alive bot executes exactly 1 instruction
+   - emit `BOT_EXEC`
+   - bullet spawns (and `BULLET_SPAWN`) happen here when a bot successfully fires
 
-2) **Movement + collision resolution**
-   - apply movement attempts
-   - bot positions are continuous world positions (`pos = {x,y}` in arena world units)
-     - for any rules/DSL concepts that refer to sectors/zones, derive the bot’s current `sector (1..9)` and `zone (1..4)` from `pos` by grid partitioning (see `ReplayViewerPlan.md` §4.2)
-   - speed rule: each bot may move up to its `speedUnitsPerTick` this tick
-     - v1: derived from the fixed default loadout (see `ServerPlan.md`)
-     - future: derived from the bot’s equipped loadout (see `Ruleset.md` §1.2)
-   - resolve wall bumps (`BUMP_WALL` damage) and bot-to-bot bumps deterministically (see `Ruleset.md` §1.2 and §4)
-     - v1: bot-to-bot bumps also deal damage (`DAMAGE kind=BUMP_BOT`) and can contribute to kill credit
-   - emit replay events as needed (`ReplayViewerPlan.md`):
-     - `BOT_MOVED { botId, fromPos, toPos, dir? }`
-     - `BUMP_WALL { botId, dir, damage }` / `BUMP_BOT { botId, otherBotId, dir }`
+2) **Toggle drains**
+   - apply energy drains for active toggles:
+     - `SAW`: `energy -= 1` (auto-off at `energy == 0`)
+     - `SHIELD`: `energy -= 1` (auto-off at `energy == 0`)
 
-3) **Toggle drains**
-   - apply energy drains for active toggles (saw/shield)
+3) **Movement + collision resolution**
+   - bot positions are continuous (`pos = {x,y}`) with integer updates
+   - stable processing order: `BOT1..BOT4`
+   - collision stepping uses integer Bresenham points (see `Ruleset.md` §1.2.1)
+   - emit movement/bump events:
+     - `BOT_MOVED`, `BUMP_WALL`, `BUMP_BOT`
+   - apply bump damage immediately (and emit `DAMAGE` / `BOT_DIED` immediately if it kills)
 
-4) **Projectile/deployable updates**
-   - advance bullets (continuous; swept collision per `Ruleset.md` §5.1)
-   - (future modules) advance grenades + decrement fuse
-   - (future modules) mines: decrement arming timer
+4) **SAW melee damage**
+   - apply saw damage for `sawActive` bots (and emit `DAMAGE` / `BOT_DIED` as needed)
 
-5) **Hit / explosion resolution**
-   - bullet hits are resolved during bullet advancement (collision), emitting `BULLET_HIT` / `DAMAGE` / `BULLET_DESPAWN`
-   - (future modules) grenade detonation (AoE)
-   - (future modules) mine detonation (AoE)
+5) **Projectile updates (bullets)**
+   - advance bullets, resolve hits/walls/TTL
+   - emit `BULLET_MOVE`, `BULLET_HIT`, `BULLET_DESPAWN`, `DAMAGE`, and `BOT_DIED` as applicable
 
 6) **Pickups**
-   - powerup pickup: an **alive** bot’s position intersects the powerup pickup region (powerups may remain anchored; map `powerup.loc` to its world-space center and use a deterministic pickup radius/overlap test)
-   - deterministic ordering: process bots in `BOT1..BOT4` order (see `Ruleset.md`)
+   - process bots in `BOT1..BOT4` order
+   - if bot AABB overlaps a powerup anchor point, pick it up
+   - emit `POWERUP_PICKUP`, `POWERUP_DESPAWN reason=PICKUP`, and `RESOURCE_DELTA`
 
-7) **Deaths + last-bot-alive check**
-   - bots become **dead immediately** when `health <= 0` during earlier phases (per `Ruleset.md`) and should be skipped by subsequent phase logic in the same tick
-   - in this phase, emit `BOT_DIED` and remove dead bots from the arena (so the replay/stat updates happen at a stable point)
-   - evaluate the immediate end condition:
-     - last bot alive
+7) **End-of-tick maintenance**
+   - decrement weapon cooldowns
+   - copy per-tick bump flags into `*LastTick` so they are visible on the next tick
+   - powerup TTL despawn (`POWERUP_DESPAWN reason=RULES`)
+   - powerup spawn timer + spawn (`POWERUP_SPAWN`)
+   - clear a bot’s preferred powerup type if that type no longer exists
 
-8) **End-of-tick maintenance + tick-based end conditions**
-   - decrement module cooldowns and bot-local timers
-   - update match-level timers used for match termination (see `Ruleset.md`):
-     - increment/reset the no-bot-vs-bot-damage timer
-     - decrement/cancel the stalemate countdown
-   - decrement the global powerup spawn timer; if it reaches `0`, attempt to spawn one powerup and reset the timer (see `Ruleset.md`)
-   - because spawn happens after pickups, newly spawned powerups cannot be picked up until the next tick
-   - after updating the match-level timers, evaluate tick-based end conditions (`Ruleset.md`):
-     - `tickCap`
-     - `STALEMATE` (based on the updated stalemate timers)
+8) **Match end condition check**
+   - detect last bot alive / all dead / stalemate / tick cap
+   - emit `MATCH_END` on the tick that ends the match
 
 ---
 

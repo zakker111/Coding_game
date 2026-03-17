@@ -15,21 +15,23 @@ Recent gameplay changes already shipped:
 
 Goal: make docs, engine behavior, and replay schema agree so future work doesn’t create regressions.
 
-Key items left:
-- Replay `DAMAGE` schema alignment (docs vs emitted events)
-- Tick-phase ordering alignment (docs vs sim)
-- Wall clamp + bot collision edge case (docs say wall damage still applies; engine currently suppresses it)
-- DSL semantics mismatch: `IF (...) DO WAIT n` (examples use it; VM likely ignores nested WAIT)
+Completion criteria (Phase 1 is “done” once these are green):
+- QA gates:
+  - `pnpm -C packages/engine test`
+  - `pnpm qa`
 
-QA gates:
-- `pnpm -C packages/engine test`
-- `pnpm qa`
+Recommended (but optional) smoke checks:
+- `pnpm check:deploy:imports`
+- `pnpm qa:workshop -- --serve --url http://127.0.0.1:8787`
+
+Optional cleanup:
+- Unify/remove legacy docs that still describe the old `packages/replay` sample generator as authoritative.
 
 ---
 
 ## Phase 2 — Real loadouts + module model (v1 completeness)
 
-Goal: remove the sim shortcut that infers modules from source text.
+Goal: remove the sim shortcut that infers module availability from source text.
 
 Key items left:
 - Add explicit per-bot loadout input (`SLOT1..SLOT3`)
@@ -86,18 +88,31 @@ Key items left:
 
 ## Phase 6 — Determinism “golden replay” tests
 
+Status:
+- Scaffolded: golden tests + fixture generator exist.
+- Remaining: run the generator once and check in the generated fixture hashes.
+
+Commands:
+- Generate fixtures: `pnpm golden:update`
+- Run golden-only tests: `pnpm test:golden`
+
 Key items left:
-- Add golden replay fixtures (or stable replay hashes)
-- Ensure CI runs engine tests (not only `apps/web` tests)
+- Commit the generated fixture JSON under `packages/engine/test/golden/fixtures/`.
+- (After fixtures are committed) flip placeholder handling from “skip” to “fail” so CI enforces goldens.
 
 ---
 
 ## Phase 7 — Deployment unification / reduce duplication
 
-Key items left:
-- Auto-generate or validate:
-  - `deploy/bot-instructions.md` vs `BotInstructions.md`
-  - `deploy/workshop/exampleBots.js` vs `examples/bot*.md`
+Goal: prevent deploy-time copies drifting from the repo’s authoritative sources.
+
+Implemented:
+- CI validation (via `packages/engine/test/deploySync.test.js`) that fails if:
+  - `deploy/bot-instructions.md` drifts from `BotInstructions.md`
+  - `deploy/workshop/exampleBots.js` drifts from `examples/bot*.md`
+- In-repo tooling:
+  - `pnpm sync:deploy` (regenerates deploy-time copies)
+  - `pnpm check:deploy` (fails fast if deploy-time copies drift)
 
 ---
 

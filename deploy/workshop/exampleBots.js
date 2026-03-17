@@ -218,7 +218,6 @@ GOTO LOOP
     id: 'bot3',
     displayName: 'Corner Bunker',
     sourceText: `; bot3 — Corner Bunker
-; Loadout: SLOT1=BULLET, SLOT2=ARMOR
 ; Summary: hold a home corner; avoid bump-lock; dodge bullets; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1
@@ -237,7 +236,8 @@ IF (HEALTH < 70 && POWERUP_EXISTS(HEALTH)) DO SET_MOVE_TO_POWERUP HEALTH
 IF (AMMO < 80 && POWERUP_EXISTS(AMMO)) DO SET_MOVE_TO_POWERUP AMMO
 
 ; If we decided to go get a powerup, commit for 2 ticks while the goal keeps moving us.
-IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) DO WAIT 2
+; Note: WAIT is control-flow and cannot be nested under IF (...) DO ....
+IF ((HEALTH < 70 && POWERUP_EXISTS(HEALTH)) || (AMMO < 80 && POWERUP_EXISTS(AMMO))) GOTO COMMIT_POWERUP
 
 ; Otherwise, go back home.
 IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
@@ -245,6 +245,10 @@ IF (HEALTH >= 70 && AMMO >= 80) DO SET_MOVE_TO_SECTOR 1 ZONE 1
 ; Only shoot when something is fairly close (helps conserve ammo).
 IF (SLOT_READY(SLOT1) && DIST_TO_CLOSEST_BOT() <= 120) DO FIRE_SLOT1 NEAREST_BOT
 
+GOTO LOOP
+
+LABEL COMMIT_POWERUP
+WAIT 2
 GOTO LOOP
 
 LABEL BACKOFF
@@ -276,7 +280,7 @@ GOTO LOOP
     displayName: 'Saw Rusher',
     sourceText: `; bot4 — Saw Rusher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
-; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep to avoid bump-lock.
+; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep when too close.
 
 SET_MOVE_TO_BOT CLOSEST_BOT
 
@@ -380,7 +384,7 @@ GOTO LOOP
     displayName: 'Energy Saw Skirmisher',
     sourceText: `; bot6 — Energy Saw Skirmisher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
-; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY; sidestep to avoid bump-lock.
+; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY.
 
 SET_MOVE_TO_BOT CLOSEST_BOT
 

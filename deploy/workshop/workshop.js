@@ -1,29 +1,65 @@
 import { attachArenaRenderer } from './arena.js'
 import { DEFAULT_OPPONENT_EXAMPLE_IDS, EXAMPLE_BOTS, OPPONENT_EXAMPLE_POOL_IDS } from './exampleBots.js'
 
-const engineWorker = new Worker(new URL('./engineRunner.worker.js', import.meta.url), { type: 'module' })
+let engineWorker = null
+let engineWorkerFailure = null
+
+try {
+  engineWorker = new Worker(new URL('./engineRunner.worker.js', import.meta.url), { type: 'module' })
+} catch (err) {
+  engineWorkerFailure = err instanceof Error ? err : new Error(String(err))
+}
 
 let engineRequestId = 0
 const pendingEngineRuns = new Map()
 
-engineWorker.addEventListener('message', (event) => {
-  const msg = event.data
-  if (!msg || typeof msg !== 'object') return
+function rejectAllPendingEngineRuns(err) {
+  for (const pending of pendingEngineRuns.values()) pending.reject(err)
+  pendingEngineRuns.clear()
+}
 
-  if (msg.type !== 'RUN_RESULT') return
+function markEngineWorkerFailed(err) {
+  if (engineWorkerFailure) return
+  engineWorkerFailure = err instanceof Error ? err : new Error(String(err))
+  rejectAllPendingEngineRuns(engineWorkerFailure)
+}
 
-  const pending = pendingEngineRuns.get(msg.requestId)
-  if (!pending) return
-  pendingEngineRuns.delete(msg.requestId)
+if (engineWorker) {
+  engineWorker.addEventListener('error', (event) => {
+    const msg = typeof event?.message === 'string' && event.message ? event.message : 'Engine worker error'
+    markEngineWorkerFailed(new Error(msg))
+  })
 
-  if (msg.ok) {
-    pending.resolve(msg.replay)
-  } else {
-    pending.reject(new Error(msg.error?.message || 'Engine worker error'))
-  }
-})
+  engineWorker.addEventListener('messageerror', () => {
+    markEngineWorkerFailed(new Error('Engine worker message error'))
+  })
+
+  engineWorker.addEventListener('message', (event) => {
+    const msg = event.data
+    if (!msg || typeof msg !== 'object') return
+
+    if (msg.type !== 'RUN_RESULT') return
+
+    const pending = pendingEngineRuns.get(msg.requestId)
+    if (!pending) return
+    pendingEngineRuns.delete(msg.requestId)
+
+    if (msg.ok) {
+      pending.resolve(msg.replay)
+    } else {
+      pending.reject(new Error(msg.error?.message || 'Engine worker error'))
+    }
+  })
+}
 
 function runMatchInEngineWorker({ seed, tickCap, bots }) {
+  if (!engineWorker) {
+    return Promise.reject(engineWorkerFailure || new Error('Engine worker unavailable'))
+  }
+  if (engineWorkerFailure) {
+    return Promise.reject(engineWorkerFailure)
+  }
+
   const requestId = ++engineRequestId
 
   return new Promise((resolve, reject) => {
@@ -416,6 +452,7 @@ const opponent4Select = document.getElementById('opponent4Select')
 const randomizeOpponentsBtn = document.getElementById('randomizeOpponentsBtn')
 const runBtn = document.getElementById('runBtn')
 const runNotice = document.getElementById('runNotice')
+const workshopBuildTag = document.getElementById('workshopBuildTag')
 
 const myBotsSelect = document.getElementById('myBotsSelect')
 const myBotNameInput = document.getElementById('myBotNameInput')
@@ -428,6 +465,12 @@ const botEditor = document.getElementById('botEditor')
 
 const inspectTabs = document.getElementById('inspectTabs')
 const inspectStats = document.getElementById('inspectStats')
+const execBox = document.getElementById('execBox')
+const tickEventsList = document.getElementById('tickEventsList')
+const tickEventsAllBtn = document.getElementById('tickEventsAllBtn')
+const tickEventsRawBtn = document.getElementById('tickEventsRawBtn')
+const tickEventsFilterInput = document.getElementById('tickEventsFilterInput')
+const tickEventsFilterStatus = document.getElementById('tickEventsFilterStatus')
 const eventLog = document.getElementById('eventLog')
 
 const tickLabel = document.getElementById('tickLabel')
@@ -438,6 +481,9 @@ const speedSelect = document.getElementById('speedSelect')
 const scrub = document.getElementById('scrub')
 
 const canvas = document.getElementById('arenaCanvas')
+
+const WORKSHOP_BUILD = '0.3'
+if (workshopBuildTag) workshopBuildTag.textContent = `v${WORKSHOP_BUILD}`
 
 // State
 let myBots = ensureInitialMyBots()
@@ -460,6 +506,12 @@ let lastRunError = ''
 
 let runInProgress = false
 let randomizeInProgress = false
+
+let showRawTickEvents = false
+let showAllTickEvents = false
+let tickEventsFilter = ''
+
+const tickEventGroupCollapsed = {}
 
 // We interpret tick as end-of-tick snapshot index.
 // When playing, render tick `t` with alpha in [0,1] interpolating from state[t-1] -> state[t].
@@ -582,34 +634,435 @@ function updateOpponentsUI() {
   setSelectOptions(opponent4Select, pool, opponentSelections.BOT4)
 }
 
+function isRelevantEvent(e, botId) {
+  switch (e?.type) {
+    case 'BOT_EXEC':
+    case 'BOT_MOVED':
+    case 'RESOURCE_DELTA':
+    case 'BUMP_WALL':
+      return e.botId === botId
+    case 'BUMP_BOT':
+      return e.botId === botId || e.otherBotId === botId
+    case 'BULLET_SPAWN':
+      return e.ownerBotId === botId || e.targetBotId === botId
+    case 'BULLET_HIT':
+      return e.victimBotId === botId
+    case 'DAMAGE':
+      return e.victimBotId === botId || e.sourceBotId === botId
+    case 'BOT_DIED':
+      return e.victimBotId === botId || e.creditedBotId === botId
+    case 'POWERUP_PICKUP':
+      return e.botId === botId
+    case 'POWERUP_SPAWN':
+    case 'POWERUP_DESPAWN':
+      return true
+    default:
+      return false
+  }
+}
+
+function botDisplayName(replay, botId) {
+  const headerBot = (replay?.bots || []).find((b) => b && b.slotId === botId)
+  const displayName = headerBot && typeof headerBot.displayName === 'string' ? headerBot.displayName : botId
+  return displayName || botId
+}
+
+function botLabel(replay, botId) {
+  const name = botDisplayName(replay, botId)
+  return name && name !== botId ? `${botId} (${name})` : botId
+}
+
+function formatTickEventLine(replay, e) {
+  const line = { label: e?.type ?? 'EVENT', detail: '', tone: 'muted' }
+
+  switch (e?.type) {
+    case 'BOT_EXEC': {
+      line.label = `${botLabel(replay, e.botId)} BOT_EXEC`
+      line.detail = `${e.instrText}  (pc ${e.pcBefore}→${e.pcAfter}, ${e.result}${e.reason ? `, ${e.reason}` : ''})`
+      line.tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
+      return line
+    }
+    case 'BOT_MOVED':
+      line.label = `${botLabel(replay, e.botId)} moved`
+      line.detail = `${e.fromPos.x},${e.fromPos.y} → ${e.toPos.x},${e.toPos.y}${e.dir ? ` (${e.dir})` : ''}`
+      return line
+    case 'BUMP_WALL':
+      line.label = `${botLabel(replay, e.botId)} bumped wall`
+      line.detail = `${e.dir} (damage ${e.damage})`
+      line.tone = e.damage > 0 ? 'bad' : 'muted'
+      return line
+    case 'BUMP_BOT':
+      line.label = `bump`
+      line.detail = `${botLabel(replay, e.botId)} ↔ ${botLabel(replay, e.otherBotId)} (${e.dir})`
+      return line
+    case 'RESOURCE_DELTA': {
+      line.label = `${botLabel(replay, e.botId)} resources`
+      const parts = []
+      if (e.healthDelta) parts.push(`HP ${e.healthDelta > 0 ? '+' : ''}${e.healthDelta}`)
+      if (e.ammoDelta) parts.push(`AMMO ${e.ammoDelta > 0 ? '+' : ''}${e.ammoDelta}`)
+      if (e.energyDelta) parts.push(`ENERGY ${e.energyDelta > 0 ? '+' : ''}${e.energyDelta}`)
+      line.detail = `${parts.join(', ') || '(no delta)'} (${e.cause})`
+      line.tone = e.healthDelta < 0 ? 'bad' : e.healthDelta > 0 ? 'good' : 'muted'
+      return line
+    }
+    case 'DAMAGE':
+      line.label = `damage`
+      line.detail = `${botLabel(replay, e.victimBotId)} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${botLabel(replay, e.sourceBotId)}` : ''}, ${e.kind})`
+      line.tone = 'bad'
+      return line
+    case 'BOT_DIED':
+      line.label = `death`
+      line.detail = `${botLabel(replay, e.victimBotId)} died${e.creditedBotId ? ` (credited ${botLabel(replay, e.creditedBotId)})` : ''}`
+      line.tone = 'bad'
+      return line
+    case 'BULLET_SPAWN':
+      line.label = `bullet spawn`
+      line.detail = `${botLabel(replay, e.ownerBotId)} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`
+      return line
+    case 'BULLET_HIT':
+      line.label = `bullet hit`
+      line.detail = `${e.bulletId} hit ${botLabel(replay, e.victimBotId)} (${e.damage})`
+      line.tone = 'bad'
+      return line
+    case 'BULLET_DESPAWN':
+      line.label = `bullet despawn`
+      line.detail = `${e.bulletId} (${e.reason})`
+      return line
+    case 'POWERUP_PICKUP':
+      line.label = `powerup pickup`
+      line.detail = `${botLabel(replay, e.botId)} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`
+      line.tone = 'good'
+      return line
+    case 'POWERUP_SPAWN':
+      line.label = `powerup spawn`
+      line.detail = `${e.powerupType} at ${e.loc.sector}/${e.loc.zone}`
+      return line
+    case 'POWERUP_DESPAWN':
+      line.label = `powerup despawn`
+      line.detail = `${e.powerupId} (${e.reason})`
+      return line
+    case 'MATCH_END':
+      line.label = 'match end'
+      line.detail = e.endReason
+      return line
+    default:
+      line.label = e?.type ?? 'EVENT'
+      line.detail = ''
+      return line
+  }
+}
+
+function groupTickEvents(events) {
+  const groups = {
+    movement: [],
+    combat: [],
+    resources: [],
+    other: [],
+  }
+
+  for (const e of events) {
+    switch (e?.type) {
+      case 'BOT_MOVED':
+      case 'BUMP_WALL':
+      case 'BUMP_BOT':
+        groups.movement.push(e)
+        break
+      case 'BULLET_SPAWN':
+      case 'BULLET_HIT':
+      case 'BULLET_DESPAWN':
+      case 'DAMAGE':
+      case 'BOT_DIED':
+        groups.combat.push(e)
+        break
+      case 'RESOURCE_DELTA':
+      case 'POWERUP_PICKUP':
+      case 'POWERUP_SPAWN':
+      case 'POWERUP_DESPAWN':
+        groups.resources.push(e)
+        break
+      default:
+        groups.other.push(e)
+        break
+    }
+  }
+
+  return groups
+}
+
+function tickEventSearchText(replay, e) {
+  const { label, detail } = formatTickEventLine(replay, e)
+
+  const parts = [label, detail]
+  const botIdKeys = ['botId', 'otherBotId', 'ownerBotId', 'targetBotId', 'victimBotId', 'sourceBotId', 'creditedBotId']
+
+  for (const k of botIdKeys) {
+    const id = e?.[k]
+    if (typeof id !== 'string') continue
+    parts.push(botDisplayName(replay, id))
+  }
+
+  return parts.filter(Boolean).join(' ')
+}
+
+function tickEventMatchesFilter(replay, e, q) {
+  const qq = typeof q === 'string' ? q.trim().toLowerCase() : ''
+  if (!qq) return true
+  return tickEventSearchText(replay, e).toLowerCase().includes(qq)
+}
+
 function updateInspector() {
-  setActiveTab(inspectTabs, selectedBotId)
+  if (inspectTabs) setActiveTab(inspectTabs, selectedBotId)
+
+  if (tickEventsAllBtn) tickEventsAllBtn.classList.toggle('active', showAllTickEvents)
+  if (tickEventsRawBtn) tickEventsRawBtn.classList.toggle('active', showRawTickEvents)
 
   if (!replay) {
-    inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
-    eventLog.textContent = ''
+    if (inspectStats) inspectStats.innerHTML = '<div class="muted">Run a match to inspect bots.</div>'
+    if (execBox) execBox.textContent = ''
+    if (tickEventsFilterStatus) {
+      tickEventsFilterStatus.style.display = 'none'
+      tickEventsFilterStatus.textContent = ''
+    }
+
+    if (showRawTickEvents) {
+      if (tickEventsList) tickEventsList.style.display = 'none'
+      if (eventLog) {
+        eventLog.style.display = ''
+        eventLog.textContent = ''
+      }
+    } else {
+      if (eventLog) eventLog.style.display = 'none'
+      if (tickEventsList) {
+        tickEventsList.style.display = ''
+        tickEventsList.textContent = ''
+      }
+    }
+
     return
   }
 
   const t = clamp(tick, 0, replay.tickCap)
-  const snap = replay.state[t]
+  const snap = replay.state?.[t]
   const bot = snap?.bots?.find((b) => b.botId === selectedBotId)
 
-  if (!bot) {
-    inspectStats.innerHTML = '<div class="muted">Bot not found in replay.</div>'
-  } else {
-    inspectStats.innerHTML = ''
-    inspectStats.appendChild(kvRow('Bot', bot.botId))
-    inspectStats.appendChild(kvRow('HP', String(bot.hp)))
-    inspectStats.appendChild(kvRow('Ammo', String(bot.ammo)))
-    inspectStats.appendChild(kvRow('Energy', String(bot.energy)))
-    inspectStats.appendChild(kvRow('Alive', bot.alive ? 'yes' : 'no'))
-    inspectStats.appendChild(kvRow('PC', String(bot.pc)))
-    inspectStats.appendChild(kvRow('Pos', `${bot.pos.x.toFixed(3)}, ${bot.pos.y.toFixed(3)}`))
+  if (inspectStats) {
+    if (!bot) {
+      inspectStats.innerHTML = '<div class="muted">Bot not found in replay.</div>'
+    } else {
+      inspectStats.innerHTML = ''
+      const displayName = botDisplayName(replay, bot.botId)
+
+      inspectStats.appendChild(kvRow('Bot', bot.botId))
+      inspectStats.appendChild(kvRow('Name', displayName))
+      inspectStats.appendChild(kvRow('HP', String(bot.hp)))
+      inspectStats.appendChild(kvRow('Ammo', String(bot.ammo)))
+      inspectStats.appendChild(kvRow('Energy', String(bot.energy)))
+      inspectStats.appendChild(kvRow('Alive', bot.alive ? 'yes' : 'no'))
+      inspectStats.appendChild(kvRow('PC', String(bot.pc)))
+      inspectStats.appendChild(kvRow('Pos', `${bot.pos.x.toFixed(3)}, ${bot.pos.y.toFixed(3)}`))
+    }
   }
 
-  const tickEvents = replay.events[t] ?? []
-  eventLog.textContent = tickEvents.length ? JSON.stringify(tickEvents, null, 2) : '(no events)'
+  const allTickEvents = replay.events?.[t] ?? []
+  const scopedTickEvents = showAllTickEvents ? allTickEvents : allTickEvents.filter((e) => isRelevantEvent(e, selectedBotId))
+  const tickEventsQuery = tickEventsFilter.trim()
+
+  // Execution box: show the selected bot's BOT_EXEC, prominently.
+  if (execBox) {
+    execBox.innerHTML = ''
+
+    const displayName = botDisplayName(replay, selectedBotId)
+    execBox.appendChild(
+      createEl('div', {
+        text: displayName && displayName !== selectedBotId ? `${selectedBotId} — ${displayName}` : selectedBotId,
+        style: 'font-weight: 800; color: var(--text)',
+      }),
+    )
+
+    const exec = scopedTickEvents.find((e) => e?.type === 'BOT_EXEC' && e.botId === selectedBotId)
+
+    if (!exec) {
+      execBox.appendChild(createEl('div', { class: 'muted', text: '(no BOT_EXEC)', style: 'margin-top: 6px' }))
+    } else {
+      execBox.appendChild(
+        createEl('div', {
+          text: exec.instrText || '(no instruction)',
+          style: 'margin-top: 6px; font-weight: 800; color: var(--text)',
+        }),
+      )
+      const meta = createEl('div', { class: 'muted', style: 'margin-top: 6px; line-height: 1.5' })
+      meta.appendChild(document.createTextNode(`pc ${exec.pcBefore} → ${exec.pcAfter} • result `))
+      meta.appendChild(createEl('strong', { text: exec.result, style: 'color: var(--text)' }))
+      if (exec.reason) {
+        meta.appendChild(document.createTextNode(' • reason '))
+        meta.appendChild(createEl('strong', { text: exec.reason, style: 'color: #fecaca' }))
+      }
+      execBox.appendChild(meta)
+    }
+  }
+
+  if (showRawTickEvents) {
+    const qRaw = typeof tickEventsFilter === 'string' ? tickEventsFilter.trim() : ''
+    const filteredTickEvents = qRaw
+      ? scopedTickEvents.filter((e) => tickEventMatchesFilter(replay, e, qRaw))
+      : scopedTickEvents
+
+    if (tickEventsFilterStatus) {
+      if (qRaw) {
+        tickEventsFilterStatus.style.display = ''
+        tickEventsFilterStatus.textContent = `${filteredTickEvents.length} / ${scopedTickEvents.length} match “${qRaw}”`
+      } else {
+        tickEventsFilterStatus.style.display = 'none'
+        tickEventsFilterStatus.textContent = ''
+      }
+    }
+
+    if (tickEventsList) tickEventsList.style.display = 'none'
+    if (eventLog) {
+      eventLog.style.display = ''
+
+      const nameMap = {}
+      for (const hb of replay?.bots || []) {
+        if (hb && typeof hb.slotId === 'string' && typeof hb.displayName === 'string') nameMap[hb.slotId] = hb.displayName
+      }
+
+      function withNameFields(e) {
+        if (!e || typeof e !== 'object') return e
+
+        const out = { ...e }
+
+        const add = (idKey, nameKey) => {
+          const id = e[idKey]
+          if (typeof id !== 'string') return
+          const name = nameMap[id]
+          if (typeof name === 'string' && name) out[nameKey] = name
+        }
+
+        add('botId', 'botName')
+        add('otherBotId', 'otherBotName')
+        add('ownerBotId', 'ownerBotName')
+        add('targetBotId', 'targetBotName')
+        add('victimBotId', 'victimBotName')
+        add('sourceBotId', 'sourceBotName')
+        add('creditedBotId', 'creditedBotName')
+
+        return out
+      }
+
+      if (!qRaw) {
+        const eventsWithNames = scopedTickEvents.map(withNameFields)
+
+        eventLog.textContent = scopedTickEvents.length
+          ? JSON.stringify(
+              {
+                scope: showAllTickEvents ? 'all' : selectedBotId,
+                nameMap,
+                events: scopedTickEvents,
+                eventsWithNames,
+              },
+              null,
+              2,
+            )
+          : '(no events)'
+      } else {
+        const eventsWithNames = filteredTickEvents.map(withNameFields)
+
+        eventLog.textContent = JSON.stringify(
+          {
+            scope: showAllTickEvents ? 'all' : selectedBotId,
+            nameMap,
+            query: qRaw,
+            totalCount: scopedTickEvents.length,
+            matchedCount: filteredTickEvents.length,
+            events: filteredTickEvents,
+            eventsWithNames,
+          },
+          null,
+          2,
+        )
+      }
+    }
+  } else {
+    if (eventLog) eventLog.style.display = 'none'
+    if (tickEventsList) {
+      tickEventsList.style.display = ''
+      tickEventsList.innerHTML = ''
+
+      const listTickEvents = scopedTickEvents.filter((e) => {
+        if (e?.type !== 'BOT_EXEC') return true
+        if (!showAllTickEvents) return false
+        return e.botId !== selectedBotId
+      })
+
+      const qRaw = typeof tickEventsFilter === 'string' ? tickEventsFilter.trim() : ''
+      const filteredListTickEvents = qRaw
+        ? listTickEvents.filter((e) => tickEventMatchesFilter(replay, e, qRaw))
+        : listTickEvents
+
+      if (tickEventsFilterStatus) {
+        if (!qRaw) {
+          tickEventsFilterStatus.style.display = 'none'
+          tickEventsFilterStatus.textContent = ''
+        } else {
+          tickEventsFilterStatus.style.display = ''
+          tickEventsFilterStatus.textContent = `${filteredListTickEvents.length} / ${listTickEvents.length} match “${qRaw}”`
+        }
+      }
+
+      if (!filteredListTickEvents.length) {
+        tickEventsList.appendChild(createEl('div', { class: 'muted', text: '(no events)' }))
+      } else {
+        const groups = groupTickEvents(filteredListTickEvents)
+
+        const order = [
+          { key: 'movement', label: 'Movement' },
+          { key: 'combat', label: 'Combat' },
+          { key: 'resources', label: 'Resources' },
+          { key: 'other', label: 'Other' },
+        ]
+
+        for (const { key, label } of order) {
+          const events = groups[key]
+          if (!events.length) continue
+
+          const collapsed = Boolean(tickEventGroupCollapsed[key])
+
+          const header = createEl('div', { style: 'margin: 10px 0 6px; color: rgba(148, 163, 184, 0.95)' })
+          header.appendChild(
+            createEl('button', {
+              type: 'button',
+              'data-group': key,
+              style:
+                'width: 100%; text-align: left; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; font-weight: 800;',
+              onClick: () => {
+                tickEventGroupCollapsed[key] = !Boolean(tickEventGroupCollapsed[key])
+                updateInspector()
+              },
+              text: `${collapsed ? '▶' : '▼'} ${label} (${events.length})`,
+            })
+          )
+          tickEventsList.appendChild(header)
+
+          if (collapsed) continue
+
+          for (const e of events) {
+            const { label, detail, tone } = formatTickEventLine(replay, e)
+            const color =
+              tone === 'bad'
+                ? '#fecaca'
+                : tone === 'good'
+                  ? 'rgba(134, 239, 172, 0.95)'
+                  : 'rgba(148, 163, 184, 0.95)'
+
+            const row = createEl('div', { style: 'margin: 0 0 6px 12px; color: ' + color })
+            row.appendChild(createEl('strong', { text: label, style: 'color: var(--text)' }))
+            if (detail) row.appendChild(createEl('span', { text: ' ' + detail, style: 'margin-left: 8px' }))
+            tickEventsList.appendChild(row)
+          }
+        }
+      }
+    }
+  }
 }
 
 function kvRow(k, v) {
@@ -864,6 +1317,12 @@ async function run() {
 function randomizeOpponents() {
   const pool = opponentPoolOptions(myBots, selectedMyBotId)
 
+  const before = {
+    BOT2: opponentSelections.BOT2,
+    BOT3: opponentSelections.BOT3,
+    BOT4: opponentSelections.BOT4,
+  }
+
   const nonce = readOpponentNonce()
   const bot1 = selectedMyBotId ? getBotById(myBots, selectedMyBotId) : null
 
@@ -875,6 +1334,11 @@ function randomizeOpponents() {
 
   const nextU32 = xorshift32(seed)
   const values = shuffleInPlaceDeterministic(pool.map((p) => p.value), nextU32).slice(0, 3)
+
+  const same = values[0] === before.BOT2 && values[1] === before.BOT3 && values[2] === before.BOT4
+  if (same) {
+    values.push(values.shift())
+  }
 
   opponentSelections = {
     ...opponentSelections,
@@ -890,11 +1354,36 @@ function randomizeOpponents() {
 }
 
 // Wire up UI
-renderTabs(inspectTabs, selectedBotId, (id) => {
-  selectedBotId = id
-  updateInspector()
-  draw()
-})
+if (inspectTabs) {
+  renderTabs(inspectTabs, selectedBotId, (id) => {
+    selectedBotId = id
+    updateInspector()
+    draw()
+  })
+}
+
+if (tickEventsAllBtn) {
+  tickEventsAllBtn.addEventListener('click', () => {
+    showAllTickEvents = !showAllTickEvents
+    updateInspector()
+  })
+}
+
+if (tickEventsRawBtn) {
+  tickEventsRawBtn.addEventListener('click', () => {
+    showRawTickEvents = !showRawTickEvents
+    updateInspector()
+  })
+}
+
+if (tickEventsFilterInput) {
+  tickEventsFilter = tickEventsFilterInput.value
+
+  tickEventsFilterInput.addEventListener('input', () => {
+    tickEventsFilter = tickEventsFilterInput.value
+    updateInspector()
+  })
+}
 
 seedInput.addEventListener('input', () => {
   clearRunError()

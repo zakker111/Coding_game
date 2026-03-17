@@ -1,0 +1,11 @@
+{
+  "name": "modules_powerups_seed999",
+  "params": {
+    "seed": 999,
+    "tickCap": 120,
+    "bots": [0, 5, 6, 4]
+  },
+  "coreReplaySha256": "__REPLACE_BY_RUNNING_pnpm_golden_update__",
+  "stateTickSha256": [],
+  "eventsTickSha256": []
+}

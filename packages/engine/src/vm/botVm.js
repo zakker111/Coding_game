@@ -33,7 +33,7 @@ const KNOWN_KINDS = new Set([
   'USE_SLOT',
   'STOP_SLOT',
 
-  // placeholder
+  // reserved (keep list stable for future expansions)
   'INVALID',
 ])
 

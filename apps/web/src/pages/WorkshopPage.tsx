@@ -185,6 +185,8 @@ export function WorkshopPage() {
   const [runError, setRunError] = React.useState<string | null>(null)
   const [appliedRun, setAppliedRun] = React.useState<AppliedRunInfo | null>(null)
 
+  const [showRawTickEvents, setShowRawTickEvents] = React.useState(false)
+
   const [playback, dispatch] = React.useReducer(playbackReducer, initialPlaybackState)
   const [alpha, setAlpha] = React.useState(1)
 
@@ -342,31 +344,88 @@ export function WorkshopPage() {
     if (!next || !prev) return []
 
     const prevById = new Map(prev.bullets.map((b) => [b.bulletId, b]))
+    const nextById = new Map(next.bullets.map((b) => [b.bulletId, b]))
+
+    const bulletIds = new Set<string>()
+    for (const b of prev.bullets) bulletIds.add(b.bulletId)
+    for (const b of next.bullets) bulletIds.add(b.bulletId)
 
     const spawnsByBulletId = new Map(
-      (replay.events[t] ?? [])
-        .filter((e) => e.type === 'BULLET_SPAWN')
-        .map((e) => [e.bulletId, e])
+      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_SPAWN').map((e) => [e.bulletId, e]),
     )
 
-    return next.bullets.map((b) => {
-      const prevBullet = prevById.get(b.bulletId)
-      const spawn = spawnsByBulletId.get(b.bulletId)
+    const despawnsByBulletId = new Map(
+      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_DESPAWN').map((e) => [e.bulletId, e]),
+    )
 
-      // Newly spawned bullets won't exist in prev. Prefer BULLET_SPAWN.pos as the
-      // start position so bullets spawn from the muzzle and move immediately.
-      const p = prevBullet ?? (spawn ? { ...b, pos: spawn.pos } : { ...b, pos: { x: b.pos.x - b.vel.x, y: b.pos.y - b.vel.y } })
+    const out = [] as Array<{
+      bulletId: string
+      ownerBotId: SlotId
+      pos: { x: number; y: number }
+      vel: { x: number; y: number }
+      alpha?: number
+    }>
 
-      return {
-        bulletId: b.bulletId,
-        ownerBotId: b.ownerBotId,
-        pos: {
-          x: p.pos.x + (b.pos.x - p.pos.x) * a,
-          y: p.pos.y + (b.pos.y - p.pos.y) * a,
-        },
-        vel: b.vel,
+    for (const bulletId of bulletIds) {
+      const b0 = prevById.get(bulletId)
+      const b1 = nextById.get(bulletId)
+      if (!b0 && !b1) continue
+
+      // Despawn: bullet present in prev, missing in next.
+      if (b0 && !b1) {
+        if (a >= 1) continue
+
+        const despawn = despawnsByBulletId.get(bulletId)
+        const to = despawn?.pos ?? b0.pos
+
+        out.push({
+          bulletId,
+          ownerBotId: b0.ownerBotId,
+          vel: b0.vel,
+          pos: {
+            x: b0.pos.x + (to.x - b0.pos.x) * a,
+            y: b0.pos.y + (to.y - b0.pos.y) * a,
+          },
+          alpha: 1 - a,
+        })
+        continue
       }
-    })
+
+      // Spawn: bullet missing in prev, present in next.
+      if (!b0 && b1) {
+        const spawn = spawnsByBulletId.get(bulletId)
+        const from = spawn?.pos ?? { x: b1.pos.x - b1.vel.x, y: b1.pos.y - b1.vel.y }
+
+        out.push({
+          bulletId,
+          ownerBotId: b1.ownerBotId,
+          vel: b1.vel,
+          pos: {
+            x: from.x + (b1.pos.x - from.x) * a,
+            y: from.y + (b1.pos.y - from.y) * a,
+          },
+        })
+        continue
+      }
+
+      // Normal movement.
+      const from = b0?.pos ?? b1!.pos
+      const to = b1?.pos ?? b0!.pos
+      const vel = b1?.vel ?? b0!.vel
+      const ownerBotId = b1?.ownerBotId ?? b0!.ownerBotId
+
+      out.push({
+        bulletId,
+        ownerBotId,
+        vel,
+        pos: {
+          x: from.x + (to.x - from.x) * a,
+          y: from.y + (to.y - from.y) * a,
+        },
+      })
+    }
+
+    return out
   }, [alpha, playback.playing, playback.tick, replay])
 
   const powerupsForRender = React.useMemo(() => {
@@ -406,6 +465,134 @@ export function WorkshopPage() {
     const t = clamp(playback.tick, 0, replay.tickCap)
     return (replay.events[t] ?? []).filter((e) => isRelevantEvent(e, selectedBotId))
   }, [playback.tick, replay, selectedBotId])
+
+  const selectedTickEventLines = React.useMemo(() => {
+    if (!selectedTickEvents.length) return []
+
+    const lines: Array<{ key: string; label: string; detail?: string; tone?: 'muted' | 'bad' | 'good' }> = []
+
+    for (let i = 0; i < selectedTickEvents.length; i++) {
+      const e = selectedTickEvents[i]
+      switch (e.type) {
+        case 'BOT_EXEC': {
+          const tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
+          lines.push({
+            key: `BOT_EXEC:${e.botId}:${e.pcBefore}:${e.pcAfter}`,
+            label: `${e.botId} BOT_EXEC`,
+            detail: `${e.instrText}  (pc ${e.pcBefore}→${e.pcAfter}, ${e.result}${e.reason ? `, ${e.reason}` : ''})`,
+            tone,
+          })
+          break
+        }
+        case 'BOT_MOVED':
+          lines.push({
+            key: `BOT_MOVED:${e.botId}:${e.fromPos.x},${e.fromPos.y}->${e.toPos.x},${e.toPos.y}`,
+            label: `${e.botId} moved`,
+            detail: `${e.fromPos.x},${e.fromPos.y} → ${e.toPos.x},${e.toPos.y}${e.dir ? ` (${e.dir})` : ''}`,
+          })
+          break
+        case 'BUMP_WALL':
+          lines.push({
+            key: `BUMP_WALL:${e.botId}:${e.dir}`,
+            label: `${e.botId} bumped wall`,
+            detail: `${e.dir} (damage ${e.damage})`,
+            tone: e.damage > 0 ? 'bad' : 'muted',
+          })
+          break
+        case 'BUMP_BOT':
+          lines.push({
+            key: `BUMP_BOT:${e.botId}:${e.otherBotId}:${e.dir}`,
+            label: `bump`,
+            detail: `${e.botId} ↔ ${e.otherBotId} (${e.dir})`,
+          })
+          break
+        case 'RESOURCE_DELTA': {
+          const parts = []
+          if (e.healthDelta) parts.push(`HP ${e.healthDelta > 0 ? '+' : ''}${e.healthDelta}`)
+          if (e.ammoDelta) parts.push(`AMMO ${e.ammoDelta > 0 ? '+' : ''}${e.ammoDelta}`)
+          if (e.energyDelta) parts.push(`ENERGY ${e.energyDelta > 0 ? '+' : ''}${e.energyDelta}`)
+          lines.push({
+            key: `RESOURCE_DELTA:${e.botId}:${e.cause}:${parts.join(',')}`,
+            label: `${e.botId} resources`,
+            detail: `${parts.join(', ') || '(no delta)'} (${e.cause})`,
+            tone: e.healthDelta < 0 ? 'bad' : e.healthDelta > 0 ? 'good' : 'muted',
+          })
+          break
+        }
+        case 'DAMAGE':
+          lines.push({
+            key: `DAMAGE:${e.victimBotId}:${e.amount}:${e.source}:${e.sourceBotId ?? ''}`,
+            label: `damage`,
+            detail: `${e.victimBotId} -${e.amount} (${e.source}${e.sourceBotId ? ` by ${e.sourceBotId}` : ''}, ${e.kind})`,
+            tone: 'bad',
+          })
+          break
+        case 'BOT_DIED':
+          lines.push({
+            key: `BOT_DIED:${e.victimBotId}:${e.creditedBotId ?? ''}`,
+            label: `death`,
+            detail: `${e.victimBotId} died${e.creditedBotId ? ` (credited ${e.creditedBotId})` : ''}`,
+            tone: 'bad',
+          })
+          break
+        case 'BULLET_SPAWN':
+          lines.push({
+            key: `BULLET_SPAWN:${e.bulletId}`,
+            label: `bullet spawn`,
+            detail: `${e.ownerBotId} @ ${e.pos.x},${e.pos.y} vel ${e.vel.x},${e.vel.y}`,
+          })
+          break
+        case 'BULLET_HIT':
+          lines.push({
+            key: `BULLET_HIT:${e.bulletId}:${e.victimBotId}`,
+            label: `bullet hit`,
+            detail: `${e.bulletId} hit ${e.victimBotId} (${e.damage})`,
+            tone: 'bad',
+          })
+          break
+        case 'BULLET_DESPAWN':
+          lines.push({
+            key: `BULLET_DESPAWN:${e.bulletId}:${e.reason}`,
+            label: `bullet despawn`,
+            detail: `${e.bulletId} (${e.reason})`,
+            tone: 'muted',
+          })
+          break
+        case 'POWERUP_PICKUP':
+          lines.push({
+            key: `POWERUP_PICKUP:${e.powerupId}:${e.botId}`,
+            label: `powerup pickup`,
+            detail: `${e.botId} picked ${e.powerupType} (${e.loc.sector}/${e.loc.zone})`,
+            tone: 'good',
+          })
+          break
+        case 'POWERUP_SPAWN':
+          lines.push({
+            key: `POWERUP_SPAWN:${e.powerupId}`,
+            label: `powerup spawn`,
+            detail: `${e.powerupType} at ${e.loc.sector}/${e.loc.zone}`,
+            tone: 'muted',
+          })
+          break
+        case 'POWERUP_DESPAWN':
+          lines.push({
+            key: `POWERUP_DESPAWN:${e.powerupId}:${e.reason}`,
+            label: `powerup despawn`,
+            detail: `${e.powerupId} (${e.reason})`,
+            tone: 'muted',
+          })
+          break
+        case 'MATCH_END':
+          lines.push({ key: 'MATCH_END', label: 'match end', detail: e.endReason, tone: 'muted' })
+          break
+        default:
+          lines.push({ key: `${e.type}:${i}`, label: e.type, detail: JSON.stringify(e), tone: 'muted' })
+          break
+      }
+    }
+
+    return lines
+  }, [selectedTickEvents])
 
   function createNewBot() {
     setMyBots((prev) => {
@@ -824,29 +1011,120 @@ export function WorkshopPage() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <div className="panel-title">Tick events</div>
-            <pre
+            <div className="panel-title">Execution</div>
+            <div
               style={{
                 marginTop: 8,
                 padding: 10,
                 borderRadius: 10,
                 background: 'rgba(0,0,0,0.35)',
-                overflow: 'auto',
-                height: 240,
               }}
             >
-              {replay
-                ? selectedTickEvents.length
-                  ? JSON.stringify(selectedTickEvents, null, 2)
-                  : '(no events)'
-                : 'Run a match to see events.'}
-            </pre>
+              {(() => {
+                if (!replay) return <div className="muted">Run a match to inspect execution.</div>
+
+                const exec = selectedTickEvents.find((e) => e.type === 'BOT_EXEC')
+                if (!exec || exec.type !== 'BOT_EXEC') return <div className="muted">(no BOT_EXEC)</div>
+
+                return (
+                  <div className="muted" style={{ lineHeight: 1.5 }}>
+                    <div>
+                      <strong style={{ color: 'var(--text)' }}>{exec.instrText}</strong>
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      pc {exec.pcBefore} → {exec.pcAfter}
+                      {' • '}
+                      result <strong style={{ color: 'var(--text)' }}>{exec.result}</strong>
+                      {exec.reason ? (
+                        <>
+                          {' • '}
+                          reason <strong style={{ color: '#fecaca' }}>{exec.reason}</strong>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <div className="panel-title">Loadout (local-only)</div>
+            <div className="panel-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Tick events</span>
+              <button
+                type="button"
+                className={['chip', showRawTickEvents ? 'active' : ''].join(' ')}
+                onClick={() => setShowRawTickEvents((v) => !v)}
+                disabled={!replay}
+                title="Toggle raw JSON"
+              >
+                Raw
+              </button>
+            </div>
+
+            {replay ? (
+              showRawTickEvents ? (
+                <pre
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: 'rgba(0,0,0,0.35)',
+                    overflow: 'auto',
+                    height: 240,
+                  }}
+                >
+                  {selectedTickEvents.length ? JSON.stringify(selectedTickEvents, null, 2) : '(no events)'}
+                </pre>
+              ) : (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: 10,
+                    borderRadius: 10,
+                    background: 'rgba(0,0,0,0.35)',
+                    overflow: 'auto',
+                    height: 240,
+                    fontFamily:
+                      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                    fontSize: 12,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {selectedTickEventLines.length ? (
+                    selectedTickEventLines.map((l) => {
+                      const color =
+                        l.tone === 'bad'
+                          ? '#fecaca'
+                          : l.tone === 'good'
+                            ? 'rgba(134, 239, 172, 0.95)'
+                            : 'rgba(148, 163, 184, 0.95)'
+
+                      return (
+                        <div key={l.key} style={{ marginBottom: 6 }}>
+                          <div style={{ color }}>
+                            <strong style={{ color: 'var(--text)' }}>{l.label}</strong>
+                            {l.detail ? <span style={{ marginLeft: 8 }}>{l.detail}</span> : null}
+                          </div>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="muted">(no events)</div>
+                  )}
+                </div>
+              )
+            ) : (
+              <div className="muted" style={{ marginTop: 8 }}>
+                Run a match to see events.
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div className="panel-title">Loadout</div>
             <div className="muted" style={{ marginTop: 8 }}>
-              Slot 1 / Slot 2 / Slot 3 (coming soon)
+              Loadouts are not configurable yet (rulesetVersion 0.1.0). Current engine behavior: mentioning <code>SAW</code> enables SAW in SLOT1; mentioning <code>SHIELD</code> enables SHIELD in SLOT2.
             </div>
           </div>
 

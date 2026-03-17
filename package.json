@@ -1,7 +1,7 @@
 {
   "name": "nowt",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "pnpm -C apps/web dev",
@@ -9,9 +9,21 @@
     "preview": "pnpm -C apps/web preview",
     "test": "pnpm -C apps/web test",
 
+    "sync:deploy": "node scripts/sync-deploy.mjs",
+    "check:deploy": "node scripts/sync-deploy.mjs --check",
+    "check:deploy:imports": "node scripts/check-deploy-imports.mjs",
+    "serve:deploy": "node scripts/serve-deploy.mjs",
+    "qa:workshop": "node scripts/qa-workshop.mjs",
+
     "build:all": "pnpm -r build",
     "test:all": "pnpm -r test",
-    "qa:phase1": "pnpm test:all && pnpm build:all",
-    "qa": "pnpm qa:phase1"
+    "qa:phase1": "pnpm golden:check && pnpm test:all && pnpm build:all",
+    "qa": "pnpm qa:phase1",
+    "test:golden": "pnpm -C packages/engine test:golden",
+    "golden:update": "pnpm -C packages/engine golden:update",
+    "golden:check": "pnpm -C packages/engine golden:check"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
   }
 }

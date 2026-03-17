@@ -210,16 +210,19 @@ Tick field convention:
   - `result`: `EXECUTED | NOP | ERROR`
   - `reason` (optional): a stable enum (see below)
 
-Trace conventions (recommended, to avoid implementation drift):
-- **Invalid/malformed instruction** (runtime policy in `Todo.md` / `BotInstructions.md`):
+Trace conventions (current engine behavior; keep consistent with `packages/engine/src/sim/runMatchToReplay.js` + `packages/replay/src/index.d.ts`):
+- **Invalid/malformed instruction** (runtime policy in `BotInstructions.md`):
   - treat as no-op for gameplay
-  - set `result = ERROR`
+  - set `result = NOP`
   - set `reason = INVALID_INSTR`
   - set `pcAfter = 1` (the post-tick state has `pc = 1`)
 - **Valid instruction that no-ops** due to cooldown/resources/invalid target/etc.:
   - set `result = NOP`
   - set `reason` accordingly
   - `pcAfter` advances as normal (unless the instruction defines special control-flow)
+
+Note:
+- The `ERROR` value remains in the schema for forward compatibility, but the current engine emits `NOP` for invalid instructions.
 
 Canonical `reason` values (v1+; extend additively):
 - `INVALID_INSTR`
@@ -307,11 +310,14 @@ Timing note:
 - `POWERUP_SPAWN` happens during end-of-tick maintenance (after pickups). A powerup spawned on tick `t` is first eligible to be picked up on tick `t+1`.
 
 - `POWERUP_SPAWN`:
-  - `powerupId`, `type`, `loc`
+  - `powerupId`, `powerupType`, `loc`
 - `POWERUP_PICKUP`:
-  - `botId`, `powerupId`, `type`, `loc`
+  - `botId`, `powerupId`, `powerupType`, `loc`
 - `POWERUP_DESPAWN`:
   - `powerupId`, `reason` (`PICKUP|RULES`)
+
+Note:
+- In events, the `type` field is reserved for the event discriminator (e.g. `"POWERUP_SPAWN"`), so the powerup's kind is carried as `powerupType`.
 
 ### 4.5 Resources
 
@@ -395,18 +401,21 @@ Damage caused by a beam should still be represented via `DAMAGE` events (see §4
 ### 4.9 Damage + deaths
 
 - `DAMAGE`:
-  - required: `victimBotId`, `amount`, `source`, `sourceBotId?`, `kind`
-  - optional (future):
-    - `sourceRef`: `{ type, id }` (lets the viewer link damage back to a specific entity)
-      - examples:
-        - `{ type: "BULLET", id: bulletId }`
-        - `{ type: "GRENADE", id: grenadeId }`
-        - `{ type: "MINE", id: mineId }`
-        - `{ type: "BEAM", id: beamId }`
-    - `mitigation` (how defenses interacted with the damage):
-      - `shieldAbsorbed` (number; if shields exist)
-      - `ignoredShield` (boolean; set true for lasers/beams that ignore shields)
+  - required: `victimBotId`, `amount`, `source`, `kind`
+  - optional:
+    - `sourceBotId` (present for bot-caused damage, including bullets/saw/bot-bump)
+    - `sourceRef`: `{ type, id }` (links damage back to an entity or relationship)
 
+Current engine emission notes:
+- `source` is currently a string and may be one of:
+  - `"ENV"` (wall bump)
+  - `"BOT"` (bot bump / ramming)
+  - `"BULLET"`
+  - `"SAW"`
+- `kind` is currently a string and is typically:
+  - `"BUMP_WALL"` for wall bumps
+  - `"BUMP_BOT"` for bot bumps
+  - `"DIRECT"` for weapon hits
 
 - `BOT_DIED`:
   - `victimBotId`, `creditedBotId?`

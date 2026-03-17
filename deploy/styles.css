@@ -233,9 +233,15 @@ input:focus, textarea:focus, select:focus {
 }
 
 /* Workshop: keep the tick event log from resizing the layout. */
-#eventLog {
+#eventLog,
+#tickEventsList {
   height: 320px;
   max-height: 320px;
+  max-width: 100%;
+  overflow: auto;
+}
+
+#execBox {
   max-width: 100%;
   overflow: auto;
 }

@@ -47,6 +47,10 @@ In particular, **equipment/loadout is not required for v1 server simulation**.
 For any server-run match in v1, assume a single fixed default loadout for all bots:
 - `SLOT1 = BULLET`, `SLOT2 = (empty)`, `SLOT3 = (empty)`
 
+Planned (when server-side loadouts are supported):
+- Default loadout becomes all-empty unless explicitly provided by match config: `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+- The Workshop will still embed the chosen loadout as locked source headers (`;@slot1`, `;@slot2`, `;@slot3`), but server simulation will use stored match config loadout rather than source scanning.
+
 **v1 product constraint (to keep UI and storage simple):** each user has **at most 3 bots**.
 
 Reproducibility rule (still required):

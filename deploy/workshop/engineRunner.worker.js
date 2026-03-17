@@ -1,6 +1,13 @@
-import { runMatchToReplay } from '../engine/src/index.js'
+let enginePromise = null
 
-self.addEventListener('message', (event) => {
+function loadEngine() {
+  if (!enginePromise) {
+    enginePromise = import(new URL('../engine/src/index.js', import.meta.url))
+  }
+  return enginePromise
+}
+
+self.addEventListener('message', async (event) => {
   const msg = event.data
   if (!msg || typeof msg !== 'object') return
 
@@ -13,6 +20,7 @@ self.addEventListener('message', (event) => {
   if (requestId == null) return
 
   try {
+    const { runMatchToReplay } = await loadEngine()
     const replay = runMatchToReplay({ seed, tickCap, bots })
 
     self.postMessage({

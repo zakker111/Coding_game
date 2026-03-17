@@ -41,6 +41,18 @@ A fun bot language usually has:
 
 ## 2) Keep `BotInstructions.md` split into two layers
 
+### 2.0) Planned “locked loadout headers” (Workshop ergonomics)
+
+To make loadouts discoverable and to keep matches reproducible, the Workshop will represent the selected loadout as the first 3 non-blank lines of the bot source (comments):
+- `;@slot1 <MODULE|EMPTY>`
+- `;@slot2 <MODULE|EMPTY>`
+- `;@slot3 <MODULE|EMPTY>`
+
+These are **UI-generated and locked** (not user-editable). The compiler ignores them as comments.
+When explicit loadouts are implemented, the match config can use these directives to populate `loadout` (or the UI can pass `loadout` directly).
+
+Default (if omitted): all slots `EMPTY`.
+
 ### 2.1 Layer A — Stable VM / language core (rarely changes)
 
 `BotInstructions.md` should remain the source of truth for:
