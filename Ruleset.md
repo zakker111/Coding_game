@@ -43,6 +43,7 @@ When `endReason ∈ {TICK_CAP, STALEMATE}` and multiple bots are alive, all surv
 
 Ruleset parameters (implemented defaults):
 - `tickCap = 600`
+  - UI note: the Workshop exposes `tickCap` as a match config value and should clamp it to a safe range (current UI cap: `<= 2000`).
 - `stalemateNoDamageGraceTicks = 120`
 - `stalemateCountdownTicks = 30`
 
@@ -71,12 +72,17 @@ The engine does **not** yet model explicit 3-slot loadouts. Instead it infers ca
 - if the source contains `SAW` (word match) → bot is **saw-capable**
 - if the source contains `SHIELD` (word match) → bot is **shield-capable**
 
-Effective slots:
+Effective slots (current, `rulesetVersion = 0.1.0`):
 - `SLOT1` always exists:
   - if saw-capable: `SLOT1 = SAW` (toggle weapon)
   - otherwise: `SLOT1 = BULLET` (ammo weapon)
 - `SLOT2` exists only if shield-capable: `SLOT2 = SHIELD` (toggle defense)
 - `SLOT3` is always empty
+
+Planned (`rulesetVersion > 0.1.0`):
+- Slot modules come from an explicit per-bot `loadout = [slot1, slot2, slot3]`.
+- Default if no loadout is provided: `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+- The Workshop/UI will generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines to reflect the selected loadout, but gameplay uses match config loadout (not source scanning).
 
 ### 1.2 Speed model (continuous movement)
 

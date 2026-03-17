@@ -40,6 +40,13 @@ It builds on:
    - **Choose equipment / loadout** (BOT1)
      - bottom area loadout selector (3 slots)
      - validates rules (no duplicates; at most 1 weapon slot in v1)
+     - Workshop implementation plan:
+       - loadout is represented in bot source by 3 locked header directives (first 3 non-blank lines):
+         - `;@slot1 <MODULE|EMPTY>`
+         - `;@slot2 <MODULE|EMPTY>`
+         - `;@slot3 <MODULE|EMPTY>`
+       - the editor treats these lines as non-editable; dropdown changes rewrite them deterministically
+       - default for a new bot: all slots `EMPTY`
      - v1 note: loadout affects **local preview** only; server-run matches store/run only bot code in v1
    - **Run a local match (4 bots)**
      - BOT1 = your selected bot (editable)

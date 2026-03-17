@@ -43,6 +43,17 @@ Optional (non-semantic) UI metadata directives (still comments):
   - v1 suggestion: `#RRGGBB` (hex color)
   - future suggestion: `asset:<id>` or `hash:<contentHash>`
 
+Planned (vNext) **loadout header directives** (still comments):
+- `;@slot1 <MODULE|EMPTY>`
+- `;@slot2 <MODULE|EMPTY>`
+- `;@slot3 <MODULE|EMPTY>`
+
+Rules for these header directives (plan):
+- If present, they must be the **first 3 non-blank lines** of the bot source.
+- Workshop/UI should generate and maintain them; the editor treats them as **locked** (not user-editable).
+- The compiler ignores them as comments; when explicit loadouts are implemented, the match config may use these to populate `loadout`.
+- Default (if omitted): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+
 ---
 
 ## 0.5) Tokens / notation
@@ -78,6 +89,8 @@ Notes:
 
 Loadout notes (spec direction):
 - The language supports 3 slots (`SLOT1..SLOT3`) and slot-addressed actions.
+- **Planned default when explicit loadouts land:** `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY` unless provided by match config.
+- Workshop/UI plan: loadout selection will generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0).
 - **Current engine behavior (rulesetVersion `0.1.0`):** explicit per-bot loadouts are not implemented yet; modules are inferred from the bot source text (see `Ruleset.md` §1.1.1).
 
 ---

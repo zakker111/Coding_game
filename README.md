@@ -74,6 +74,7 @@ Notes:
 - Arena is a **3×3 grid of sectors** (1–9). Each sector has **4 zones** (2×2). Bots have continuous world positions (`pos = {x,y}` in a 192×192 arena) and a **16×16 hitbox** (centered at `pos`); sector/zone are UI/rules regions derived from `pos`.
   - Bots do **not** move anchor-to-anchor or snap to sector/zone centers; only powerups use anchor locations for compact encoding.
 - Module/loadout note (rulesetVersion `0.1.0`): explicit 3-slot loadouts are not implemented yet; the engine infers whether a bot has `SAW`/`SHIELD` by scanning the bot source text.
+  - Planned: Workshop will represent loadout as 3 locked source header directives (`;@slot1`, `;@slot2`, `;@slot3`) and future rulesets will default to `SLOT1=EMPTY` if no loadout is provided.
 - Powerups (`HEALTH|AMMO|ENERGY`) spawn at deterministic anchors (seeded RNG) every **10–20 ticks** and are picked up when a bot’s AABB overlaps the anchor point.
 - Matches end by rules: last bot alive, or `tickCap`, or `STALEMATE` (no bot-vs-bot damage for a configured window) — see `Ruleset.md`.
 - Matches are fully replayable from `(rulesetVersion, matchSeed, bot source snapshots)` (and future: explicit loadouts).
