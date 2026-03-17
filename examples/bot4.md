@@ -1,6 +1,6 @@
 # Built-in bot: Saw Rusher (SAW + SHIELD)
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = SAW`
 - `SLOT2 = SHIELD`
 - `SLOT3 = (empty)`
@@ -14,6 +14,9 @@
 ## Script
 
 ```text
+;@slot1 SAW
+;@slot2 SHIELD
+;@slot3 EMPTY
 ; bot4 — Saw Rusher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
 ; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep when too close.

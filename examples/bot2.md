@@ -1,6 +1,6 @@
 # Built-in bot: Chaser Shooter (BULLET)
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = BULLET`
 - `SLOT2 = (empty)`
 - `SLOT3 = (empty)`
@@ -18,6 +18,9 @@
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
 ; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: choose a target (BOT1→BOT3→BOT4), chase it, shoot it; avoid bump-lock; detour for HEALTH/AMMO; dodge enemy bullets.

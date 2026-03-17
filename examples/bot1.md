@@ -1,6 +1,6 @@
 # Built-in bot: Zone Patrol Shooter (BULLET)
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = BULLET`
 - `SLOT2 = (empty)`
 - `SLOT3 = (empty)`
@@ -17,6 +17,9 @@
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
 ; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: patrol zones 1→2→4→3→1 (current sector); avoid bump-lock; detour for HEALTH/AMMO when low; dodge bullets; fire at NEAREST_BOT.

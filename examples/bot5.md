@@ -1,6 +1,6 @@
 # Built-in bot: Burst Hunter (BULLET + ARMOR)
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = BULLET`
 - `SLOT2 = ARMOR`
 - `SLOT3 = (empty)`
@@ -14,6 +14,9 @@
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 ARMOR
+;@slot3 EMPTY
 ; bot5 — Burst Hunter
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
 ; Summary: center control + burst windows; detours for HEALTH/AMMO; avoid bump-lock; dodge bullets when threatened.
