@@ -5,7 +5,10 @@ export const EXAMPLE_BOTS = {
   bot0: {
     id: 'bot0',
     displayName: 'Aggressive Skirmisher (starter)',
-    sourceText: `; bot0 — Aggressive Skirmisher (starter)
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
 ; Summary: chase+shoot the closest bot; avoid bump-lock; detour for HEALTH/AMMO when low; dodge enemy bullets when threatened.
 
@@ -278,7 +281,10 @@ GOTO LOOP
   bot4: {
     id: 'bot4',
     displayName: 'Saw Rusher',
-    sourceText: `; bot4 — Saw Rusher
+    sourceText: `;@slot1 SAW
+;@slot2 SHIELD
+;@slot3 EMPTY
+; bot4 — Saw Rusher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
 ; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep when too close.
 
@@ -320,7 +326,10 @@ GOTO LOOP
   bot5: {
     id: 'bot5',
     displayName: 'Burst Hunter',
-    sourceText: `; bot5 — Burst Hunter
+    sourceText: `;@slot1 BULLET
+;@slot2 ARMOR
+;@slot3 EMPTY
+; bot5 — Burst Hunter
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
 ; Summary: center control + burst windows; detours for HEALTH/AMMO; avoid bump-lock; dodge bullets when threatened.
 
@@ -382,7 +391,10 @@ GOTO LOOP
   bot6: {
     id: 'bot6',
     displayName: 'Energy Saw Skirmisher',
-    sourceText: `; bot6 — Energy Saw Skirmisher
+    sourceText: `;@slot1 SAW
+;@slot2 SHIELD
+;@slot3 EMPTY
+; bot6 — Energy Saw Skirmisher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
 ; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY.
 

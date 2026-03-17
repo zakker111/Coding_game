@@ -421,7 +421,7 @@ export function generateSampleReplay(seed, opts = {}) {
       displayName: 'Aggressive Skirmisher',
       appearance: { kind: 'COLOR', color: '#4ade80' },
       sourceText:
-        '; bot0 — Aggressive Skirmisher (starter)\nLABEL LOOP\nIF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL\nTARGET_CLOSEST\nSET_MOVE_TO_TARGET\nIF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET\nGOTO LOOP\nLABEL HEAL\nCLEAR_TARGET_BOT\nTARGET_POWERUP HEALTH\nSET_MOVE_TO_TARGET\nWAIT 6\nCLEAR_MOVE\nGOTO LOOP\n',
+        ';@slot1 BULLET\n;@slot2 EMPTY\n;@slot3 EMPTY\n; bot0 — Aggressive Skirmisher (starter)\nLABEL LOOP\nIF (HEALTH < 45 && POWERUP_EXISTS(HEALTH)) GOTO HEAL\nTARGET_CLOSEST\nSET_MOVE_TO_TARGET\nIF (HAS_TARGET_BOT() && SLOT_READY(SLOT1)) DO FIRE_SLOT1 TARGET\nGOTO LOOP\nLABEL HEAL\nCLEAR_TARGET_BOT\nTARGET_POWERUP HEALTH\nSET_MOVE_TO_TARGET\nWAIT 6\nCLEAR_MOVE\nGOTO LOOP\n',
     },
     {
       slotId: 'BOT2',
