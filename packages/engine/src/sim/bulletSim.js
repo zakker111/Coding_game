@@ -100,7 +100,8 @@ export function stepBullets(bullets, bots, tickEvents) {
     if (hit.kind === 'BOT') {
       const victim = hit.victim
 
-      const damage = victim.shieldActive ? BULLET_DAMAGE - Math.floor(BULLET_DAMAGE / 2) : BULLET_DAMAGE
+      let damage = victim.shieldActive ? BULLET_DAMAGE - Math.floor(BULLET_DAMAGE / 2) : BULLET_DAMAGE
+      if (victim.armorEquipped) damage = damage - Math.floor(damage / 3)
 
       tickEvents.push({
         type: 'BULLET_HIT',

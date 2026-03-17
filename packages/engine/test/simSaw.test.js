@@ -11,16 +11,18 @@ function makeBots() {
   return [
     {
       slotId: 'BOT1',
+      loadout: ['SAW', null, null],
       // Ensure BOT1 closes distance every tick (via persistent moveGoal), so SAW damage actually occurs.
       sourceText: ['LABEL LOOP', 'TARGET_CLOSEST', 'SET_MOVE_TO_TARGET', 'SAW ON', 'GOTO LOOP', ''].join('\n'),
     },
     // Keep BOT2 stationary at its spawn, so BOT1 can reliably reach SAW range.
-    { slotId: 'BOT2', sourceText: 'NOP\n' },
+    { slotId: 'BOT2', loadout: [null, null, null], sourceText: 'NOP\n' },
     {
       slotId: 'BOT3',
+      loadout: ['BULLET', null, null],
       sourceText: ['LABEL LOOP', 'IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 BOT4', 'GOTO LOOP', ''].join('\n'),
     },
-    { slotId: 'BOT4', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT4', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
   ]
 }
 

@@ -8,14 +8,15 @@ test('runMatchToReplay: TARGET_CLOSEST is resolved at set time (does not change 
   const bots = [
     {
       slotId: 'BOT1',
+      loadout: ['BULLET', null, null],
       // Tick1: pick target; Tick2: shoot stored TARGET.
       sourceText: ['TARGET_CLOSEST', 'FIRE_SLOT1 TARGET', ''].join('\n'),
     },
-    { slotId: 'BOT2', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT2', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
     // BOT3 moves closer to BOT1 after tick1, so if TARGET were re-resolved at
     // shoot-time, the shot would incorrectly go to BOT3.
-    { slotId: 'BOT3', sourceText: 'MOVE UP\n' },
-    { slotId: 'BOT4', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT3', loadout: [null, null, null], sourceText: 'MOVE UP\n' },
+    { slotId: 'BOT4', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
   ]
 
   const replay = runMatchToReplay({ seed: 1, tickCap: 3, bots })

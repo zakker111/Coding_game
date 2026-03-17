@@ -36,10 +36,10 @@ test('runMatchToReplay: deterministic smoke test (examples bot0..bot3)', () => {
   }
 
   const bots = [
-    { slotId: 'BOT1', sourceText: sources[0] },
-    { slotId: 'BOT2', sourceText: sources[1] },
-    { slotId: 'BOT3', sourceText: sources[2] },
-    { slotId: 'BOT4', sourceText: sources[3] },
+    { slotId: 'BOT1', loadout: ['BULLET', null, null], sourceText: sources[0] },
+    { slotId: 'BOT2', loadout: ['BULLET', null, null], sourceText: sources[1] },
+    { slotId: 'BOT3', loadout: ['BULLET', null, null], sourceText: sources[2] },
+    { slotId: 'BOT4', loadout: ['BULLET', null, null], sourceText: sources[3] },
   ]
 
   const params = { seed: 123, tickCap: 50, bots }
@@ -50,7 +50,7 @@ test('runMatchToReplay: deterministic smoke test (examples bot0..bot3)', () => {
   assert.deepStrictEqual(r2, r1, 'expected deterministic replay output')
 
   assert.equal(r1.schemaVersion, '0.1.0')
-  assert.equal(r1.rulesetVersion, '0.1.0')
+  assert.equal(r1.rulesetVersion, '0.2.0')
   assert.equal(r1.matchSeed, 123)
   assert.ok(r1.tickCap <= 50)
 

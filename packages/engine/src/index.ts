@@ -1,8 +1,11 @@
-import type { Replay, SlotId } from '@coding-game/replay'
+import type { Loadout, Replay, SlotId } from '@coding-game/replay'
 
 export type BotSourceSpec = {
   slotId: SlotId
   sourceText: string
+
+  /** Optional explicit loadout; omitted defaults to empty slots. */
+  loadout?: Loadout
 }
 
 export type RunMatchParams = {

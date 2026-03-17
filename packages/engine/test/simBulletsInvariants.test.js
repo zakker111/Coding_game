@@ -6,9 +6,10 @@ import { BULLET_SPEED_UNITS_PER_TICK } from '../src/sim/constants.js'
 
 test('runMatchToReplay: bullets despawn and ammo only decreases via SHOOT', () => {
   const bots = [
-    { slotId: 'BOT1', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT1', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
     {
       slotId: 'BOT2',
+      loadout: ['BULLET', null, null],
       sourceText: [
         '; fire repeatedly (subject to cooldown)',
         'LABEL LOOP',
@@ -17,8 +18,8 @@ test('runMatchToReplay: bullets despawn and ammo only decreases via SHOOT', () =
         '',
       ].join('\n'),
     },
-    { slotId: 'BOT3', sourceText: 'WAIT 1\n' },
-    { slotId: 'BOT4', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT3', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT4', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
   ]
 
   const replay = runMatchToReplay({ seed: 4242, tickCap: 120, bots })

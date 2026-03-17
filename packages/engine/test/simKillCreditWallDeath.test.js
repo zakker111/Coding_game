@@ -7,14 +7,16 @@ test('runMatchToReplay: wall-bump death is credited to last damaging bot', () =>
   const bots = [
     {
       slotId: 'BOT1',
+      loadout: ['BULLET', null, null],
       sourceText: ['FIRE_SLOT1 BOT2', 'LABEL LOOP', 'WAIT 10', 'GOTO LOOP', ''].join('\n'),
     },
     {
       slotId: 'BOT2',
+      loadout: [null, null, null],
       sourceText: ['WAIT 5', 'LABEL LOOP', 'MOVE LEFT', 'GOTO LOOP', ''].join('\n'),
     },
-    { slotId: 'BOT3', sourceText: 'LABEL LOOP\nWAIT 10\nGOTO LOOP\n' },
-    { slotId: 'BOT4', sourceText: 'LABEL LOOP\nWAIT 10\nGOTO LOOP\n' },
+    { slotId: 'BOT3', loadout: [null, null, null], sourceText: 'LABEL LOOP\nWAIT 10\nGOTO LOOP\n' },
+    { slotId: 'BOT4', loadout: [null, null, null], sourceText: 'LABEL LOOP\nWAIT 10\nGOTO LOOP\n' },
   ]
 
   const params = { seed: 2, tickCap: 120, bots }
