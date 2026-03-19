@@ -19,6 +19,9 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
+- Deploy Workshop:
+  - Example bots updated to include locked loadout header directives (`;@slot1/2/3 ...`) at the top of each script fence.
+  - Workshop build tag bumped to **v0.3.1**.
 - Docs/spec: restore detailed `Ruleset.md` and align `ReplayViewerPlan.md`/`SpecAlignment.md` with current `rulesetVersion = 0.2.0` behavior (explicit loadouts + ARMOR, default-empty + normalization).
 
 ---
@@ -29,7 +32,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Added
 - Deploy Workshop (buildless static):
-  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.3**.
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), **v0.3**.
   - Inspector improvements:
     - bot display names shown in Inspector + event formatting
     - tick events grouped (Movement/Combat/Resources/Other) with collapsible headers
