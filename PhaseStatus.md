@@ -31,17 +31,25 @@ Optional cleanup:
 
 ## Phase 2 — Real loadouts + module model (`rulesetVersion = 0.2.0`)
 
-Goal: remove the sim shortcut that infers module availability from source text.
+Goal: make module availability an explicit match input (not source-scanned), and make replays self-describing via per-bot `loadout`.
 
-Key items left:
-- Add explicit per-bot loadout input (`SLOT1..SLOT3`) with default-empty + normalization
-- Enforce v1 constraints (no duplicates; at most one weapon)
-- Implement ARMOR fully:
-  - heavy speed penalty
-  - passive mitigation rules
+Implemented (authoritative engine: `packages/engine`):
+- Explicit per-bot 3-slot `loadout` input (`SLOT1..SLOT3`) with default-empty + deterministic normalization.
+- v1 constraints enforced via normalization (unknown modules → EMPTY, dedupe, at most one weapon).
+- `ARMOR` implemented:
+  - speed penalty: `floor(12 * 3/4) = 9`
+  - mitigation (all damage sources): `amount - floor(amount/3)`
+
+Remaining (wiring / consumers):
+- Wire loadout through all frontends that call `runMatchToReplay` (notably `apps/web` worker), so matches don’t silently run with an all-empty loadout.
+- Remove/upgrade legacy deploy-time sim copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (`deploy/engine`).
+- Workshop UX:
+  - show per-bot loadout in the inspector
+  - surface `loadoutIssues` as a visible warning (non-blocking)
 
 QA gates:
-- Add deterministic tests proving loadout affects speed + mitigation.
+- Add/keep deterministic engine tests proving loadout affects speed + mitigation.
+- Add an integration smoke test ensuring Workshop passes loadouts into the worker → engine pipeline.
 
 ---
 

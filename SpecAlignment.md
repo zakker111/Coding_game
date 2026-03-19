@@ -14,13 +14,20 @@ Primary implementation references:
 
 ---
 
-## What is considered “locked” for `rulesetVersion = 0.2.0`
+## Current implemented contract: `rulesetVersion = 0.2.0`
 
 ### Replay header
-- `schemaVersion` is currently emitted as `'0.1.0'`.
-- `rulesetVersion` is currently emitted as `'0.2.0'`.
-- `bots[i].loadout` is a 3-slot array (`[slot1, slot2, slot3]`), where each entry is `"BULLET" | "SAW" | "SHIELD" | "ARMOR" | null`.
-- `bots[i].loadoutIssues` may be present (informational), when the engine normalized an invalid loadout.
+- `schemaVersion` is emitted as `'0.1.0'`.
+- `rulesetVersion` is emitted as `'0.2.0'`.
+- `bots[i].loadout` is a 3-slot array (`[slot1, slot2, slot3]`), where each entry is a module id (`"BULLET"|"SAW"|"SHIELD"|"ARMOR"`) or `null`.
+- `bots[i].loadoutIssues` may be present (informational) if the engine had to normalize an invalid loadout.
+
+### Loadout rules (v0.2.0)
+- Default-empty loadout rule: if `loadout` is missing/omitted at match input time, treat it as `[null, null, null]`.
+- Invalid loadouts do not abort the match; they are **deterministically normalized** and issues are recorded.
+  - Unknown module id → `null` + `UNKNOWN_MODULE`
+  - Duplicate module → keep earliest slot, later duplicates → `null` + `DUPLICATE`
+  - Multiple weapons (more than one of `BULLET|SAW`) → keep earliest weapon, later weapons → `null` + `MULTI_WEAPON`
 
 ### Tick ordering (engine phase order)
 1. Bot VM execution (`BOT1..BOT4`) + `BOT_EXEC` (bullets may spawn here)
@@ -33,13 +40,12 @@ Primary implementation references:
 8. Match end check + `MATCH_END`
 
 ### Movement + collision
-- Base speed is `12` units/tick; with `ARMOR` equipped: `floor(12 * 3/4) = 9`.
+- Base speed is `12` units/tick.
+- With `ARMOR` equipped: `floor(12 * 3/4) = 9` units/tick.
 - Collision detection walks integer points along the move segment using Bresenham.
 - **Wall bump damage is suppressed if a bot bump occurs**.
 
 ### Weapons / modules
-- Explicit per-bot loadouts are implemented; default if omitted is **all empty** `[null, null, null]`.
-- Loadout normalization is deterministic and records issues (`UNKNOWN_MODULE`, `DUPLICATE`, `MULTI_WEAPON`).
 - Bullets:
   - damage `10`, speed `16`, TTL `18`, ammo cost `1`, cooldown `4`
   - muzzle-offset spawn is outside shooter AABB (`BOT_HALF_SIZE + 2 = 10` via L∞ normalization)
@@ -50,8 +56,8 @@ Primary implementation references:
   - energy drain `1` per tick
   - bullet mitigation: 50% reduction (`amount - floor(amount/2)`)
 - ARMOR:
-  - incoming damage mitigation (all sources): `amount - floor(amount/3)`
-  - for bullets: apply SHIELD first, then ARMOR
+  - passive mitigation (all damage sources): `amount - floor(amount/3)`
+  - ordering for bullet hits when SHIELD is active: apply SHIELD first, then ARMOR
 
 ### Environmental damage
 - Wall bump damage `2`.
@@ -70,7 +76,15 @@ Primary implementation references:
 
 ---
 
+## Legacy notes: `rulesetVersion = 0.1.0`
+
+- No explicit per-bot loadouts; module capability was inferred by scanning `sourceText` for tokens like `SAW` / `SHIELD`.
+- `ARMOR` did not exist.
+
+---
+
 ## Canonical docs
 
-- `Ruleset.md` — the gameplay rules for the current engine.
-- `ReplayViewerPlan.md` — replay schema/viewer expectations (including legacy handling when `loadout` is missing).
+- `Ruleset.md` — gameplay rules for the currently implemented engine (`rulesetVersion = 0.2.0`).
+- `ReplayViewerPlan.md` — replay schema/viewer expectations.
+- `UIPlan.md` — Workshop loadout UX, including how derived `;@slot*` lines relate to structured loadout state.

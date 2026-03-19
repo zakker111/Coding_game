@@ -21,7 +21,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 - Deploy Workshop:
   - Example bots updated to include locked loadout header directives (`;@slot1/2/3 ...`) at the top of each script fence.
-  - Workshop build tag bumped to **v0.3.1**.
+  - Workshop build tag is **v0.3.1** (see `deploy/workshop/workshop.js`).
 - Docs/spec: restore detailed `Ruleset.md` and align `ReplayViewerPlan.md`/`SpecAlignment.md` with current `rulesetVersion = 0.2.0` behavior (explicit loadouts + ARMOR, default-empty + normalization).
 
 ---

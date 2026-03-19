@@ -123,17 +123,26 @@ A replay should support 2 independent requirements:
         - content-addressed storage (`contentHash`)
         - or a direct URL (`url`) when appropriate
     - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
-  - `loadout` (present for `rulesetVersion >= 0.2.0`; 3 slot positions; each entry is a module id or `null`)
-    - encoding: `[slot1, slot2, slot3]` where each entry is `"<MODULE_ID>" | null`
-    - the replay should include the **resolved/normalized** loadout actually used by the engine
-    - legacy behavior: if omitted, the viewer should derive a display loadout from `rulesetVersion` + `sourceText`:
-      - for `rulesetVersion = 0.1.0`: `slot1 = (sourceText contains token "SAW" ? "SAW" : "BULLET")`, `slot2 = (sourceText contains token "SHIELD" ? "SHIELD" : null)`, `slot3 = null`
-      - otherwise: default to `[null, null, null]`
-  - `loadoutIssues` (optional; informational only)
-    - used by `rulesetVersion >= 0.2.0` for UI diagnostics around normalization
-    - when present: `Array<{ kind, slot, module? }>`
+  - `loadout` (rulesetVersion-specific module loadout; 3 slots)
+    - encoding: `[slot1, slot2, slot3]` (SLOT1..SLOT3), where each entry is a module id (`"<MODULE_ID>"`) or `null` (EMPTY slot)
+    - for `rulesetVersion >= 0.2.0`:
+      - **should be present** in the replay header and should already be the engine’s **resolved/normalized** loadout
+      - viewer compatibility rule: if a replay omits `loadout`, the viewer must treat it as **all empty**: `[null, null, null]`
+      - do not do source-text scanning for `rulesetVersion >= 0.2.0`
+    - **legacy (`rulesetVersion = 0.1.0`)**:
+      - replays typically omit `loadout` because explicit per-bot loadouts did not exist
+      - viewer may derive a *display* loadout from `sourceText` (if present):
+        - `slot1 = (sourceText contains token "SAW" ? "SAW" : "BULLET")`
+        - `slot2 = (sourceText contains token "SHIELD" ? "SHIELD" : null)`
+        - `slot3 = null`
+      - if `sourceText` is not available (common for some server-run matches), default the display loadout to: `["BULLET", null, null]`
+  - `loadoutIssues` (optional but recommended; informational only)
+    - used by `rulesetVersion >= 0.2.0` when the engine had to normalize/coerce an invalid loadout
+    - when present:
+      - `Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
+      - `slot` refers to the 1-based slot index in `[slot1, slot2, slot3]`
     - if omitted, the viewer should default to an empty list: `[]`
-    - viewer UX: show a non-blocking warning indicator on the bot (e.g. in the bot list) and list the issues in the bot inspector; do not refuse to load the replay
+    - viewer UX: show a non-blocking warning indicator on the bot (e.g. in the bot list) and surface the issue list in the bot inspector (e.g. under a “Loadout” section); do not refuse to load the replay
   - `sourceText` (or `sourceHash` + URL)
   - future (server / library):
     - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`
@@ -234,8 +243,8 @@ Note:
 Canonical `reason` values (v1+; extend additively):
 - `INVALID_INSTR`
 - `NO_MODULE`
+- `NO_EFFECT` (valid instruction but no gameplay effect, e.g. using/stopping a non-usable/passive module)
 - `COOLDOWN`
-
 - `NO_AMMO`
 - `NO_ENERGY`
 - `INVALID_TARGET_KIND`

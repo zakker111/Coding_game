@@ -162,29 +162,24 @@ QA checklist
 
 ## Phase 2 — Real loadouts + module model (`rulesetVersion = 0.2.0`)
 
-Goal: remove the temporary “infer modules from source text” shortcut and make bot capabilities explicit.
+Goal: make bot capabilities explicit via per-bot 3-slot loadouts, and ensure all match runners/frontends pass those loadouts into the engine.
 
-Concrete tasks
-- [ ] Engine input model:
-  - add per-bot `loadout` (3 slots) to the match config input.
-  - define loadout normalization rules (including default-empty) in `Ruleset.md` (validation vs. coercion).
-- [ ] Enforcement:
-  - no duplicates
-  - at most one weapon
-  - specify behavior for invalid loadouts (fail match vs. coerce to default).
-- [ ] Simulation integration:
-  - remove capability inference from source text.
-  - make `SLOT1/SLOT2/SLOT3` behavior purely loadout-driven.
-- [ ] Workshop integration:
-  - UI for selecting/editing loadout per bot.
-  - replay inspector shows loadout.
-- [ ] Update examples:
-  - update `examples/` bots to declare explicit loadouts (or whatever the new config format becomes).
+Implemented (authoritative engine: `packages/engine`)
+- [x] `runMatchToReplay` accepts per-bot `loadout` (3 slots) and defaults to `[null, null, null]` when omitted.
+- [x] Deterministic loadout normalization + `loadoutIssues` surfaced in the replay header.
+- [x] Slot behavior is loadout-driven (no source scanning) in `packages/engine`.
+
+Remaining work (wiring / consumers)
+- [ ] Workshop (`apps/web`) must pass each bot’s `loadout` into the worker → engine boundary (see `apps/web/src/worker/simRunner.worker.ts`).
+- [ ] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of:
+  - resolved `loadout`
+  - `loadoutIssues` as a non-blocking warning
+- [ ] Remove/upgrade legacy match runners that still implement `rulesetVersion = 0.1.0` source-scanning semantics (notably `deploy/engine`), or clearly mark them as legacy/not-authoritative.
 
 Acceptance criteria
-- Given the same seed and same loadouts, replays are deterministic.
-- Changing only loadouts changes behavior in expected ways (e.g., weapon availability and/or speed penalties).
-- Docs and schema are updated for the new match config and replay metadata.
+- Local Workshop matches behave according to selected loadouts (weapons available, ARMOR speed penalty, etc.), not source-text scanning.
+- Replay viewer surfaces per-bot loadout and any normalization issues.
+- Deploy drift checks remain green (`pnpm check:deploy`).
 
 QA checklist
 - `pnpm -C packages/engine test`
@@ -196,19 +191,23 @@ QA checklist
 
 ## Phase 2.1 — ARMOR (complete module set, `rulesetVersion = 0.2.0`)
 
-Goal: implement ARMOR as a first-class module with deterministic mitigation and any movement penalties.
+Goal: lock in ARMOR semantics (docs + tests) and make the behavior debuggable/visible in the Workshop.
 
-Concrete tasks
-- [ ] Implement ARMOR mitigation rules (document exact math and ordering with shield/bullet mitigation).
-- [ ] Implement speed/acceleration penalty (if applicable) and document it.
-- [ ] Add replay events/stats needed to debug mitigation (e.g., pre/post damage numbers).
-- [ ] Add engine tests covering:
-  - mitigation math
-  - interaction with SHIELD (ordering is deterministic and documented)
+Implemented (authoritative engine: `packages/engine`)
+- [x] Passive mitigation (all damage sources): `amount - floor(amount/3)`.
+- [x] Movement speed penalty when equipped in any slot: `floor(12 * 3/4) = 9`.
+- [x] Bullet mitigation ordering when SHIELD is active: apply SHIELD first, then ARMOR.
+
+Remaining work (QA / UX)
+- [ ] Add/keep explicit engine regression tests covering:
+  - mitigation math (including odd amounts)
+  - SHIELD→ARMOR ordering
+  - speed penalty when equipped
+- [ ] Workshop: ensure ARMOR-equipped bots’ slower movement and mitigated damage are easy to inspect (stats/event log).
 
 Acceptance criteria
 - ARMOR behavior is fully specified in `Ruleset.md` and matches the engine.
-- Tests prove mitigation is deterministic and stable (including edge cases like odd-number mitigation).
+- Tests prove mitigation + ordering + speed penalty are deterministic and stable.
 
 QA checklist
 - `pnpm -C packages/engine test`

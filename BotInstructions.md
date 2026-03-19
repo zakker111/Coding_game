@@ -89,11 +89,19 @@ Notes:
 
 Loadout notes (spec direction):
 - The language supports 3 slots (`SLOT1..SLOT3`) and slot-addressed actions.
-- Default (if omitted by match config / Workshop state): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
-- Workshop/UI may generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0); these are UI-derived comments and are not authoritative.
-- **Engine behavior:**
-  - rulesetVersion `0.2.0`: explicit per-bot loadout comes from the match config (or Workshop structured state).
-  - rulesetVersion `0.1.0`: per-bot loadouts were not implemented; modules were inferred from the bot source text (see `Ruleset.md` §1.1.1).
+- Workshop/UI may generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0); these are UI-derived comments for UX/editor ergonomics and are not authoritative.
+- **rulesetVersion `0.2.0` (current engine behavior):** explicit per-bot loadout is authoritative and comes from match config (or Workshop structured state).
+  - If `loadout` is missing/omitted, it defaults to `EMPTY/EMPTY/EMPTY`.
+  - Invalid loadouts are **deterministically normalized** (the match does not fail solely due to loadout shape/content):
+    1. Coerce to 3 slots: take the first 3 entries; if fewer, pad with `EMPTY`.
+    2. Unknown module ids → `EMPTY` (record `UNKNOWN_MODULE`).
+    3. Deduplicate modules: keep the earliest occurrence; later duplicates → `EMPTY` (record `DUPLICATE`).
+    4. Enforce weapon limit: keep only the earliest weapon among `{BULLET, SAW}`; later weapons → `EMPTY` (record `MULTI_WEAPON`).
+  - Important: if a match runner omits `loadout`, bots will have `EMPTY/EMPTY/EMPTY` and slot-based module instructions will no-op. Some UIs/runners may still need wiring updates.
+- **rulesetVersion `0.1.0` (legacy):** per-bot loadouts were not a first-class match input; module capability was inferred from source scanning:
+  - if the source contains token `SAW`: the bot is saw-capable
+  - if the source contains token `SHIELD`: the bot is shield-capable
+  - otherwise: `SLOT1=BULLET`, `SLOT2=EMPTY`, `SLOT3=EMPTY`
 
 ---
 
@@ -290,10 +298,13 @@ Collisions:
 
 Armor note:
 - `ARMOR` is a passive module (no active use).
-- Slot semantics for passive modules (`ARMOR`):
+- In rulesetVersion `0.2.0` (current engine behavior), if equipped in any slot:
+  - mitigates **all incoming damage** (not just bullets)
+  - applies a movement speed penalty
+- Slot semantics for passive modules (`ARMOR`) (v1 stable):
   - `SLOT_READY(<SLOT>)` is `true` if equipped in that slot.
   - `SLOT_ACTIVE(<SLOT>)` is always `false`.
-  - `USE_SLOTn ...` and `STOP_SLOTn` against a passive module are deterministic no-ops (and should not spend ammo/energy or start cooldowns).
+  - `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops (and should not spend ammo/energy or start cooldowns).
 
 Future-proofing note:
 - In v1, these spellings are unambiguous because v1 forbids duplicate modules.
@@ -333,7 +344,17 @@ Current engine module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
 - **BULLET**: fires only at bot targets (`<BOT_TARGET>`); non-bot targets are `INVALID_TARGET_KIND` no-ops.
 - **SAW**: same as `SAW ON` (target ignored).
 - **SHIELD**: same as `SHIELD ON` (target ignored).
-- **ARMOR**: passive module; `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops (see Armor note above).
+- **ARMOR**: passive module; `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops.
+
+Armor note:
+- `ARMOR` is a passive module (no active use).
+- In rulesetVersion `0.2.0` (current engine behavior), if equipped in any slot:
+  - mitigates **all incoming damage** (not just bullets)
+  - applies a movement speed penalty
+- Slot semantics for passive modules (`ARMOR`) (v1 stable):
+  - `SLOT_READY(<SLOT>)` is `true` if equipped in that slot.
+  - `SLOT_ACTIVE(<SLOT>)` is always `false`.
+  - `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops (and should not spend ammo/energy or start cooldowns).
 
 Optional convenience:
 - `FIRE_TARGET <SLOT>`: use the given slot against the current `targetBotId` (no valid bot target → no-op; target powerup → no-op).

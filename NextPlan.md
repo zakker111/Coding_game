@@ -14,7 +14,7 @@ The docs in this repo are already organized into “phases” (`PhaseStatus.md`,
 
 If you change any of the below, treat it as a **contract change** and update `Versions.md` + any affected specs.
 
-- `rulesetVersion = 0.1.0` behavior (see `Ruleset.md`)
+- `rulesetVersion = 0.2.0` behavior (see `Ruleset.md`)
 - Replay schema contract (see `ReplayViewerPlan.md` + `packages/replay/src/index.d.ts`)
 - Deterministic tick loop order (see `Ruleset.md` §5, `ServerSimulationPlan.md`, `SpecAlignment.md`)
 
@@ -24,7 +24,7 @@ If you change any of the below, treat it as a **contract change** and update `Ve
 
 **Authoritative for v1 behavior**
 
-- `Ruleset.md` — engine-matching rules + constants for `0.1.0`
+- `Ruleset.md` — engine-matching rules + constants for `0.2.0`
 - `BotInstructions.md` — stable v1 DSL contract
 - `ReplayViewerPlan.md` — replay/viewer contract (schema + UX semantics)
 - `ArenaPlan.md` — topology + units + collision model
@@ -69,9 +69,10 @@ This unlocks safe iteration on all later mechanics.
 ### Option B: Phase 2 + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
 Outcome:
-- removes the current “scan source text for SAW/SHIELD” shortcut
-- makes module availability an explicit match input + replay header field
-- specifies loadout default-empty + normalization rules in the ruleset
+- makes module availability an explicit match input + replay header field (loadout is authoritative)
+- locks loadout default-empty + deterministic normalization rules in the ruleset
+- removes remaining legacy “scan source text for SAW/SHIELD” shortcuts in non-authoritative runners (notably `deploy/engine`)
+- wires Workshop UI state → engine loadout so matches don’t silently run with an all-empty loadout
 
 ### Option C: Phase 3 — bullet targeting + evasion primitive
 
@@ -137,8 +138,8 @@ Once fixtures are real:
 
 These aren’t engine changes, but they reduce reader confusion:
 
-- `examples/bot5.md` currently markets “BULLET + ARMOR” even though ARMOR isn’t implemented.
-  - Either add a prominent “ARMOR not implemented” note (like `bot3.md` does), or rename the title.
+- Ensure built-in examples clearly communicate their intended loadouts (and that Workshop wiring passes those loadouts into `runMatchToReplay`).
+  - `examples/bot5.md` is the canonical **BULLET + ARMOR** example; it should only be used in UIs that actually pass a loadout to the engine.
 
 ---
 
@@ -146,12 +147,17 @@ These aren’t engine changes, but they reduce reader confusion:
 
 ### Option B: explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
-Primary work items:
-- define match input loadout shape + default-empty + normalization rules (`Ruleset.md`)
-- update `runMatchToReplay({ bots })` input model to include `loadout`
-- remove source scanning for `SAW`/`SHIELD` as capability detection
-- implement ARMOR mitigation + speed penalty + tests
-- update Workshop UI to select/loadout + show it in inspector
+Primary work items (remaining)
+- Wire `loadout` through all local runners/frontends (notably `apps/web` worker) so matches don’t silently run with an all-empty loadout.
+- Workshop UX:
+  - add per-bot loadout selection/editing + persistence
+  - show resolved `loadout` + `loadoutIssues` warnings in the inspector
+- Deployment unification:
+  - remove/upgrade legacy `deploy/engine` copy that still uses source-scanning (`rulesetVersion = 0.1.0`) semantics
+  - ensure deploy Workshop matches are either loadout-aware or clearly marked legacy
+- Tests:
+  - keep explicit engine regression tests for loadouts + ARMOR
+  - add an integration smoke test that exercises the full Workshop → worker → engine pipeline with a **non-empty** loadout (e.g. ARMOR affects speed/mitigation)
 
 ### Option C: bullet targeting
 

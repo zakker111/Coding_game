@@ -1,4 +1,4 @@
-# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.2.0`)
+# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.2.0`, schemaVersion `0.1.0`)
 
 This document describes the deterministic match simulation implemented by:
 - `packages/engine/src/sim/runMatchToReplay.js`
@@ -6,7 +6,7 @@ This document describes the deterministic match simulation implemented by:
 - `packages/engine/src/sim/powerupSim.js`
 - `packages/engine/src/sim/constants.js`
 
-Replay files currently use:
+Replays emitted by `packages/engine` currently use:
 - `schemaVersion = 0.1.0` (event/state schema)
 - `rulesetVersion = 0.2.0` (simulation behavior)
 
@@ -18,15 +18,18 @@ Related docs:
 
 ## A) rulesetVersion notes
 
-- `0.2.0` — **implemented** (in `packages/engine`):
+- `0.2.0` — **implemented** (current behavior):
   - explicit per-bot 3-slot `loadout` (default-empty)
   - deterministic loadout normalization with issues surfaced in replay metadata
-  - `ARMOR` module: passive mitigation applies to all damage + 25% speed penalty
+  - `ARMOR` module: passive mitigation applies to all damage + speed penalty
   - mitigation ordering on bullet hits: `SHIELD` then `ARMOR`
-- `0.1.0` — **legacy** (still referenced in older docs/deploy copies):
+
+- `0.1.0` — **legacy** (older replays/docs):
   - modules inferred from bot source text (temporary shortcut)
   - no explicit per-bot loadouts
   - no `ARMOR`
+
+In this document, legacy `0.1.0` behavior is explicitly labeled.
 
 ---
 
@@ -85,11 +88,11 @@ Initial values (implemented):
 
 #### `rulesetVersion = 0.2.0` (implemented; explicit loadouts)
 
-Bots have an explicit **3-slot loadout** provided as match input:
+Bots have an explicit **per-bot 3-slot loadout** provided as match input:
 
 - `loadout = [slot1, slot2, slot3]`
 - each entry is either a module id string or `null`
-- if a bot omits `loadout`, the default is **all empty**: `[null, null, null]`
+- if a bot omits `loadout`, the default is: `[null, null, null]`
 
 Recognized module ids in `0.2.0`:
 - `BULLET | SAW | SHIELD | ARMOR`
@@ -99,21 +102,39 @@ Module semantics:
 - `SAW`: melee weapon; `SAW ON/OFF` toggles it and drains energy while active; `USE_SLOTn` behaves like turning SAW on when that slot contains SAW
 - `SHIELD`: defense; `SHIELD ON/OFF` toggles it and drains energy while active; `USE_SLOTn` behaves like turning SHIELD on when that slot contains SHIELD
 - `ARMOR` (passive):
-  - reduces **all incoming** damage by ~33% (`dmg := dmg - floor(dmg/3)`) (see §2.3)
-  - applies a movement speed penalty (see §1.2)
+  - mitigation applies to all damage sources (see §2.3)
+  - speed penalty applies if equipped in any slot (see §1.2)
 
-Loadout normalization (deterministic; implemented):
+Invalid loadouts (visible + deterministic):
+- A loadout is considered invalid if it requires normalization (unknown modules, duplicates, or multiple weapons).
+- The engine does not fail the match solely due to loadout shape/content; it deterministically normalizes the loadout per bot and records `loadoutIssues`.
+- Consumers should render `loadoutIssues` as a visible error/warning.
 
-- The engine does not fail the match solely due to loadout shape/content; it deterministically normalizes per bot and records issues.
-- Normalization algorithm (applied in order):
-  1. Take the first 3 entries of the provided array; if fewer than 3 entries, pad with `null`.
-  2. Replace unknown module ids with `null` and record `loadoutIssues` entries with `kind = UNKNOWN_MODULE`.
-  3. Remove duplicate modules (keep the earliest slot; later duplicates become `null`) and record `kind = DUPLICATE`.
-  4. Enforce weapon limit: keep only the earliest module among `{BULLET, SAW}`; any additional weapons become `null` and record `kind = MULTI_WEAPON`.
+Normalization algorithm (deterministic; applied per bot in order):
 
-The replay header includes the resolved loadout and any issues per bot:
-- `bots[i].loadout: [slot1, slot2, slot3]`
-- `bots[i].loadoutIssues?: Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
+Loadout shape/defaulting:
+- missing `loadout` defaults to `[null, null, null]`
+- otherwise: take the first 3 entries; if fewer than 3 entries, pad with `null`
+
+Normalization steps:
+1) Unknown modules → `null`
+   - any string not in `{BULLET, SAW, SHIELD, ARMOR}` becomes `null`
+2) Dedupe modules
+   - keep the earliest slot for each module id
+   - later duplicates become `null`
+3) Weapon limit
+   - at most 1 weapon among `{BULLET, SAW}`
+   - keep the earliest weapon slot; later weapon slots become `null`
+
+Issue recording (`loadoutIssues`):
+- For each slot that gets normalized to `null`, record an issue:
+  - `UNKNOWN_MODULE`: `{ kind: 'UNKNOWN_MODULE', slot, module: <originalString> }`
+  - `DUPLICATE`: `{ kind: 'DUPLICATE', slot, module: <moduleId> }`
+  - `MULTI_WEAPON`: `{ kind: 'MULTI_WEAPON', slot, module: <moduleId> }`
+
+Replay header requirements (`rulesetVersion = 0.2.0`):
+- `bots[i].loadout: [slot1, slot2, slot3]` (normalized)
+- `bots[i].loadoutIssues: Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
 
 #### `rulesetVersion = 0.1.0` (legacy; inferred modules)
 
@@ -122,13 +143,15 @@ The replay header includes the resolved loadout and any issues per bot:
   - if the source contains token `SAW`: saw-capable (SLOT1 behaves as SAW)
   - if the source contains token `SHIELD`: shield-capable (SLOT2 behaves as SHIELD)
   - otherwise: SLOT1 behaves as BULLET; SLOT2 and SLOT3 behave as empty
-- `ARMOR` does not exist.
+- `ARMOR` is not implemented in `0.1.0`.
 
 ### 1.2 Speed model (continuous movement)
 
-Ruleset parameters (implemented):
-- `baseSpeedUnitsPerTick = 12`
-- if `ARMOR` is equipped in any slot: `speedUnitsPerTick = floor(baseSpeedUnitsPerTick * 3/4) = 9`
+Ruleset parameters:
+- `baseSpeedUnitsPerTick = 12` (implemented)
+- `rulesetVersion = 0.2.0` (implemented):
+  - if `ARMOR` is equipped in any slot: `speedUnitsPerTick = floor(baseSpeedUnitsPerTick * 3/4)`
+  - example: `baseSpeedUnitsPerTick = 12` → `speedUnitsPerTick = 9`
 
 Bots have continuous world positions `pos = { x, y }` and a **16×16** AABB centered at `pos`.
 
@@ -196,14 +219,16 @@ On death, emit `BOT_DIED { victimBotId, creditedBotId? }` where `creditedBotId =
 
 - Shield mitigates **bullet** damage only.
 - If shield is active: `damage := damage - floor(damage / 2)`.
-- If `ARMOR` is also equipped, `ARMOR` is applied **after** this mitigation (see §2.3).
+- If `ARMOR` is also equipped, apply `ARMOR` **after** this mitigation (see §2.3).
 
-### 2.3 ARMOR mitigation (implemented; rulesetVersion >= 0.2.0)
+### 2.3 ARMOR mitigation (implemented; `rulesetVersion = 0.2.0`)
 
-If `ARMOR` is equipped in any slot:
-- Incoming damage is reduced: `damage := damage - floor(damage / 3)`.
-- This applies to **all** damage sources/kinds (`ENV` wall bumps, `BOT` bumps, `BULLET` hits, `SAW` hits).
-- For bullet hits, mitigation ordering is `SHIELD` then `ARMOR`.
+`ARMOR` is passive. If `ARMOR` is equipped in any slot:
+
+- Applies to **all** `DAMAGE` sources/kinds (`ENV` wall bumps, `BOT` bumps, `BULLET` hits, `SAW` hits).
+- Mitigation math (integer): `damage := damage - floor(damage / 3)`
+- Bullet ordering when both apply:
+  - apply `SHIELD` first, then apply `ARMOR` to the post-shield damage
 
 ---
 
@@ -288,7 +313,7 @@ Movement + collision:
 - On hit:
   - emit `BULLET_MOVE` with `toPos` as the hit point
   - emit `BULLET_HIT`
-  - apply damage (shield and/or armor may reduce)
+  - apply damage (SHIELD and/or ARMOR may reduce)
   - emit `DAMAGE` with `source = "BULLET"`, `kind = "DIRECT"`, `sourceRef = { type: "BULLET", id }`
   - emit `BULLET_DESPAWN reason=HIT`
 - On wall:
