@@ -66,11 +66,12 @@ Outcome:
 
 This unlocks safe iteration on all later mechanics.
 
-### Option B: Phase 2 + 2.1 — explicit loadouts + ARMOR
+### Option B: Phase 2 + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
 Outcome:
 - removes the current “scan source text for SAW/SHIELD” shortcut
 - makes module availability an explicit match input + replay header field
+- specifies loadout default-empty + normalization rules in the ruleset
 
 ### Option C: Phase 3 — bullet targeting + evasion primitive
 
@@ -143,10 +144,10 @@ These aren’t engine changes, but they reduce reader confusion:
 
 ## 6) What Option B/C/D look like (high-level only)
 
-### Option B: explicit loadouts + ARMOR
+### Option B: explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
 Primary work items:
-- define match input loadout shape + validation rules (`Ruleset.md`)
+- define match input loadout shape + default-empty + normalization rules (`Ruleset.md`)
 - update `runMatchToReplay({ bots })` input model to include `loadout`
 - remove source scanning for `SAW`/`SHIELD` as capability detection
 - implement ARMOR mitigation + speed penalty + tests

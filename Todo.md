@@ -2,7 +2,7 @@
 
 Near-term engineering tasks and the **current ruleset/engine contract**.
 
-Primary specs (authoritative for `rulesetVersion = 0.1.0`):
+Primary specs (authoritative for `rulesetVersion = 0.2.0`):
 - `Ruleset.md`
 - `ReplayViewerPlan.md` (schema contract)
 
@@ -31,14 +31,14 @@ Done (shipped)
 Not done yet (next milestones)
 - [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
 - [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
-- [ ] Phase 2: replace “infer modules from source text” with explicit per-bot 3-slot `loadout`.
-- [ ] Phase 2.1: implement ARMOR (mitigation + any speed penalty) + tests.
+- [ ] Wire explicit per-bot `loadout` through all frontends that call `runMatchToReplay` (e.g. `apps/web` worker) so local runs match the `rulesetVersion = 0.2.0` engine.
+- [ ] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
 - [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
 - [ ] Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
 
 ---
 
-## Current engine contract (rulesetVersion `0.1.0`)
+## Current engine contract (rulesetVersion `0.2.0`)
 
 ### Determinism
 - Seeded RNG per match.
@@ -56,12 +56,11 @@ See `Ruleset.md` §5.
   - bot `pc` resets to `1` next tick
   - engine emits `BOT_EXEC { result: "NOP", reason: "INVALID_INSTR" }`
 
-### Module availability (temporary simplification)
-- No explicit loadouts yet.
-- Capabilities inferred from source text:
-  - contains `SAW` → saw-capable (SLOT1 behaves as SAW)
-  - contains `SHIELD` → shield-capable (SLOT2 behaves as SHIELD)
-  - otherwise SLOT1 behaves as BULLET; SLOT2 absent
+### Module availability
+- Explicit per-bot 3-slot `loadout` is supported as match input.
+- If omitted, the engine defaults to all-empty: `[null, null, null]`.
+- Loadouts are deterministically normalized and issues may be surfaced in replay header as `loadoutIssues`.
+- `ARMOR` is implemented (passive mitigation + speed penalty).
 
 ### Implemented balance numbers
 (These are *implemented constants*; tuneable only via a rulesetVersion bump.)
@@ -130,7 +129,7 @@ Workshop QA contract (keep stable or update the QA script alongside UI changes):
 
 ---
 
-## Phase 0.3+ — Post-0.0.2 hardening (keep `rulesetVersion = 0.1.0`)
+## Phase 0.3+ — Post-0.0.2 hardening (keep `rulesetVersion = 0.2.0`)
 
 Goal: close out alignment work, reduce drift, and make the existing loop “boringly reliable” before adding new mechanics.
 
@@ -161,14 +160,14 @@ QA checklist
 
 ---
 
-## Phase 2 — Real loadouts + module model (new `rulesetVersion`)
+## Phase 2 — Real loadouts + module model (`rulesetVersion = 0.2.0`)
 
 Goal: remove the temporary “infer modules from source text” shortcut and make bot capabilities explicit.
 
 Concrete tasks
 - [ ] Engine input model:
   - add per-bot `loadout` (3 slots) to the match config input.
-  - define loadout normalization rules in `Ruleset.md` (validation vs. coercion).
+  - define loadout normalization rules (including default-empty) in `Ruleset.md` (validation vs. coercion).
 - [ ] Enforcement:
   - no duplicates
   - at most one weapon
@@ -195,7 +194,7 @@ QA checklist
 
 ---
 
-## Phase 2.1 — ARMOR (complete module set)
+## Phase 2.1 — ARMOR (complete module set, `rulesetVersion = 0.2.0`)
 
 Goal: implement ARMOR as a first-class module with deterministic mitigation and any movement penalties.
 

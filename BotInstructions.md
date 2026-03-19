@@ -43,15 +43,15 @@ Optional (non-semantic) UI metadata directives (still comments):
   - v1 suggestion: `#RRGGBB` (hex color)
   - future suggestion: `asset:<id>` or `hash:<contentHash>`
 
-Planned (vNext) **loadout header directives** (still comments):
+Loadout header directives (UI-derived; still comments):
 - `;@slot1 <MODULE|EMPTY>`
 - `;@slot2 <MODULE|EMPTY>`
 - `;@slot3 <MODULE|EMPTY>`
 
-Rules for these header directives (plan):
+Rules for these header directives (v1):
 - If present, they must be the **first 3 non-blank lines** of the bot source.
 - Workshop/UI should generate and maintain them; the editor treats them as **locked** (not user-editable).
-- The compiler ignores them as comments; when explicit loadouts are implemented, the match config may use these to populate `loadout`.
+- The compiler ignores them as comments. In rulesetVersion `0.2.0`, the actual loadout comes from the match config (or Workshop structured state), not from these lines.
 - Default (if omitted): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
 
 ---
@@ -89,9 +89,11 @@ Notes:
 
 Loadout notes (spec direction):
 - The language supports 3 slots (`SLOT1..SLOT3`) and slot-addressed actions.
-- **Planned default when explicit loadouts land:** `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY` unless provided by match config.
-- Workshop/UI plan: loadout selection will generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0).
-- **Current engine behavior (rulesetVersion `0.1.0`):** explicit per-bot loadouts are not implemented yet; modules are inferred from the bot source text (see `Ruleset.md` §1.1.1).
+- Default (if omitted by match config / Workshop state): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+- Workshop/UI may generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0); these are UI-derived comments and are not authoritative.
+- **Engine behavior:**
+  - rulesetVersion `0.2.0`: explicit per-bot loadout comes from the match config (or Workshop structured state).
+  - rulesetVersion `0.1.0`: per-bot loadouts were not implemented; modules were inferred from the bot source text (see `Ruleset.md` §1.1.1).
 
 ---
 
@@ -284,10 +286,14 @@ Collisions:
 |---|---:|---|
 | `FIRE_BULLET <BOT_TARGET>` | ammo | If `AMMO==0`, no-op. Bullets are continuous projectiles and may hit any bot they collide with (16×16 bot hitbox), not only the chosen target. |
 | `SAW ON` / `SAW OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. |
-| `SHIELD ON` / `SHIELD OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. Current engine (`rulesetVersion = 0.1.0`): mitigates bullet damage by **50%**. |
+| `SHIELD ON` / `SHIELD OFF` | energy | When ON, drains energy per tick; auto-OFF at `ENERGY==0`. Current engine (`rulesetVersion = 0.2.0`): mitigates bullet damage by **50%**. |
 
 Armor note:
-- `ARMOR` is not implemented in the current engine ruleset and has no gameplay effect.
+- `ARMOR` is a passive module (no active use).
+- Slot semantics for passive modules (`ARMOR`):
+  - `SLOT_READY(<SLOT>)` is `true` if equipped in that slot.
+  - `SLOT_ACTIVE(<SLOT>)` is always `false`.
+  - `USE_SLOTn ...` and `STOP_SLOTn` against a passive module are deterministic no-ops (and should not spend ammo/energy or start cooldowns).
 
 Future-proofing note:
 - In v1, these spellings are unambiguous because v1 forbids duplicate modules.
@@ -315,7 +321,7 @@ Wrong target kind:
 `STOP_SLOTn` stable contract (v1+):
 - “Request to stop/cancel whatever the module in this slot is currently doing.”
 - Toggles (SAW/SHIELD): turns OFF.
-- Passive or instant modules: no-op.
+- Passive or instant modules: deterministic no-op (e.g., `ARMOR`).
 - Future modules: module defines what “stop” means; call must remain deterministic and should emit a replay/debug reason if it had no effect.
 
 Compatibility aliases (v1):
@@ -327,7 +333,7 @@ Current engine module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
 - **BULLET**: fires only at bot targets (`<BOT_TARGET>`); non-bot targets are `INVALID_TARGET_KIND` no-ops.
 - **SAW**: same as `SAW ON` (target ignored).
 - **SHIELD**: same as `SHIELD ON` (target ignored).
-- **ARMOR**: not implemented (no-op).
+- **ARMOR**: passive module; `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops (see Armor note above).
 
 Optional convenience:
 - `FIRE_TARGET <SLOT>`: use the given slot against the current `targetBotId` (no valid bot target → no-op; target powerup → no-op).
@@ -422,8 +428,8 @@ Timers:
 Slot/module state:
 - `HAS_MODULE(<SLOT>)` → bool
 - `COOLDOWN_REMAINING(<SLOT>)` → int
-- `SLOT_READY(<SLOT>)` → bool (has module, cooldown==0, and enough ammo/energy)
-- `SLOT_ACTIVE(<SLOT>)` → bool (toggle modules)
+- `SLOT_READY(<SLOT>)` → bool (has module and is usable now: cooldown==0 and enough ammo/energy; passive modules like `ARMOR` count as ready when equipped)
+- `SLOT_ACTIVE(<SLOT>)` → bool (toggle modules only; passive modules like `ARMOR` are always `false`)
 
 ---
 

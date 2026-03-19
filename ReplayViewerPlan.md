@@ -123,10 +123,17 @@ A replay should support 2 independent requirements:
         - content-addressed storage (`contentHash`)
         - or a direct URL (`url`) when appropriate
     - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
-  - `loadout` (optional; 3 slot positions; each entry is a module id or `null`)
-    - if omitted, viewers may assume a v1 server default (e.g. `SLOT1=BULLET`, others empty)
-    - v1 validation (when present): no duplicate modules among equipped slots
-    - v1 validation (when present): at most one weapon module equipped (`BULLET` or `SAW`)
+  - `loadout` (present for `rulesetVersion >= 0.2.0`; 3 slot positions; each entry is a module id or `null`)
+    - encoding: `[slot1, slot2, slot3]` where each entry is `"<MODULE_ID>" | null`
+    - the replay should include the **resolved/normalized** loadout actually used by the engine
+    - legacy behavior: if omitted, the viewer should derive a display loadout from `rulesetVersion` + `sourceText`:
+      - for `rulesetVersion = 0.1.0`: `slot1 = (sourceText contains token "SAW" ? "SAW" : "BULLET")`, `slot2 = (sourceText contains token "SHIELD" ? "SHIELD" : null)`, `slot3 = null`
+      - otherwise: default to `[null, null, null]`
+  - `loadoutIssues` (optional; informational only)
+    - used by `rulesetVersion >= 0.2.0` for UI diagnostics around normalization
+    - when present: `Array<{ kind, slot, module? }>`
+    - if omitted, the viewer should default to an empty list: `[]`
+    - viewer UX: show a non-blocking warning indicator on the bot (e.g. in the bot list) and list the issues in the bot inspector; do not refuse to load the replay
   - `sourceText` (or `sourceHash` + URL)
   - future (server / library):
     - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`

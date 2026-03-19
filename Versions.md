@@ -19,7 +19,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- (none)
+- Docs/spec: restore detailed `Ruleset.md` and align `ReplayViewerPlan.md`/`SpecAlignment.md` with current `rulesetVersion = 0.2.0` behavior (explicit loadouts + ARMOR, default-empty + normalization).
 
 ---
 
@@ -86,7 +86,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Workspace configuration (`pnpm-workspace.yaml`) includes `apps/*` and `packages/*`, excluding legacy `site/`.
 
 ### Notes
-- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.1.0`.
+- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.2.0` (replay `schemaVersion` remains `0.1.0`).
 - `packages/replay` remains a legacy/sample generator and should not be treated as authoritative.
 
 ---
