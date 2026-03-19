@@ -41,3 +41,10 @@ jobs:
           pnpm -C apps/web test
 
           pnpm qa:phase1
+
+      # Playwright is a devDependency, but browsers are not always preinstalled on CI runners.
+      - name: Install Playwright browsers (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Workshop smoke (local serve)
+        run: pnpm qa:workshop -- --serve
