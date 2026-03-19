@@ -56,7 +56,7 @@ export function initBotVm(program) {
  *
  * Semantics:
  * 1) Start-of-step: decrement timers >0 by 1.
- * 2) If waitRemaining>0: decrement by 1 and return early (no execution). When it reaches 0, advance pc once.
+ * 2) If waitRemaining>0: decrement by 1 and return early (no execution, pc unchanged).
  * 3) Execute current instruction at pc (1-indexed).
  * 4) Advance pc by default; JUMP/IF_JUMP override; IF_DO advances once.
  * 5) INVALID or unknown instructions are treated as NOP and reset pc to 1.

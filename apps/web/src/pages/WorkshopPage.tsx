@@ -12,6 +12,7 @@ import {
   type LocalBotLibraryV1,
 } from '../localBots'
 import { selectDistinctFromPool } from '../opponents'
+import { parseLoadoutFromSourceText } from '../loadout'
 import { fnv1a32 } from '../worker/seed'
 
 import { initialPlaybackState, playbackReducer } from '../replay/playbackReducer'
@@ -673,7 +674,10 @@ export function WorkshopPage() {
     setRunError(null)
 
     try {
-      const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sourcesBySlot[slotId] }))
+      const bots = SLOT_IDS.map((slotId) => {
+        const sourceText = sourcesBySlot[slotId]
+        return { slotId, sourceText, loadout: parseLoadoutFromSourceText(sourceText) }
+      })
       const nextReplay: Replay = await runLocalInWorker({ seed, tickCap, bots })
 
       setAppliedRun({

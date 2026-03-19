@@ -262,3 +262,9 @@ export declare function generateSampleReplay(
   seed: number | string,
   opts?: GenerateSampleReplayOptions
 ): Replay
+
+export declare function createRng(seed: number | string): () => number
+
+export declare function rngInt(rng: () => number, minInclusive: number, maxInclusive: number): number
+
+export declare function rngChoice<T>(rng: () => number, items: T[]): T

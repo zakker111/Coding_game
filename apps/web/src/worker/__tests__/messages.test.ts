@@ -12,10 +12,10 @@ describe('worker message guards', () => {
         seed: 123,
         tickCap: 50,
         bots: [
-          { slotId: 'BOT1', sourceText: 'WAIT 1' },
-          { slotId: 'BOT2', sourceText: 'WAIT 1' },
-          { slotId: 'BOT3', sourceText: 'WAIT 1' },
-          { slotId: 'BOT4', sourceText: 'WAIT 1' },
+          { slotId: 'BOT1', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
+          { slotId: 'BOT2', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
+          { slotId: 'BOT3', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
+          { slotId: 'BOT4', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
         ],
       }),
     ).toBe(true)

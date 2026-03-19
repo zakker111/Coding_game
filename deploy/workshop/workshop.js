@@ -119,6 +119,42 @@ function computeRunSignature(seed, tickCap, sources) {
   return h >>> 0
 }
 
+function parseLoadoutFromSource(sourceText) {
+  const lines = String(sourceText || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+
+  /** @type {[any, any, any]} */
+  const loadout = [null, null, null]
+
+  let sawDirective = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    if (!trimmed.startsWith(';')) break
+
+    const m = trimmed.match(/^;\s*@slot([123])\s+(\S+)/i)
+    if (!m) continue
+
+    sawDirective = true
+
+    const slot = Number(m[1])
+    const raw = String(m[2] || '').trim().toUpperCase()
+
+    const moduleId = raw === 'EMPTY' || raw === 'NONE' ? null : raw || null
+
+    if (slot >= 1 && slot <= 3) loadout[slot - 1] = moduleId
+  }
+
+  // Back-compat with the legacy deploy workshop: if no explicit loadout is
+  // declared in the script, default to SLOT1=BULLET.
+  if (!sawDirective) return ['BULLET', null, null]
+
+  return loadout
+}
+
 function createEl(tag, props = {}, children = []) {
   const el = document.createElement(tag)
   for (const [k, v] of Object.entries(props)) {
@@ -1270,24 +1306,28 @@ async function run() {
       displayName: bot1?.name ?? 'BOT1',
       appearance: SLOT_APPEARANCE.BOT1,
       sourceText: sources.BOT1,
+      loadout: parseLoadoutFromSource(sources.BOT1),
     },
     {
       slotId: 'BOT2',
       displayName: opp2?.displayName ?? 'BOT2',
       appearance: SLOT_APPEARANCE.BOT2,
       sourceText: sources.BOT2,
+      loadout: parseLoadoutFromSource(sources.BOT2),
     },
     {
       slotId: 'BOT3',
       displayName: opp3?.displayName ?? 'BOT3',
       appearance: SLOT_APPEARANCE.BOT3,
       sourceText: sources.BOT3,
+      loadout: parseLoadoutFromSource(sources.BOT3),
     },
     {
       slotId: 'BOT4',
       displayName: opp4?.displayName ?? 'BOT4',
       appearance: SLOT_APPEARANCE.BOT4,
       sourceText: sources.BOT4,
+      loadout: parseLoadoutFromSource(sources.BOT4),
     },
   ]
 
@@ -1295,10 +1335,23 @@ async function run() {
     const replayFromWorker = await runMatchInEngineWorker({
       seed: mixed,
       tickCap,
-      bots: headerBots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText })),
+      bots: headerBots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText, loadout: b.loadout })),
     })
 
-    replay = { ...replayFromWorker, bots: headerBots }
+    // Preserve engine-normalized loadout + loadoutIssues (if any), but keep the
+    // Workshop UI's displayName/appearance.
+    const mergedHeaderBots = (replayFromWorker.bots || []).map((engineBot) => {
+      const uiBot = headerBots.find((b) => b.slotId === engineBot.slotId)
+      if (!uiBot) return engineBot
+      return {
+        ...engineBot,
+        displayName: uiBot.displayName,
+        appearance: uiBot.appearance,
+        sourceText: uiBot.sourceText,
+      }
+    })
+
+    replay = { ...replayFromWorker, bots: mergedHeaderBots }
     lastRunSignature = computeRunSignature(seed, tickCap, sources)
     replayStale = false
 

@@ -21,7 +21,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 - Deploy Workshop:
   - Example bots updated to include locked loadout header directives (`;@slot1/2/3 ...`) at the top of each script fence.
+  - Workshop now **parses loadout directives** from bot source and passes per-bot `loadout` into the engine worker (so local runs reflect the `rulesetVersion = 0.2.0` engine).
+  - `deploy/engine` is synced to `rulesetVersion = 0.2.0` (explicit loadouts + ARMOR speed/damage effects).
   - Workshop build tag is **v0.3.1** (see `deploy/workshop/workshop.js`).
+- `apps/web` Workshop local runner now passes explicit per-bot `loadout` into `@coding-game/engine` (derived from `;@slot` directives, with a back-compat default of `SLOT1=BULLET` when missing).
 - Docs/spec: restore detailed `Ruleset.md` and align `ReplayViewerPlan.md`/`SpecAlignment.md` with current `rulesetVersion = 0.2.0` behavior (explicit loadouts + ARMOR, default-empty + normalization).
 
 ---

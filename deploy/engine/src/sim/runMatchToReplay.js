@@ -51,9 +51,19 @@ const SPAWN_POS_BY_ID = {
   BOT4: { x: 176, y: 176 },
 }
 
-// v1 fixed default loadout: SLOT1=BULLET.
+const RULESET_VERSION = '0.2.0'
+
+const DEFAULT_LOADOUT = /** @type {[any, any, any]} */ ([null, null, null])
+
 // (Ruleset.md v1 recommended baseSpeed 16 - 1 equipped slot penalty 4 => 12.)
-const BOT_SPEED_UNITS_PER_TICK = 12
+const BASE_SPEED_UNITS_PER_TICK = 12
+
+// ARMOR speed penalty: >=20% (we use 25%): floor(base * 3/4)
+const ARMOR_SPEED_NUM = 3
+const ARMOR_SPEED_DEN = 4
+
+// ARMOR damage reduction: amount - floor(amount/3)
+const ARMOR_DAMAGE_DIV = 3
 
 // Ruleset.md §0.1 recommended defaults.
 const STALEMATE_GRACE_TICKS = 120
@@ -67,18 +77,82 @@ const SAW_ATTACK_RANGE2 = SAW_ATTACK_RANGE * SAW_ATTACK_RANGE
 
 const SHIELD_ENERGY_DRAIN = 1
 
-function botSourceHasSaw(sourceText) {
-  if (!sourceText) return false
-  return /\bSAW\b/i.test(sourceText)
+function applyArmorMitigation(amount) {
+  return amount - Math.floor(amount / ARMOR_DAMAGE_DIV)
 }
 
-function botSourceHasShield(sourceText) {
-  if (!sourceText) return false
-  return /\bSHIELD\b/i.test(sourceText)
+function computeBotSpeedUnitsPerTick(bot) {
+  if (!bot.armorEquipped) return BASE_SPEED_UNITS_PER_TICK
+  return Math.floor((BASE_SPEED_UNITS_PER_TICK * ARMOR_SPEED_NUM) / ARMOR_SPEED_DEN)
+}
+
+function findSlotIndex(loadout, moduleId) {
+  for (let i = 0; i < loadout.length; i++) {
+    if (loadout[i] === moduleId) return i
+  }
+  return -1
+}
+
+function normalizeLoadout(raw) {
+  /** @type {any[]} */
+  const inputArr = Array.isArray(raw) ? raw.slice(0, 3) : []
+  while (inputArr.length < 3) inputArr.push(null)
+
+  /** @type {[any, any, any]} */
+  const loadout = [null, null, null]
+
+  /** @type {Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>} */
+  const issues = []
+
+  // 1) Unknown modules => null.
+  for (let i = 0; i < 3; i++) {
+    const v = inputArr[i]
+    if (v == null) {
+      loadout[i] = null
+      continue
+    }
+
+    if (v === 'BULLET' || v === 'SAW' || v === 'SHIELD' || v === 'ARMOR') {
+      loadout[i] = v
+    } else {
+      issues.push({ kind: 'UNKNOWN_MODULE', slot: (i + 1), module: String(v) })
+      loadout[i] = null
+    }
+  }
+
+  // 2) De-dupe (keep earliest).
+  const seen = new Set()
+  for (let i = 0; i < 3; i++) {
+    const v = loadout[i]
+    if (v == null) continue
+    if (!seen.has(v)) {
+      seen.add(v)
+      continue
+    }
+    issues.push({ kind: 'DUPLICATE', slot: (i + 1), module: v })
+    loadout[i] = null
+  }
+
+  // 3) At most one weapon (keep earliest).
+  const weaponSlots = []
+  for (let i = 0; i < 3; i++) {
+    const v = loadout[i]
+    if (v === 'BULLET' || v === 'SAW') weaponSlots.push(i)
+  }
+
+  if (weaponSlots.length > 1) {
+    for (let j = 1; j < weaponSlots.length; j++) {
+      const i = weaponSlots[j]
+      issues.push({ kind: 'MULTI_WEAPON', slot: (i + 1), module: String(loadout[i]) })
+      loadout[i] = null
+    }
+  }
+
+  return { loadout, issues }
 }
 
 /**
- * @param {{ seed: number|string, tickCap: number, bots: Array<{slotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4', sourceText: string}> }} params
+ * @param {{ seed: number|string, tickCap: number, bots: Array<{slotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4', sourceText: string, loadout?: any}> }} params
  */
 export function runMatchToReplay(params) {
   const tickCapLimit = params.tickCap
@@ -87,16 +161,23 @@ export function runMatchToReplay(params) {
 
   const headerBots = normalizeHeaderBots(params.bots)
 
-  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slot1Cooldown:number, pendingMove:any,
+  /** @type {Array<{botId:'BOT1'|'BOT2'|'BOT3'|'BOT4', pos:{x:number,y:number}, hp:number, ammo:number, energy:number, alive:boolean, lastDamageByBotId: 'BOT1'|'BOT2'|'BOT3'|'BOT4' | null, vm: any, slotCooldowns:[number,number,number], pendingMove:any,
   bumpedBotLastTick:boolean, bumpedBotThisTick:boolean, bumpedBotIdLastTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotIdThisTick:('BOT1'|'BOT2'|'BOT3'|'BOT4'|null), bumpedBotDirLastTick:any, bumpedBotDirThisTick:any,
   bumpedWallLastTick:boolean, bumpedWallThisTick:boolean, bumpedWallDirLastTick:any, bumpedWallDirThisTick:any,
-  sawCapable:boolean, sawActive:boolean, shieldCapable:boolean, shieldActive:boolean}>} */
+  loadout:[any,any,any], bulletSlotIndex:number, sawSlotIndex:number, shieldSlotIndex:number, armorEquipped:boolean,
+  sawActive:boolean, shieldActive:boolean}>} */
   const bots = SLOT_IDS.map((botId) => {
-    const sourceText = headerBots.find((b) => b.slotId === botId)?.sourceText ?? ''
+    const header = headerBots.find((b) => b.slotId === botId)
+
+    const sourceText = header?.sourceText ?? ''
     const compiled = compileBotSource(sourceText)
 
-    const sawCapable = botSourceHasSaw(sourceText)
-    const shieldCapable = botSourceHasShield(sourceText)
+    const loadout = header?.loadout ?? DEFAULT_LOADOUT
+
+    const bulletSlotIndex = findSlotIndex(loadout, 'BULLET')
+    const sawSlotIndex = findSlotIndex(loadout, 'SAW')
+    const shieldSlotIndex = findSlotIndex(loadout, 'SHIELD')
+    const armorEquipped = findSlotIndex(loadout, 'ARMOR') !== -1
 
     return {
       botId,
@@ -107,7 +188,7 @@ export function runMatchToReplay(params) {
       alive: true,
       lastDamageByBotId: null,
       vm: initBotVm(compiled.program),
-      slot1Cooldown: 0,
+      slotCooldowns: [0, 0, 0],
       pendingMove: null,
 
       // Bump signals are computed during movement resolution and become visible
@@ -124,9 +205,13 @@ export function runMatchToReplay(params) {
       bumpedWallDirLastTick: null,
       bumpedWallDirThisTick: null,
 
-      sawCapable,
+      loadout,
+      bulletSlotIndex,
+      sawSlotIndex,
+      shieldSlotIndex,
+      armorEquipped,
+
       sawActive: false,
-      shieldCapable,
       shieldActive: false,
     }
   })
@@ -202,14 +287,14 @@ export function runMatchToReplay(params) {
         }
 
         if (eff.kind === 'MODULE_TOGGLE') {
+          const wantsOn = Boolean(eff.on)
+
           if (eff.module === 'SAW') {
-            if (!bot.sawCapable) {
+            if (bot.sawSlotIndex === -1) {
               botExecResult = 'NOP'
               botExecReason = 'NO_MODULE'
               continue
             }
-
-            const wantsOn = Boolean(eff.on)
 
             if (wantsOn && bot.energy <= 0) {
               botExecResult = 'NOP'
@@ -223,13 +308,11 @@ export function runMatchToReplay(params) {
           }
 
           if (eff.module === 'SHIELD') {
-            if (!bot.shieldCapable) {
+            if (bot.shieldSlotIndex === -1) {
               botExecResult = 'NOP'
               botExecReason = 'NO_MODULE'
               continue
             }
-
-            const wantsOn = Boolean(eff.on)
 
             if (wantsOn && bot.energy <= 0) {
               botExecResult = 'NOP'
@@ -248,13 +331,22 @@ export function runMatchToReplay(params) {
         }
 
         if (eff.kind === 'STOP_SLOT') {
-          if (eff.slot === 1 && bot.sawCapable) {
+          const slotIndex = eff.slot === 1 ? 0 : eff.slot === 2 ? 1 : eff.slot === 3 ? 2 : -1
+          const mod = slotIndex >= 0 ? bot.loadout[slotIndex] : null
+
+          if (mod === 'SAW' && slotIndex === bot.sawSlotIndex) {
             bot.sawActive = false
             continue
           }
 
-          if (eff.slot === 2 && bot.shieldCapable) {
+          if (mod === 'SHIELD' && slotIndex === bot.shieldSlotIndex) {
             bot.shieldActive = false
+            continue
+          }
+
+          if (mod === 'ARMOR' || mod === 'BULLET') {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_EFFECT'
             continue
           }
 
@@ -264,43 +356,16 @@ export function runMatchToReplay(params) {
         }
 
         if (eff.kind === 'USE_SLOT') {
-          if (eff.slot === 1) {
-            // v1: if SLOT1 is SAW, USE_SLOT1 behaves like SAW ON (target ignored).
-            if (bot.sawCapable) {
-              if (bot.energy <= 0) {
-                botExecResult = 'NOP'
-                botExecReason = 'NO_ENERGY'
-                bot.sawActive = false
-                continue
-              }
+          const slotIndex = eff.slot === 1 ? 0 : eff.slot === 2 ? 1 : eff.slot === 3 ? 2 : -1
+          const mod = slotIndex >= 0 ? bot.loadout[slotIndex] : null
 
-              bot.sawActive = true
-              continue
-            }
-
-            const r = attemptUseSlot1(bot, eff.target, bots, bullets, ++bulletCounter, tickEvents)
-
-            if (!r.ok) {
-              botExecResult = 'NOP'
-              botExecReason = r.reason
-              bulletCounter--
-            } else {
-              bullets = r.bullets
-              bot.slot1Cooldown = BULLET_COOLDOWN_TICKS
-              bulletCounter = r.bulletCounter
-            }
-
+          if (mod == null) {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_MODULE'
             continue
           }
 
-          if (eff.slot === 2) {
-            // v1: if SLOT2 is SHIELD, USE_SLOT2 behaves like SHIELD ON (target ignored).
-            if (!bot.shieldCapable) {
-              botExecResult = 'NOP'
-              botExecReason = 'NO_MODULE'
-              continue
-            }
-
+          if (mod === 'SHIELD') {
             if (bot.energy <= 0) {
               botExecResult = 'NOP'
               botExecReason = 'NO_ENERGY'
@@ -312,8 +377,42 @@ export function runMatchToReplay(params) {
             continue
           }
 
-          botExecResult = 'NOP'
-          botExecReason = 'NO_MODULE'
+          if (mod === 'SAW') {
+            if (bot.energy <= 0) {
+              botExecResult = 'NOP'
+              botExecReason = 'NO_ENERGY'
+              bot.sawActive = false
+              continue
+            }
+
+            bot.sawActive = true
+            continue
+          }
+
+          if (mod === 'ARMOR') {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_EFFECT'
+            continue
+          }
+
+          if (mod !== 'BULLET') {
+            botExecResult = 'NOP'
+            botExecReason = 'NO_MODULE'
+            continue
+          }
+
+          const r = attemptUseBullet(bot, slotIndex, eff.target, bots, bullets, ++bulletCounter, tickEvents)
+
+          if (!r.ok) {
+            botExecResult = 'NOP'
+            botExecReason = r.reason
+            bulletCounter--
+          } else {
+            bullets = r.bullets
+            bot.slotCooldowns[slotIndex] = BULLET_COOLDOWN_TICKS
+            bulletCounter = r.bulletCounter
+          }
+
           continue
         }
       }
@@ -352,7 +451,9 @@ export function runMatchToReplay(params) {
     // 8) End-of-tick maintenance
     for (const bot of bots) {
       bot.pendingMove = null
-      if (bot.slot1Cooldown > 0) bot.slot1Cooldown--
+      for (let i = 0; i < bot.slotCooldowns.length; i++) {
+        if (bot.slotCooldowns[i] > 0) bot.slotCooldowns[i]--
+      }
 
       bot.bumpedBotLastTick = bot.bumpedBotThisTick
       bot.bumpedBotIdLastTick = bot.bumpedBotIdThisTick
@@ -426,7 +527,7 @@ export function runMatchToReplay(params) {
 
   return {
     schemaVersion: '0.1.0',
-    rulesetVersion: '0.1.0',
+    rulesetVersion: RULESET_VERSION,
     ticksPerSecond: DEFAULT_TICKS_PER_SECOND,
     matchSeed: params.seed,
     tickCap,
@@ -468,6 +569,7 @@ function defaultHeaderBot(slotId) {
     displayName: slotId,
     appearance: DEFAULT_APPEARANCE_BY_SLOT[slotId] ?? { kind: 'COLOR', color: '#e2e8f0' },
     sourceText: '',
+    loadout: DEFAULT_LOADOUT,
   }
 }
 
@@ -478,12 +580,17 @@ function normalizeHeaderBots(botsInput) {
 
   return SLOT_IDS.map((slotId) => {
     const b = byId.get(slotId)
+    const sourceText = typeof b?.sourceText === 'string' ? b.sourceText : ''
+
+    const { loadout, issues } = normalizeLoadout(b?.loadout)
 
     return {
       slotId,
       displayName: slotId,
       appearance: DEFAULT_APPEARANCE_BY_SLOT[slotId] ?? { kind: 'COLOR', color: '#e2e8f0' },
-      sourceText: typeof b?.sourceText === 'string' ? b.sourceText : '',
+      sourceText,
+      loadout,
+      ...(issues.length ? { loadoutIssues: issues } : {}),
     }
   })
 }
@@ -597,22 +704,35 @@ function buildObservation(bot, bots, bullets, powerupState) {
 
     // Slots
     hasModule: (slot) => {
-      if (slot === 1) return true
-      if (slot === 2) return bot.shieldCapable
-      return false
+      const idx = slot === 1 ? 0 : slot === 2 ? 1 : slot === 3 ? 2 : -1
+      if (idx < 0) return false
+      return bot.loadout[idx] != null
     },
-    cooldownRemaining: (slot) => (slot === 1 ? bot.slot1Cooldown : 0),
+    cooldownRemaining: (slot) => {
+      const idx = slot === 1 ? 0 : slot === 2 ? 1 : slot === 3 ? 2 : -1
+      if (idx < 0) return 0
+      return bot.slotCooldowns[idx] ?? 0
+    },
     slotReady: (slot) => {
-      if (slot === 1 && bot.sawCapable) return bot.energy > 0
-      if (slot === 2 && bot.shieldCapable) return bot.energy > 0
+      const idx = slot === 1 ? 0 : slot === 2 ? 1 : slot === 3 ? 2 : -1
+      if (idx < 0) return false
 
-      if (slot !== 1) return false
-      if (bot.slot1Cooldown > 0) return false
+      const mod = bot.loadout[idx]
+
+      if (mod === 'ARMOR') return true
+      if (mod === 'SHIELD') return bot.energy > 0
+      if (mod === 'SAW') return bot.energy > 0
+
+      if (mod !== 'BULLET') return false
+      if (bot.slotCooldowns[idx] > 0) return false
       return bot.ammo >= BULLET_AMMO_COST
     },
     slotActive: (slot) => {
-      if (slot === 1 && bot.sawCapable) return bot.sawActive
-      if (slot === 2 && bot.shieldCapable) return bot.shieldActive
+      const idx = slot === 1 ? 0 : slot === 2 ? 1 : slot === 3 ? 2 : -1
+      if (idx < 0) return false
+      const mod = bot.loadout[idx]
+      if (mod === 'SHIELD' && idx === bot.shieldSlotIndex) return bot.shieldActive
+      if (mod === 'SAW' && idx === bot.sawSlotIndex) return bot.sawActive
       return false
     },
 
@@ -715,7 +835,9 @@ function normalizeTargetRegister(bot, bots, prevTargetSelector = null) {
   if (selector === 'NEXT_IF_DEAD') {
     const current = prevTargetSelector
     const currentBot =
-      current === 'BOT1' || current === 'BOT2' || current === 'BOT3' || current === 'BOT4' ? botsById(bots, current) : null
+      current === 'BOT1' || current === 'BOT2' || current === 'BOT3' || current === 'BOT4'
+        ? botsById(bots, current)
+        : null
 
     if (currentBot && currentBot.alive) {
       bot.vm.target.botSelector = current
@@ -752,7 +874,8 @@ function resolveMovement(bots, powerupState, tickEvents) {
       request = resolveMoveEffect(bot, move, bots, powerupState)
     } else if (bot.vm?.moveGoal) {
       requestFromGoal = true
-      request = resolveMoveTarget(bot, bot.vm.moveGoal, bots, powerupState, true)
+      const speed = computeBotSpeedUnitsPerTick(bot)
+      request = resolveMoveTarget(bot, bot.vm.moveGoal, bots, powerupState, true, speed)
     }
 
     if (!request) continue
@@ -867,19 +990,22 @@ function applyWallBumpDamage(bot, dir, tickEvents) {
   bot.bumpedWallThisTick = true
   bot.bumpedWallDirThisTick = dir
 
+  const raw = WALL_BUMP_DAMAGE
+  const damage = bot.armorEquipped ? applyArmorMitigation(raw) : raw
+
   tickEvents.push({
     type: 'BUMP_WALL',
     botId: bot.botId,
     dir,
-    damage: WALL_BUMP_DAMAGE,
+    damage,
   })
 
-  bot.hp = Math.max(0, bot.hp - WALL_BUMP_DAMAGE)
+  bot.hp = Math.max(0, bot.hp - damage)
 
   tickEvents.push({
     type: 'DAMAGE',
     victimBotId: bot.botId,
-    amount: WALL_BUMP_DAMAGE,
+    amount: damage,
     source: 'ENV',
     kind: 'BUMP_WALL',
   })
@@ -897,15 +1023,17 @@ function applyWallBumpDamage(bot, dir, tickEvents) {
 function applyBotBumpDamage(botA, botB, tickEvents, pairKey) {
   if (!BOT_BUMP_DAMAGE || BOT_BUMP_DAMAGE <= 0) return
 
-  const dmg = BOT_BUMP_DAMAGE
+  const raw = BOT_BUMP_DAMAGE
+
+  const dmgA = botA.armorEquipped ? applyArmorMitigation(raw) : raw
 
   botA.lastDamageByBotId = botB.botId
-  botA.hp = Math.max(0, botA.hp - dmg)
+  botA.hp = Math.max(0, botA.hp - dmgA)
 
   tickEvents.push({
     type: 'DAMAGE',
     victimBotId: botA.botId,
-    amount: dmg,
+    amount: dmgA,
     source: 'BOT',
     sourceBotId: botB.botId,
     kind: 'BUMP_BOT',
@@ -921,13 +1049,15 @@ function applyBotBumpDamage(botA, botB, tickEvents, pairKey) {
     })
   }
 
+  const dmgB = botB.armorEquipped ? applyArmorMitigation(raw) : raw
+
   botB.lastDamageByBotId = botA.botId
-  botB.hp = Math.max(0, botB.hp - dmg)
+  botB.hp = Math.max(0, botB.hp - dmgB)
 
   tickEvents.push({
     type: 'DAMAGE',
     victimBotId: botB.botId,
-    amount: dmg,
+    amount: dmgB,
     source: 'BOT',
     sourceBotId: botA.botId,
     kind: 'BUMP_BOT',
@@ -945,20 +1075,22 @@ function applyBotBumpDamage(botA, botB, tickEvents, pairKey) {
 }
 
 function resolveMoveEffect(bot, move, bots, powerupState) {
+  const speed = computeBotSpeedUnitsPerTick(bot)
+
   if (move.kind === 'MOVE_DIR') {
-    const { dx, dy } = deltaForMoveDir(move.dir, BOT_SPEED_UNITS_PER_TICK)
+    const { dx, dy } = deltaForMoveDir(move.dir, speed)
     return { dx, dy, dir: move.dir }
   }
 
   if (move.kind === 'MOVE') {
     const target = normalizeMoveTargetAtSetTime(move.target, bot.pos)
-    return resolveMoveTarget(bot, target, bots, powerupState, false)
+    return resolveMoveTarget(bot, target, bots, powerupState, false, speed)
   }
 
   return null
 }
 
-function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) {
+function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid, speed) {
   if (!target || typeof target !== 'object') return null
 
   if (target.kind === 'TARGET') {
@@ -971,7 +1103,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
     if (botTarget && botTarget.alive) {
       const dx = botTarget.pos.x - bot.pos.x
       const dy = botTarget.pos.y - bot.pos.y
-      const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+      const scaled = scaleDeltaToMaxLen(dx, dy, speed)
       return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
     }
 
@@ -982,7 +1114,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
         const pos = locToWorld(loc)
         const dx = pos.x - bot.pos.x
         const dy = pos.y - bot.pos.y
-        const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+        const scaled = scaleDeltaToMaxLen(dx, dy, speed)
         return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
       }
     }
@@ -1001,7 +1133,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
 
     const dx = botTarget.pos.x - bot.pos.x
     const dy = botTarget.pos.y - bot.pos.y
-    const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+    const scaled = scaleDeltaToMaxLen(dx, dy, speed)
     return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
   }
 
@@ -1014,7 +1146,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
     const pos = locToWorld(loc)
     const dx = pos.x - bot.pos.x
     const dy = pos.y - bot.pos.y
-    const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+    const scaled = scaleDeltaToMaxLen(dx, dy, speed)
     return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
   }
 
@@ -1025,7 +1157,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
     const dx = goalPos.x - bot.pos.x
     const dy = goalPos.y - bot.pos.y
 
-    const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+    const scaled = scaleDeltaToMaxLen(dx, dy, speed)
     return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
   }
 
@@ -1038,7 +1170,7 @@ function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid) 
 
     const dx = goal.x - bot.pos.x
     const dy = goal.y - bot.pos.y
-    const scaled = scaleDeltaToMaxLen(dx, dy, BOT_SPEED_UNITS_PER_TICK)
+    const scaled = scaleDeltaToMaxLen(dx, dy, speed)
     return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
   }
 
@@ -1125,9 +1257,10 @@ function findLowestHealthLivingBot(fromId, bots) {
   return best
 }
 
-function attemptUseSlot1(bot, targetToken, bots, bullets, nextBulletId, tickEvents) {
-  if (bot.sawCapable) return { ok: false, reason: 'NO_MODULE' }
-  if (bot.slot1Cooldown > 0) return { ok: false, reason: 'COOLDOWN' }
+function attemptUseBullet(bot, slotIndex, targetToken, bots, bullets, nextBulletId, tickEvents) {
+  if (slotIndex < 0 || slotIndex > 2) return { ok: false, reason: 'NO_MODULE' }
+  if (bot.loadout[slotIndex] !== 'BULLET') return { ok: false, reason: 'NO_MODULE' }
+  if (bot.slotCooldowns[slotIndex] > 0) return { ok: false, reason: 'COOLDOWN' }
   if (bot.ammo < BULLET_AMMO_COST) return { ok: false, reason: 'NO_AMMO' }
 
   const isBotKind =
@@ -1292,13 +1425,16 @@ function stepSawDamage(bots, tickEvents) {
     const victim = findClosestLivingBotInSawRange(bot.botId, bot.pos, bots)
     if (!victim) continue
 
+    const raw = SAW_DAMAGE
+    const damage = victim.armorEquipped ? applyArmorMitigation(raw) : raw
+
     victim.lastDamageByBotId = bot.botId
-    victim.hp = Math.max(0, victim.hp - SAW_DAMAGE)
+    victim.hp = Math.max(0, victim.hp - damage)
 
     tickEvents.push({
       type: 'DAMAGE',
       victimBotId: victim.botId,
-      amount: SAW_DAMAGE,
+      amount: damage,
       source: 'SAW',
       sourceBotId: bot.botId,
       kind: 'DIRECT',

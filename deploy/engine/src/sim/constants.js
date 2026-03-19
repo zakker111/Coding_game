@@ -41,4 +41,5 @@ export const BULLET_COOLDOWN_TICKS = 4
 export const WALL_BUMP_DAMAGE = 2
 
 // Damage dealt to both bots when they collide (bot-to-bot bump / ramming).
+// Kept small so collisions discourage "stuck" behavior without dominating combat.
 export const BOT_BUMP_DAMAGE = 1

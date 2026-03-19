@@ -1,5 +1,3 @@
-// Copied from packages/replay/src/prng.js (buildless deploy bundle)
-
 function hashSeedToU32(seed) {
   if (typeof seed === 'number') {
     return seed >>> 0
