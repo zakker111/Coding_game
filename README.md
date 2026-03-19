@@ -33,11 +33,17 @@ pnpm -C packages/engine test
 
 Phase 1 QA is intended to be fully reproducible in CI and locally.
 
+Fast path:
+
 ```bash
 pnpm qa:phase1
 ```
 
-This runs workspace-wide tests + builds (including `apps/web` and `packages/engine`).
+Full “Phase 1 gate” (runs the full sequence and writes `phase1-gate.log`):
+
+```bash
+pnpm gate:phase1
+```
 
 Additional recommended checks (deploy/workshop):
 

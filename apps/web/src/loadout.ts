@@ -19,8 +19,7 @@ function parseModuleId(raw: string): ModuleId | null {
  *   ;@slot2 EMPTY
  *   ;@slot3 ARMOR
  *
- * If no directives are present, we default to `[BULLET, null, null]` for
- * Workshop back-compat and better UX.
+ * If no directives are present, we default to `[null, null, null]`.
  */
 export function parseLoadoutFromSourceText(sourceText: string): Loadout {
   const lines = normalizeNewlines(String(sourceText ?? '')).split('\n')
@@ -46,6 +45,6 @@ export function parseLoadoutFromSourceText(sourceText: string): Loadout {
     if (slot >= 1 && slot <= 3) loadout[slot - 1] = mod
   }
 
-  if (!sawDirective) return ['BULLET', null, null]
+  if (!sawDirective) return [null, null, null]
   return loadout
 }

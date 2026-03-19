@@ -148,9 +148,8 @@ function parseLoadoutFromSource(sourceText) {
     if (slot >= 1 && slot <= 3) loadout[slot - 1] = moduleId
   }
 
-  // Back-compat with the legacy deploy workshop: if no explicit loadout is
-  // declared in the script, default to SLOT1=BULLET.
-  if (!sawDirective) return ['BULLET', null, null]
+  // If no explicit loadout is declared in the script, default to all-empty.
+  if (!sawDirective) return [null, null, null]
 
   return loadout
 }
