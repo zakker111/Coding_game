@@ -9,7 +9,7 @@
 - Constantly chases the closest living enemy (persistent goal).
 - Turns `SAW` on in short bursts after bumping a bot (plus an extra “close range” trigger so it doesn’t whiff).
 - Sidesteps when very close to avoid repeated bump-lock.
-- (Future) Turns `SHIELD` on when bullets are nearby, then off again once safe.
+- Turns `SHIELD` on when bullets are nearby, then off again once safe.
 
 ## Script
 

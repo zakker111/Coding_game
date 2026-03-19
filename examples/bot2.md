@@ -7,8 +7,8 @@
 
 **Intended behavior**
 - Demonstrates **explicit target selection** using `BOT_ALIVE(...)` + `SET_TARGET`:
-- If bullets are nearby, briefly dodges (so a bullet bot doesn’t just tunnel-vision).
   - target BOT1 if alive; else BOT3; else BOT4
+- If bullets are nearby, briefly dodges (so a bullet bot doesn’t just tunnel-vision).
 - If a bot is **very close** (or we just bumped), briefly backs off toward the center before re-engaging.
 - If health is low and a HEALTH powerup exists, commits briefly to a healing run.
 - If ammo is low and an AMMO powerup exists (and we’re not currently healing), commits briefly to an ammo run.

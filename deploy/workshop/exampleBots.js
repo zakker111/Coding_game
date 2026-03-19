@@ -78,7 +78,10 @@ GOTO LOOP
   bot1: {
     id: 'bot1',
     displayName: 'Zone Patrol Shooter',
-    sourceText: `; bot1 — Zone Patrol Shooter
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: patrol zones 1→2→4→3→1 (current sector); avoid bump-lock; detour for HEALTH/AMMO when low; dodge bullets; fire at NEAREST_BOT.
 
@@ -148,7 +151,10 @@ GOTO LOOP
   bot2: {
     id: 'bot2',
     displayName: 'Chaser Shooter',
-    sourceText: `; bot2 — Chaser Shooter
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: choose a target (BOT1→BOT3→BOT4), chase it, shoot it; avoid bump-lock; detour for HEALTH/AMMO; dodge enemy bullets.
 
@@ -220,7 +226,11 @@ GOTO LOOP
   bot3: {
     id: 'bot3',
     displayName: 'Corner Bunker',
-    sourceText: `; bot3 — Corner Bunker
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot3 — Corner Bunker
+; Loadout: SLOT1=BULLET
 ; Summary: hold a home corner; avoid bump-lock; dodge bullets; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1

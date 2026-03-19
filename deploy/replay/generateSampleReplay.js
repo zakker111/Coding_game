@@ -187,6 +187,7 @@ function locToWorld(loc) {
   }
 }
 
+/** @returns {import('./index.d.ts').ReplayTickState['powerups'][number]['type'] | null} */
 function parseTargetPowerupType(sourceText) {
   const s = stripBotSourceForHeuristics(sourceText)
   if (!s) return null
@@ -480,7 +481,7 @@ export function generateSampleReplay(seed, opts = {}) {
     BOT4: botSourceWantsPowerups(headerById.BOT4?.sourceText),
   })
 
-  const botPreferredPowerupByBotId = /** @type {Record<import('./index.d.ts').SlotId, any>} */ ({
+  const botPreferredPowerupByBotId = /** @type {Record<import('./index.d.ts').SlotId, import('./index.d.ts').ReplayTickState['powerups'][number]['type'] | null>} */ ({
     BOT1: parseTargetPowerupType(headerById.BOT1?.sourceText),
     BOT2: parseTargetPowerupType(headerById.BOT2?.sourceText),
     BOT3: parseTargetPowerupType(headerById.BOT3?.sourceText),
