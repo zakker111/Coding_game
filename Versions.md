@@ -19,13 +19,24 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- Deploy Workshop:
-  - Example bots updated to include locked loadout header directives (`;@slot1/2/3 ...`) at the top of each script fence.
-  - Workshop now **parses loadout directives** from bot source and passes per-bot `loadout` into the engine worker (so local runs reflect the `rulesetVersion = 0.2.0` engine).
-  - `deploy/engine` is synced to `rulesetVersion = 0.2.0` (explicit loadouts + ARMOR speed/damage effects).
-  - Workshop build tag is **v0.3.1** (see `deploy/workshop/workshop.js`).
-- `apps/web` Workshop local runner now passes explicit per-bot `loadout` into `@coding-game/engine` (derived from `;@slot` directives; if missing, defaults to all-empty).
-- Docs/spec: restore detailed `Ruleset.md` and align `ReplayViewerPlan.md`/`SpecAlignment.md` with current `rulesetVersion = 0.2.0` behavior (explicit loadouts + ARMOR, default-empty + normalization).
+### Updated
+- Docs/spec alignment for the current engine contract (`rulesetVersion = 0.2.0`, `schemaVersion = 0.1.0`):
+  - `Ruleset.md`, `ReplayViewerPlan.md`, `BotInstructions.md`, `SpecAlignment.md`
+  - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`, `README.md`)
+
+### Changed
+- Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
+  - `;@slot1 <MODULE|EMPTY>`
+  - `;@slot2 <MODULE|EMPTY>`
+  - `;@slot3 <MODULE|EMPTY>`
+  These are UI/UX metadata comments; authoritative loadout is still the match config / structured UI state.
+
+### Fixed
+- Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
+
+### Deferred
+- Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues`.
+- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI.
 
 ---
 
@@ -35,7 +46,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Added
 - Deploy Workshop (buildless static):
-  - Visible build tag chip in header (`WORKSHOP_BUILD`), **v0.3**.
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), **v0.3.1**.
   - Inspector improvements:
     - bot display names shown in Inspector + event formatting
     - tick events grouped (Movement/Combat/Resources/Other) with collapsible headers

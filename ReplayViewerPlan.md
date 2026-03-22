@@ -103,6 +103,11 @@ A replay should support 2 independent requirements:
 
 ### 3.1 Header (required)
 
+Compatibility rules (reader + writer):
+- Replay readers must **ignore unknown header fields** (forward-compatible).
+- Fields documented as optional may be omitted in older schema/ruleset versions; readers must apply the defaults described below.
+- For `rulesetVersion >= 0.2.0` (including `0.2.0`), replay writers are expected to include `bots[].loadout` (and may include `bots[].loadoutIssues` when applicable).
+
 - `schemaVersion`
 - `rulesetVersion`
 - `ticksPerSecond` (so “1× playback” can mean real time for that ruleset version)
@@ -125,8 +130,8 @@ A replay should support 2 independent requirements:
     - Replay size rule: **do not embed large image bytes** in the replay. Replays should carry only fallbacks + refs.
   - `loadout` (rulesetVersion-specific module loadout; 3 slots)
     - encoding: `[slot1, slot2, slot3]` (SLOT1..SLOT3), where each entry is a module id (`"<MODULE_ID>"`) or `null` (EMPTY slot)
-    - for `rulesetVersion >= 0.2.0`:
-      - **should be present** in the replay header and should already be the engine’s **resolved/normalized** loadout
+    - for `rulesetVersion >= 0.2.0` (including `0.2.0`):
+      - **expected to be present** in the replay header and should already be the engine’s **resolved/normalized** loadout
       - viewer compatibility rule: if a replay omits `loadout`, the viewer must treat it as **all empty**: `[null, null, null]`
       - do not do source-text scanning for `rulesetVersion >= 0.2.0`
     - **legacy (`rulesetVersion = 0.1.0`)**:
@@ -138,6 +143,9 @@ A replay should support 2 independent requirements:
       - if `sourceText` is not available (common for some server-run matches), default the display loadout to: `["BULLET", null, null]`
   - `loadoutIssues` (optional but recommended; informational only)
     - used by `rulesetVersion >= 0.2.0` when the engine had to normalize/coerce an invalid loadout
+    - for `rulesetVersion = 0.2.0`:
+      - expected to be present when non-empty
+      - may be omitted when empty (viewer default must be `[]`)
     - when present:
       - `Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
       - `slot` refers to the 1-based slot index in `[slot1, slot2, slot3]`

@@ -5,6 +5,10 @@ This repo already has a working end-to-end local loop:
 - Deterministic simulation + replay generation (`packages/engine/src/sim/runMatchToReplay.js`)
 - Workshop UI running the engine in a worker (`apps/web/src/worker`)
 
+Slice 2.A (docs-only):
+- Align docs/specs to the implemented `rulesetVersion = 0.2.0` engine contract.
+- Do not modify `packages/engine/**` in this slice.
+
 Recent gameplay changes already shipped:
 - Example bots now dodge bullets using `BULLET_IN_SAME_SECTOR()` / `BULLET_IN_ADJ_SECTOR()`.
 - Bot-to-bot collisions (`BUMP_BOT`) now deal ramming damage (`BOT_BUMP_DAMAGE = 1`) with kill credit.

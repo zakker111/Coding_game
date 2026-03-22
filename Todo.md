@@ -10,6 +10,10 @@ Primary specs (authoritative for `rulesetVersion = 0.2.0`):
 
 ## Current status
 
+Slice 2.A (docs-only):
+- Bring docs/specs back in line with the implemented `rulesetVersion = 0.2.0` engine behavior.
+- No code changes (especially none under `packages/engine/**`) in this slice.
+
 Implemented:
 - Deterministic local engine (`packages/engine`) with replay output (`runMatchToReplay`).
 - Workshop UI (`apps/web`) running the engine in a Worker.
@@ -20,6 +24,7 @@ Legacy:
 ### Checklist (done vs. not done)
 
 Done (shipped)
+- [x] Docs: `Ruleset.md` now reflects the implemented `rulesetVersion = 0.2.0` engine behavior (explicit loadouts + `ARMOR`).
 - [x] Deploy Workshop build tag chip (`WORKSHOP_BUILD`) visible in `/workshop/`.
 - [x] Inspector shows bot display names (beyond `BOT1/BOT2…`).
 - [x] Tick events list grouped by category (Movement/Combat/Resources/Other) with collapsible headers.

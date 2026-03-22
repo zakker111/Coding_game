@@ -8,6 +8,10 @@ This repo already has a working, end-to-end *local* loop:
 
 The docs in this repo are already organized into “phases” (`PhaseStatus.md`, `Todo.md`). This plan is a **decision + execution checklist** for the next concrete slice.
 
+Slice 2.A (docs-only):
+- Update docs/specs to match the implemented `rulesetVersion = 0.2.0` engine.
+- No code edits in this slice (especially none under `packages/engine/**`).
+
 ---
 
 ## 1) What’s “locked” right now

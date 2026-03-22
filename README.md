@@ -39,7 +39,19 @@ Fast path:
 pnpm qa:phase1
 ```
 
-Full “Phase 1 gate” (runs the full sequence and writes `phase1-gate.log`):
+Full sequence (same steps as CI should run):
+
+```bash
+pnpm install --no-frozen-lockfile
+pnpm check:deploy
+pnpm check:deploy:imports
+pnpm -C packages/engine test
+pnpm -C packages/replay test
+pnpm -C apps/web test
+pnpm qa:phase1
+```
+
+Or run the one-shot gate runner (writes `phase1-gate.log`):
 
 ```bash
 pnpm gate:phase1
@@ -86,7 +98,7 @@ Notes:
 
 ## Where to look (recommended reading order)
 
-1. `Ruleset.md` — core gameplay rules (stats, speed model, damage/kill credit, powerups)
+1. `Ruleset.md` — core gameplay rules for `rulesetVersion = 0.2.0` (stats, speed model, damage/kill credit, powerups)
 2. `BotInstructions.md` — the bot language
 3. `ArenaPlan.md` — arena topology + sectors/zones + movement model
 4. `UIPlan.md` + `ArenaVisualPlan.md` — client workshop UX and exact arena rendering spec

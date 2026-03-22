@@ -51,7 +51,10 @@ Loadout header directives (UI-derived; still comments):
 Rules for these header directives (v1):
 - If present, they must be the **first 3 non-blank lines** of the bot source.
 - Workshop/UI should generate and maintain them; the editor treats them as **locked** (not user-editable).
-- The compiler ignores them as comments. In rulesetVersion `0.2.0`, the actual loadout comes from the match config (or Workshop structured state), not from these lines.
+- These directives are **UI-generated metadata**, not gameplay input.
+  - The compiler ignores them as comments.
+  - In rulesetVersion `0.2.0`, the authoritative loadout comes from the match config (or Workshop structured state), not from these lines.
+  - In `0.2.0`, the Workshop/UI may still round-trip these lines as a serialization of its structured `loadout` state (and replay exports may map that structured loadout into replay header `bots[].loadout`).
 - Default (if omitted): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
 
 ---
@@ -332,7 +335,8 @@ Wrong target kind:
 `STOP_SLOTn` stable contract (v1+):
 - “Request to stop/cancel whatever the module in this slot is currently doing.”
 - Toggles (SAW/SHIELD): turns OFF.
-- Passive or instant modules: deterministic no-op (e.g., `ARMOR`).
+- Passive or instant modules: deterministic no-op.
+  - Example: `ARMOR` has no active state to stop (`SLOT_ACTIVE(<SLOT>)` is always `false`), and `STOP_SLOTn` is a no-op even when `SLOT_READY(<SLOT>)` is `true` due to being equipped.
 - Future modules: module defines what “stop” means; call must remain deterministic and should emit a replay/debug reason if it had no effect.
 
 Compatibility aliases (v1):
@@ -449,7 +453,7 @@ Timers:
 Slot/module state:
 - `HAS_MODULE(<SLOT>)` → bool
 - `COOLDOWN_REMAINING(<SLOT>)` → int
-- `SLOT_READY(<SLOT>)` → bool (has module and is usable now: cooldown==0 and enough ammo/energy; passive modules like `ARMOR` count as ready when equipped)
+- `SLOT_READY(<SLOT>)` → bool (has module and is usable now: cooldown==0 and enough ammo/energy; passive modules like `ARMOR` count as ready when equipped even though `USE_SLOTn` / `STOP_SLOTn` are no-ops)
 - `SLOT_ACTIVE(<SLOT>)` → bool (toggle modules only; passive modules like `ARMOR` are always `false`)
 
 ---
