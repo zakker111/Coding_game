@@ -12,7 +12,7 @@ import {
   type LocalBotLibraryV1,
 } from '../localBots'
 import { selectDistinctFromPool } from '../opponents'
-import { parseLoadoutFromSourceText } from '../loadout'
+import { deriveLoadoutForSlot } from '../loadout'
 import { fnv1a32 } from '../worker/seed'
 
 import { initialPlaybackState, playbackReducer } from '../replay/playbackReducer'
@@ -676,7 +676,7 @@ export function WorkshopPage() {
     try {
       const bots = SLOT_IDS.map((slotId) => {
         const sourceText = sourcesBySlot[slotId]
-        return { slotId, sourceText, loadout: parseLoadoutFromSourceText(sourceText) }
+        return { slotId, sourceText, loadout: deriveLoadoutForSlot(slotId, sourceText) }
       })
       const nextReplay: Replay = await runLocalInWorker({ seed, tickCap, bots })
 
@@ -916,7 +916,7 @@ export function WorkshopPage() {
           />
 
           <div className="muted" style={{ marginTop: 10 }}>
-            Tip: mentioning <code>SAW</code> in a bot source enables the sample melee behavior.
+            Tip: you can set a loadout via the first 3 comment lines, e.g. <code>;@slot1 BULLET</code>.
           </div>
         </section>
 
@@ -1128,7 +1128,7 @@ export function WorkshopPage() {
           <div style={{ marginTop: 18 }}>
             <div className="panel-title">Loadout</div>
             <div className="muted" style={{ marginTop: 8 }}>
-              Loadouts are not configurable yet (rulesetVersion 0.1.0). Current engine behavior: mentioning <code>SAW</code> enables SAW in SLOT1; mentioning <code>SHIELD</code> enables SHIELD in SLOT2.
+              Loadouts aren’t configurable via UI yet. For now, the Workshop reads the first 3 non-blank comment lines as directives: <code>;@slot1</code>, <code>;@slot2</code>, <code>;@slot3</code>.
             </div>
           </div>
 

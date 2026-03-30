@@ -37,6 +37,50 @@ function stripHeaderSourceText(replay) {
   return { ...(replay.header ?? {}), bots: headerBots }
 }
 
+function parseLoadoutFromSourceHeader(sourceText) {
+  const lines = String(sourceText || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+
+  /** @type {[any, any, any]} */
+  const loadout = [null, null, null]
+
+  let headerCommentLinesSeen = 0
+  let sawDirective = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Only scan the leading comment header.
+    if (!trimmed.startsWith(';')) break
+
+    headerCommentLinesSeen++
+
+    // Accept `;@slot1 BULLET` as well as `;@slot1: BULLET` / `;@slot1 = BULLET`.
+    const m = trimmed.match(/^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i)
+    if (m) {
+      sawDirective = true
+
+      const slot = Number(m[1])
+      const raw = String(m[2] || '')
+        .trim()
+        .toUpperCase()
+
+      if (slot < 1 || slot > 3) continue
+
+      if (raw === 'EMPTY' || raw === 'NONE') loadout[slot - 1] = null
+      else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') loadout[slot - 1] = raw
+      else loadout[slot - 1] = null
+    }
+
+    if (headerCommentLinesSeen >= 3) break
+  }
+
+  if (!sawDirective) return [null, null, null]
+  return loadout
+}
+
 function hashReplayCore(replay) {
   const core = {
     schemaVersion: replay.schemaVersion,
@@ -85,10 +129,10 @@ function runScenarioExampleBots({ seed, tickCap, botNums }) {
   }
 
   const bots = [
-    { slotId: 'BOT1', sourceText: sources[0] },
-    { slotId: 'BOT2', sourceText: sources[1] },
-    { slotId: 'BOT3', sourceText: sources[2] },
-    { slotId: 'BOT4', sourceText: sources[3] },
+    { slotId: 'BOT1', sourceText: sources[0], loadout: parseLoadoutFromSourceHeader(sources[0]) },
+    { slotId: 'BOT2', sourceText: sources[1], loadout: parseLoadoutFromSourceHeader(sources[1]) },
+    { slotId: 'BOT3', sourceText: sources[2], loadout: parseLoadoutFromSourceHeader(sources[2]) },
+    { slotId: 'BOT4', sourceText: sources[3], loadout: parseLoadoutFromSourceHeader(sources[3]) },
   ]
 
   const replay = runMatchToReplay({ seed, tickCap, bots })

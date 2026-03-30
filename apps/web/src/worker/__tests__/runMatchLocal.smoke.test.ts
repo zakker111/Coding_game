@@ -2,16 +2,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { EXAMPLE_BOTS } from '../../exampleBots'
-import { parseLoadoutFromSourceText } from '../../loadout'
+import { deriveLoadoutForSlot } from '../../loadout'
 import { runMatchLocal } from '../runMatchLocal'
 
 describe('runMatchLocal (smoke)', () => {
   it('runs a real example match end-to-end with non-empty loadouts', () => {
     const bots = [
-      { slotId: 'BOT1' as const, sourceText: EXAMPLE_BOTS.bot0.sourceText, loadout: parseLoadoutFromSourceText(EXAMPLE_BOTS.bot0.sourceText) },
-      { slotId: 'BOT2' as const, sourceText: EXAMPLE_BOTS.bot2.sourceText, loadout: parseLoadoutFromSourceText(EXAMPLE_BOTS.bot2.sourceText) },
-      { slotId: 'BOT3' as const, sourceText: EXAMPLE_BOTS.bot3.sourceText, loadout: parseLoadoutFromSourceText(EXAMPLE_BOTS.bot3.sourceText) },
-      { slotId: 'BOT4' as const, sourceText: EXAMPLE_BOTS.bot4.sourceText, loadout: parseLoadoutFromSourceText(EXAMPLE_BOTS.bot4.sourceText) },
+      { slotId: 'BOT1' as const, sourceText: EXAMPLE_BOTS.bot0.sourceText, loadout: deriveLoadoutForSlot('BOT1', EXAMPLE_BOTS.bot0.sourceText) },
+      { slotId: 'BOT2' as const, sourceText: EXAMPLE_BOTS.bot2.sourceText, loadout: deriveLoadoutForSlot('BOT2', EXAMPLE_BOTS.bot2.sourceText) },
+      { slotId: 'BOT3' as const, sourceText: EXAMPLE_BOTS.bot3.sourceText, loadout: deriveLoadoutForSlot('BOT3', EXAMPLE_BOTS.bot3.sourceText) },
+      { slotId: 'BOT4' as const, sourceText: EXAMPLE_BOTS.bot4.sourceText, loadout: deriveLoadoutForSlot('BOT4', EXAMPLE_BOTS.bot4.sourceText) },
     ]
 
     const replay = runMatchLocal(12345, 50, bots)

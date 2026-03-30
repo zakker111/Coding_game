@@ -127,25 +127,37 @@ function parseLoadoutFromSource(sourceText) {
   /** @type {[any, any, any]} */
   const loadout = [null, null, null]
 
+  let headerCommentLinesSeen = 0
   let sawDirective = false
 
   for (const line of lines) {
     const trimmed = line.trim()
     if (!trimmed) continue
 
+    // Only scan the leading comment header.
     if (!trimmed.startsWith(';')) break
 
-    const m = trimmed.match(/^;\s*@slot([123])\s+(\S+)/i)
-    if (!m) continue
+    headerCommentLinesSeen++
 
-    sawDirective = true
+    // Accept `;@slot1 BULLET` as well as `;@slot1: BULLET` / `;@slot1 = BULLET`.
+    const m = trimmed.match(/^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i)
+    if (m) {
+      sawDirective = true
 
-    const slot = Number(m[1])
-    const raw = String(m[2] || '').trim().toUpperCase()
+      const slot = Number(m[1])
+      const raw = String(m[2] || '')
+        .trim()
+        .toUpperCase()
 
-    const moduleId = raw === 'EMPTY' || raw === 'NONE' ? null : raw || null
+      if (slot < 1 || slot > 3) continue
 
-    if (slot >= 1 && slot <= 3) loadout[slot - 1] = moduleId
+      if (raw === 'EMPTY' || raw === 'NONE') loadout[slot - 1] = null
+      else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') loadout[slot - 1] = raw
+      else loadout[slot - 1] = null
+    }
+
+    // Workshop contract: only the first 3 non-blank comment lines are considered.
+    if (headerCommentLinesSeen >= 3) break
   }
 
   // If no explicit loadout is declared in the script, default to all-empty.

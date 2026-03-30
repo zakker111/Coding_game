@@ -23,7 +23,11 @@ export type ReplayHeaderBot = {
   appearance: ReplayAppearance
   sourceText?: string
 
-  /** Ruleset-specific equipped modules; omitted for legacy replays. */
+  /**
+   * Ruleset-specific equipped modules (3 slots).
+   *
+   * Optional for legacy replays (rulesetVersion < 0.2.0) and for viewer compatibility.
+   */
   loadout?: Loadout
 
   /** If the provided loadout was invalid, a deterministic normalization may have been applied. */

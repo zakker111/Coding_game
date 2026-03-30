@@ -115,6 +115,53 @@ function stripBotSourceForHeuristics(sourceText) {
     .trim()
 }
 
+function parseLoadoutFromSourceHeader(sourceText) {
+  const lines = String(sourceText || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+
+  /** @type {[any, any, any]} */
+  const loadout = [null, null, null]
+
+  let headerCommentLinesSeen = 0
+  let sawDirective = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Only scan the leading comment header.
+    if (!trimmed.startsWith(';')) break
+
+    headerCommentLinesSeen++
+
+    // Accept both `;@slot1 BULLET` and `;@slot1: BULLET` / `;@slot1 = BULLET`.
+    const m = trimmed.match(/^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i)
+    if (m) {
+      sawDirective = true
+
+      const slot = Number(m[1])
+      const raw = String(m[2] || '')
+        .trim()
+        .toUpperCase()
+
+      if (slot < 1 || slot > 3) continue
+
+      if (raw === 'EMPTY' || raw === 'NONE') loadout[slot - 1] = null
+      else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') loadout[slot - 1] = raw
+      else loadout[slot - 1] = null
+    }
+
+    // Workshop contract: only the first 3 non-blank comment lines can contain directives.
+    if (headerCommentLinesSeen >= 3) break
+  }
+
+  // If no explicit loadout is declared in the script, default to all-empty.
+  if (!sawDirective) return [null, null, null]
+
+  return loadout
+}
+
 function botSourceLooksIdle(sourceText) {
   const s = stripBotSourceForHeuristics(sourceText)
   if (!s) return true
@@ -390,14 +437,34 @@ function normalizeHeaderBots(input, fallback) {
 
   return SLOT_IDS.map((slotId) => {
     const b = byId.get(slotId)
+
     const appearance =
       b?.appearance?.kind === 'COLOR' && typeof b.appearance.color === 'string' ? b.appearance : null
+
+    const sourceText = typeof b?.sourceText === 'string' ? b.sourceText : ''
+
+    let loadout = parseLoadoutFromSourceHeader(sourceText)
+
+    if (Array.isArray(b?.loadout) && b.loadout.length === 3) {
+      /** @type {[any, any, any]} */
+      const normalized = [null, null, null]
+
+      for (let i = 0; i < 3; i++) {
+        const raw = b.loadout[i]
+        if (raw == null) normalized[i] = null
+        else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') normalized[i] = raw
+        else normalized[i] = null
+      }
+
+      loadout = normalized
+    }
 
     return {
       slotId,
       displayName: typeof b?.displayName === 'string' ? b.displayName : slotId,
       appearance: appearance ?? defaultAppearanceForSlot(slotId),
-      sourceText: typeof b?.sourceText === 'string' ? b.sourceText : '',
+      sourceText,
+      loadout,
     }
   })
 }
@@ -422,6 +489,7 @@ export function generateSampleReplay(seed, opts = {}) {
       slotId: 'BOT1',
       displayName: 'Aggressive Skirmisher',
       appearance: { kind: 'COLOR', color: '#4ade80' },
+      loadout: ['BULLET', null, null],
       sourceText: `;@slot1 BULLET
 ;@slot2 EMPTY
 ;@slot3 EMPTY
@@ -495,6 +563,7 @@ GOTO LOOP
       slotId: 'BOT2',
       displayName: 'Chaser Shooter',
       appearance: { kind: 'COLOR', color: '#60a5fa' },
+      loadout: ['BULLET', null, null],
       sourceText: `;@slot1 BULLET
 ;@slot2 EMPTY
 ;@slot3 EMPTY
@@ -570,6 +639,7 @@ GOTO LOOP
       slotId: 'BOT3',
       displayName: 'Corner Bunker',
       appearance: { kind: 'COLOR', color: '#f472b6' },
+      loadout: ['BULLET', null, null],
       sourceText: `;@slot1 BULLET
 ;@slot2 EMPTY
 ;@slot3 EMPTY
@@ -635,6 +705,7 @@ GOTO LOOP
       slotId: 'BOT4',
       displayName: 'Saw Rusher',
       appearance: { kind: 'COLOR', color: '#fbbf24' },
+      loadout: ['SAW', 'SHIELD', null],
       sourceText: `;@slot1 SAW
 ;@slot2 SHIELD
 ;@slot3 EMPTY
