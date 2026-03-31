@@ -67,6 +67,10 @@ Non-goals (until explicitly requested):
 - **Document the “why”, not just the “what”.**
   - In PRs/changes: explain tradeoffs and how to test.
 
+- **Subagents are allowed but capped.**
+  - Use at most **3 subagents** concurrently.
+  - Prefer direct, targeted file/tool usage when possible.
+
 - **Specs/docs should stay beginner-friendly while keeping a stable core.**
   - Prefer a small set of canonical primitives, then layer convenience aliases (“sugar”) on top.
   - When adding sugar (new convenience instructions/predicates), explicitly label it as an alias and point at the canonical form.
