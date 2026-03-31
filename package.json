@@ -22,7 +22,8 @@
     "gate:phase1": "node scripts/phase1-gate.mjs",
     "test:golden": "pnpm -C packages/engine test:golden",
     "golden:update": "pnpm -C packages/engine golden:update",
-    "golden:check": "pnpm -C packages/engine golden:check"
+    "golden:check": "pnpm -C packages/engine golden:check",
+    "golden:check:ci": "GOLDEN_STRICT=1 pnpm golden:check"
   },
   "devDependencies": {
     "playwright": "1.58.2"

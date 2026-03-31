@@ -98,16 +98,22 @@ Key items left:
 ## Phase 6 — Determinism “golden replay” tests
 
 Status:
-- Scaffolded: golden tests + fixture generator exist.
-- Remaining: run the generator once and check in the generated fixture hashes.
+- ✅ Fixtures committed (golden hash fixtures under `packages/engine/test/golden/fixtures/`).
+- ✅ CI-enforced (QA workflow sets `GOLDEN_STRICT=1`).
 
 Commands:
 - Generate fixtures: `pnpm golden:update`
 - Run golden-only tests: `pnpm test:golden`
 
+Automation:
+- You can also run the GitHub Actions workflow **"Golden fixtures update (Phase 6)"** (see `.github/workflows/golden-update.yml`) to generate fixtures and open a PR automatically.
+
 Key items left:
-- Commit the generated fixture JSON under `packages/engine/test/golden/fixtures/`.
-- (After fixtures are committed) flip placeholder handling from “skip” to “fail” so CI enforces goldens.
+- When simulation behavior changes intentionally, re-run `pnpm golden:update` (or the GH workflow) and merge the fixture update PR.
+
+Notes:
+- Strict checking is enabled by setting `GOLDEN_STRICT=1` (locally or in CI).
+- For local strict checking, run `pnpm golden:check:ci`.
 
 ---
 

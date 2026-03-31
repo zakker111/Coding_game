@@ -1,0 +1,54 @@
+name: Golden fixtures update (Phase 6)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  golden-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Update golden fixtures
+        run: pnpm golden:update
+
+      - name: Upload golden fixtures artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-fixtures
+          path: packages/engine/test/golden/fixtures
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(golden): update fixtures'
+          title: 'chore(golden): update fixtures'
+          body: |
+            Automated golden fixture update.
+
+            Generated via `pnpm golden:update`.
+          branch: automation/golden-fixtures
+          delete-branch: true
+          add-paths: |
+            packages/engine/test/golden/fixtures

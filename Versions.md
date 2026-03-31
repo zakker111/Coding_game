@@ -38,10 +38,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 - Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
+- Phase 6: golden determinism fixtures committed + enforced in CI.
 
 ### Deferred
 - Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues` (Phase 2; in progress).
-- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI (next after Phase 2.A + 2.1).
 
 ---
 

@@ -53,10 +53,10 @@ Before adding more mechanics, the highest-leverage work is to **prevent silent d
 
 Concretely:
 
-- Phase 6 golden tests exist, but fixtures are placeholders (see `packages/engine/test/golden/fixtures/*.json`).
-- The golden harness currently references `replay.header` even though the schema uses `replay.bots` (see `packages/replay/src/index.d.ts` and `packages/engine/src/sim/runMatchToReplay.js`).
+- Phase 6 golden tests exist, fixtures are generated + checked in (see `packages/engine/test/golden/fixtures/*.json`).
+- The golden harness matches the current replay shape (`replay.bots`) and excludes `bots[].sourceText` from the core hash (so comment-only edits don’t churn fixtures).
 
-Until goldens are real + enforced, it’s too easy to break determinism while “just refactoring”.
+With strict checking enabled in CI (`GOLDEN_STRICT=1`), determinism drift should now be caught quickly.
 
 ---
 

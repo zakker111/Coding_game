@@ -39,7 +39,8 @@ Not done yet (current focus: Phase 2.A + 2.1)
 - [x] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues` visible warnings/errors.
 - [x] Add/keep explicit engine regression tests covering ARMOR mitigation math (odd amounts), SHIELD→ARMOR ordering, and the ARMOR speed penalty.
 - [x] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
-- [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
+- [x] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
+  - Tip: you can run the GitHub Actions workflow **"Golden fixtures update (Phase 6)"** to generate fixtures and open a PR automatically.
 - [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
 - [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
 - [ ] Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
@@ -313,6 +314,7 @@ Acceptance criteria
 
 QA checklist
 - Generate: `pnpm golden:update`
+  - Or run GitHub Actions workflow "Golden fixtures update (Phase 6)" (`.github/workflows/golden-update.yml`) to generate fixtures and open a PR.
 - Verify: `pnpm golden:check`
 - Full gate: `pnpm qa`
 
