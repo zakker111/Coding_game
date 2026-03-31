@@ -24,7 +24,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `Ruleset.md`, `ReplayViewerPlan.md`, `BotInstructions.md`, `SpecAlignment.md`
   - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`)
 - Spec clarifications for `rulesetVersion = 0.2.0`:
-  - explicit per-bot 3-slot loadouts (default-empty + deterministic normalization + `loadoutIssues`)
+  - explicit per-bot 3-slot loadouts (default-empty if omitted + deterministic normalization + `loadoutIssues`)
+  - invalid loadouts surface as **visible, non-blocking warnings/errors** via `loadoutIssues` (match still runs)
   - `ARMOR` passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering
 
 ### Changed
@@ -39,7 +40,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Deferred
 - Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues` (Phase 2; in progress).
-- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI (next after Phase 2 + 2.1).
+- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI (next after Phase 2.A + 2.1).
 
 ---
 

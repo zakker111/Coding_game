@@ -5,9 +5,9 @@ This repo already has a working end-to-end local loop:
 - Deterministic simulation + replay generation (`packages/engine/src/sim/runMatchToReplay.js`)
 - Workshop UI running the engine in a worker (`apps/web/src/worker`)
 
-Current slice (Phase 2 + 2.1 — loadouts + ARMOR):
+Current slice (Phase 2.A + 2.1 — spec-first lock + ARMOR):
 - Wire explicit per-bot `loadout` through all runners/frontends (Workshop worker, deploy runners) so matches don’t silently run with `[null, null, null]`.
-- Workshop UX: loadout editor + inspector display of resolved `loadout` and any `loadoutIssues` warnings.
+- Workshop UX: loadout editor + inspector display of resolved `loadout` and any `loadoutIssues` (**visible, non-blocking warning/error**).
 - ARMOR QA/UX: keep deterministic tests for mitigation/ordering/speed penalty and surface the effects in replay inspection.
 
 Recent gameplay changes already shipped:
@@ -46,15 +46,10 @@ Implemented (authoritative engine: `packages/engine`):
   - mitigation (all damage sources): `amount - floor(amount/3)`
 
 Remaining (wiring / consumers):
-- Wire loadout through all frontends that call `runMatchToReplay` (notably `apps/web` worker), so matches don’t silently run with an all-empty loadout.
 - Remove/upgrade legacy deploy-time sim copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (`deploy/engine`).
-- Workshop UX:
-  - show per-bot loadout in the inspector
-  - surface `loadoutIssues` as a visible warning (non-blocking)
 
 QA gates:
 - Add/keep deterministic engine tests proving loadout affects speed + mitigation.
-- Add an integration smoke test ensuring Workshop passes loadouts into the worker → engine pipeline.
 
 ---
 
@@ -137,7 +132,7 @@ Key items left:
 
 ---
 
-## Suggested next slice (after Phase 2 + 2.1)
+## Suggested next slice (after Phase 2.A + 2.1)
 
 1) Phase 6 determinism lock-in (commit/enforce golden fixtures)
 2) Phase 3 bullet-as-target + evasion

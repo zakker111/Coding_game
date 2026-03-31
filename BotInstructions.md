@@ -57,8 +57,8 @@ Rules for these header directives (v1):
   - In rulesetVersion `0.2.0`, the authoritative loadout comes from the match config (or Workshop structured state), not from these lines.
   - In `0.2.0`, the Workshop/UI may still round-trip these lines as a serialization of its structured `loadout` state (and replay exports may map that structured loadout into replay header `bots[].loadout`).
 - If omitted: the loadout directives are **unspecified** (there is no directive-defined loadout).
-  - Match runners/UIs may choose a deterministic default.
-  - Current Workshop default (for playability): `SLOT1=BULLET`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+  - For `rulesetVersion = 0.2.0`, if match input omits `loadout`, the engine default is `EMPTY/EMPTY/EMPTY` (`[null, null, null]`).
+  - Match runners/UIs should pick an explicit default (if any) and pass it as structured `loadout` rather than relying on source heuristics.
 
 ---
 
@@ -105,6 +105,7 @@ Loadout notes (v1):
     3. Deduplicate modules: keep the earliest occurrence; later duplicates → `EMPTY` (record `DUPLICATE`).
     4. Enforce weapon limit: keep only the earliest weapon among `{BULLET, SAW}`; later weapons → `EMPTY` (record `MULTI_WEAPON`).
   - Important: if a match runner omits `loadout`, bots will have `EMPTY/EMPTY/EMPTY` and slot-based module instructions will no-op.
+  - UX contract: if `loadoutIssues` is non-empty, UIs/replay viewers should surface it as a **visible, non-blocking warning/error** (the match still runs).
 - **rulesetVersion `0.1.0` (legacy; not current engine behavior):** per-bot loadouts were not a first-class match input; module capability was inferred from source scanning:
   - if the source contains token `SAW`: the bot is saw-capable
   - if the source contains token `SHIELD`: the bot is shield-capable
@@ -306,8 +307,9 @@ Collisions:
 Armor note:
 - `ARMOR` is a passive module (no active use).
 - In rulesetVersion `0.2.0` (current engine behavior), if equipped in any slot:
-  - mitigates **all incoming damage** (not just bullets)
-  - applies a movement speed penalty
+  - mitigates **all incoming damage**: `amount := amount - floor(amount/3)`
+  - applies a movement speed penalty: `speedUnitsPerTick = floor(12 * 3/4) = 9`
+  - bullet mitigation ordering when both apply: apply `SHIELD` first, then `ARMOR`
 - Slot semantics for passive modules (`ARMOR`) (v1 stable):
   - `SLOT_READY(<SLOT>)` is `true` if equipped in that slot.
   - `SLOT_ACTIVE(<SLOT>)` is always `false`.

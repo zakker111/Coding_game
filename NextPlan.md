@@ -8,9 +8,10 @@ This repo already has a working, end-to-end *local* loop:
 
 The docs in this repo are already organized into “phases” (`PhaseStatus.md`, `Todo.md`). This plan is a **decision + execution checklist** for the next concrete slice.
 
-Current slice (Phase 2 + 2.1):
+Current slice (Phase 2.A + 2.1 — spec-first lock + ARMOR):
 - Implement Phase 2 wiring: pass explicit per-bot `loadout` into the engine from all runners/frontends.
 - Implement Phase 2.1 wiring/UX: make ARMOR behavior visible and debuggable (tests + inspector).
+- Ensure invalid loadouts produce deterministic normalization plus **visible, non-blocking warnings/errors** via `loadoutIssues`.
 
 ---
 
@@ -59,11 +60,12 @@ Until goldens are real + enforced, it’s too easy to break determinism while �
 
 ---
 
-## 4) Current slice: Phase 2 + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
+## 4) Current slice: Phase 2.A + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
 Outcome:
 - module availability is an explicit match input (no source scanning)
 - replay headers are self-describing via per-bot `loadout` (+ optional `loadoutIssues`)
+- invalid loadouts produce deterministic normalization plus visible, non-blocking warnings/errors via `loadoutIssues`
 - ARMOR semantics are locked (mitigation + speed penalty) and debuggable
 
 ### Execution checklist
@@ -100,7 +102,7 @@ pnpm qa:workshop -- --serve --url http://127.0.0.1:8787
 
 ---
 
-## 5) Up next (after Phase 2 + 2.1)
+## 5) Up next (after Phase 2.A + 2.1)
 
 - Phase 6 determinism lock-in (commit/enforce golden fixtures)
 - Phase 3 bullet-as-target + evasion

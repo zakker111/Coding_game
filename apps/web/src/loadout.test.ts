@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
+import { EXAMPLE_BOTS } from './exampleBots'
 import { applyLoadoutHeaderDirectives, deriveLoadoutForSlot, parseLoadoutHeaderDirectives } from './loadout'
 
 describe('loadout header directives', () => {
@@ -9,6 +10,14 @@ describe('loadout header directives', () => {
     expect(parseLoadoutHeaderDirectives(src)).toEqual({
       hasDirectives: true,
       loadout: ['BULLET', null, 'ARMOR'],
+    })
+  })
+
+  it('treats unknown module directives as EMPTY (but still counts as directives)', () => {
+    const src = [';@slot1 LASER', ';@slot2 EMPTY', ';@slot3 ARMOR', 'WAIT 1'].join('\n')
+    expect(parseLoadoutHeaderDirectives(src)).toEqual({
+      hasDirectives: true,
+      loadout: [null, null, 'ARMOR'],
     })
   })
 
@@ -26,6 +35,11 @@ describe('loadout header directives', () => {
 
     const src = [';@slot1 EMPTY', ';@slot2 EMPTY', ';@slot3 EMPTY', 'WAIT 1'].join('\n')
     expect(deriveLoadoutForSlot('BOT1', src)).toEqual([null, null, null])
+  })
+
+  it('derives loadout from built-in example bot headers (explicit loadout wiring)', () => {
+    expect(deriveLoadoutForSlot('BOT1', EXAMPLE_BOTS.bot0.sourceText)).toEqual(['BULLET', null, null])
+    expect(deriveLoadoutForSlot('BOT1', EXAMPLE_BOTS.bot4.sourceText)).toEqual(['SAW', 'SHIELD', null])
   })
 
   it('can apply locked header directives and keeps them as the first 3 non-blank lines', () => {

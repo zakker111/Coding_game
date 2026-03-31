@@ -21,7 +21,7 @@ If you change any of these, bump `rulesetVersion` and update all relevant docs/t
 
 - Per-bot `loadout`: exactly 3 slots (`[slot1, slot2, slot3]`), each `"BULLET"|"SAW"|"SHIELD"|"ARMOR"|null`.
 - Default-empty: missing/omitted loadout resolves to `[null, null, null]`.
-- Deterministic normalization + `loadoutIssues` surfacing (unknown → null, dedupe, max 1 weapon among `BULLET|SAW`).
+- Deterministic normalization + `loadoutIssues` surfacing (unknown → null, dedupe, max 1 weapon among `BULLET|SAW`), intended to be shown as a **visible, non-blocking warning/error** in consumers.
 - `ARMOR` passive:
   - mitigation for all damage: `amount - floor(amount/3)` (~33%)
   - speed penalty when equipped: `floor(12 * 3/4) = 9`

@@ -151,7 +151,7 @@ Compatibility rules (reader + writer):
       - `Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
       - `slot` refers to the 1-based slot index in `[slot1, slot2, slot3]`
     - if omitted, the viewer should default to an empty list: `[]`
-    - viewer UX: show a non-blocking warning indicator on the bot (e.g. in the bot list) and surface the issue list in the bot inspector (e.g. under a “Loadout” section); do not refuse to load the replay
+    - viewer UX: show a **visible, non-blocking warning/error** indicator on the bot (e.g. in the bot list) and surface the issue list in the bot inspector (e.g. under a “Loadout” section); do not refuse to load the replay
   - `sourceText` (or `sourceHash` + URL)
   - future (server / library):
     - `botRef`: `{ botId, botVersion?, sourceHash?, compiledIrHash? }`

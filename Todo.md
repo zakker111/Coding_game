@@ -10,9 +10,9 @@ Primary specs (authoritative for `rulesetVersion = 0.2.0`):
 
 ## Current status
 
-Current slice (Phase 2 + 2.1):
+Current slice (Phase 2.A + 2.1 — spec-first lock + ARMOR):
 - Wire explicit per-bot 3-slot `loadout` through all match runners/frontends (so local runs don’t silently use `[null, null, null]`).
-- Workshop: loadout editor + inspector rendering of resolved `loadout` and any `loadoutIssues` (non-blocking warning).
+- Workshop: loadout editor + inspector rendering of resolved `loadout` and any `loadoutIssues` (**visible, non-blocking warning/error**).
 - ARMOR: keep deterministic tests for mitigation/ordering/speed penalty and make the effects easy to inspect in the replay UI.
 
 Implemented:
@@ -34,11 +34,11 @@ Done (shipped)
 - [x] Raw tick events include `nameMap` + `eventsWithNames`.
 - [x] `pnpm qa:workshop` Playwright smoke covers: run/preview, opponent selects, randomize opponents, tick-events All/Raw/Filter + raw JSON shape.
 
-Not done yet (current focus: Phase 2 + 2.1)
-- [ ] Wire explicit per-bot `loadout` through all frontends that call `runMatchToReplay` (e.g. `apps/web` worker) so local runs match the `rulesetVersion = 0.2.0` engine.
-- [ ] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues` warnings.
-- [ ] Add/keep explicit engine regression tests covering ARMOR mitigation math (odd amounts), SHIELD→ARMOR ordering, and the ARMOR speed penalty.
-- [ ] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
+Not done yet (current focus: Phase 2.A + 2.1)
+- [x] Wire explicit per-bot `loadout` through all frontends that call `runMatchToReplay` (e.g. `apps/web` worker) so local runs match the `rulesetVersion = 0.2.0` engine.
+- [x] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues` visible warnings/errors.
+- [x] Add/keep explicit engine regression tests covering ARMOR mitigation math (odd amounts), SHIELD→ARMOR ordering, and the ARMOR speed penalty.
+- [x] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
 - [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
 - [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
 - [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
@@ -177,12 +177,10 @@ Implemented (authoritative engine: `packages/engine`)
 - [x] Deterministic loadout normalization + `loadoutIssues` surfaced in the replay header.
 - [x] Slot behavior is loadout-driven (no source scanning) in `packages/engine`.
 
-Remaining work (wiring / consumers)
-- [ ] Workshop (`apps/web`) must pass each bot’s `loadout` into the worker → engine boundary (see `apps/web/src/worker/simRunner.worker.ts`).
-- [ ] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of:
-  - resolved `loadout`
-  - `loadoutIssues` as a non-blocking warning
-- [ ] Remove/upgrade legacy match runners that still implement `rulesetVersion = 0.1.0` source-scanning semantics (notably `deploy/engine`), or clearly mark them as legacy/not-authoritative.
+Consumers / wiring
+- [x] Workshop (`apps/web`) passes each bot’s `loadout` into the worker → engine boundary.
+- [x] Workshop UI has loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues`.
+- [x] Deploy runner uses the upgraded `deploy/engine` copy that matches `packages/engine` (`rulesetVersion = 0.2.0`).
 
 Acceptance criteria
 - Local Workshop matches behave according to selected loadouts (weapons available, ARMOR speed penalty, etc.), not source-text scanning.
@@ -206,12 +204,9 @@ Implemented (authoritative engine: `packages/engine`)
 - [x] Movement speed penalty when equipped in any slot: `floor(12 * 3/4) = 9`.
 - [x] Bullet mitigation ordering when SHIELD is active: apply SHIELD first, then ARMOR.
 
-Remaining work (QA / UX)
-- [ ] Add/keep explicit engine regression tests covering:
-  - mitigation math (including odd amounts)
-  - SHIELD→ARMOR ordering
-  - speed penalty when equipped
-- [ ] Workshop: ensure ARMOR-equipped bots’ slower movement and mitigated damage are easy to inspect (stats/event log).
+QA / UX
+- [x] Engine regression tests cover mitigation math (including odd amounts), SHIELD→ARMOR ordering, and speed penalty.
+- [x] Workshop makes ARMOR’s effects inspectable via per-bot loadout + events/stats.
 
 Acceptance criteria
 - ARMOR behavior is fully specified in `Ruleset.md` and matches the engine.

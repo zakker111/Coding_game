@@ -23,7 +23,7 @@ Related docs:
 
 - `0.2.0` — **implemented** (current behavior):
   - explicit per-bot 3-slot `loadout` (default-empty)
-  - deterministic loadout normalization with issues surfaced in replay metadata (`loadoutIssues`)
+  - deterministic loadout normalization with issues surfaced in replay metadata (`loadoutIssues`) for **visible, non-blocking warnings/errors**
   - `ARMOR` module: passive mitigation (~33%) applies to all damage + speed penalty
   - mitigation ordering on bullet hits when both apply: `SHIELD` then `ARMOR`
 
@@ -111,7 +111,7 @@ Module semantics:
   - mitigation applies to all damage sources (see §2.3)
   - speed penalty applies if equipped in any slot (see §1.2)
 
-Invalid loadouts do not abort the match; they are **deterministically normalized** and issues are recorded in `loadoutIssues`.
+Invalid loadouts do not abort the match; they are **deterministically normalized** and issues are recorded in `loadoutIssues` (intended to be surfaced as a visible, non-blocking warning/error in UIs/replay viewers).
 
 Normalization algorithm (deterministic; applied per bot in order):
 
