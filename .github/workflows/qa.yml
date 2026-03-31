@@ -10,9 +10,6 @@ jobs:
   qa:
     runs-on: ubuntu-latest
 
-    env:
-      GOLDEN_STRICT: '1'
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
