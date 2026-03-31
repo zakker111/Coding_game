@@ -56,7 +56,7 @@ Concretely:
 - Phase 6 golden tests exist, fixtures are generated + checked in (see `packages/engine/test/golden/fixtures/*.json`).
 - The golden harness matches the current replay shape (`replay.bots`) and excludes `bots[].sourceText` from the core hash (so comment-only edits don’t churn fixtures).
 
-With fixtures checked in, CI now fails on determinism drift via `pnpm golden:check` + golden replay tests.
+With strict checking enabled in CI (`GOLDEN_STRICT=1`), determinism drift should now be caught quickly.
 
 ---
 

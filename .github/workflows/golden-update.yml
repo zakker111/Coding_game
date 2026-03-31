@@ -6,7 +6,6 @@ on:
 # NOTE: Keep this workflow free of third-party GitHub Actions.
 permissions:
   contents: read
-  actions: write
 
 jobs:
   golden-update:
@@ -90,3 +89,6 @@ jobs:
 
       - name: Golden tests
         run: pnpm test:golden
+
+      - name: Phase 1 QA (after goldens)
+        run: pnpm qa:phase1
