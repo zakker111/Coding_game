@@ -112,8 +112,7 @@ Key items left:
 - When simulation behavior changes intentionally, re-run `pnpm golden:update` (or the GH workflow) and merge the fixture update PR.
 
 Notes:
-- Strict checking is enabled by setting `GOLDEN_STRICT=1` (locally or in CI).
-- For local strict checking, run `pnpm golden:check:ci`.
+- `pnpm golden:check` is strict: missing fixtures / placeholders fail.
 
 ---
 

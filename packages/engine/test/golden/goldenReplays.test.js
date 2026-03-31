@@ -76,7 +76,9 @@ function runScenarioExampleBots({ seed, tickCap, botNums }) {
 
 const scenarios = [
   { fixtureName: 'examples_smoke_seed123', seed: 123, botNums: [0, 1, 2, 3] },
+  { fixtureName: 'examples_patrol_seed456', seed: 456, botNums: [1, 2, 3, 0] },
   { fixtureName: 'modules_powerups_seed999', seed: 999, botNums: [0, 5, 6, 4] },
+  { fixtureName: 'modules_saw_rush_seed777', seed: 777, botNums: [4, 6, 5, 0] },
 ]
 
 for (const { fixtureName, seed, botNums } of scenarios) {

@@ -304,9 +304,9 @@ QA checklist
 Goal: lock in determinism via checked-in fixtures/hashes so future changes can’t silently alter simulation.
 
 Concrete tasks
-- [ ] Generate and commit fixtures/hashes under `packages/engine/test/golden/fixtures/`.
-- [ ] Flip any placeholder “skip” behavior to “fail” so CI enforces goldens.
-- [ ] Document fixture update workflow.
+- [x] Generate and commit fixtures/hashes under `packages/engine/test/golden/fixtures/`.
+- [x] Flip placeholder handling so CI enforces goldens.
+- [x] Document fixture update workflow.
 
 Acceptance criteria
 - `pnpm golden:check` fails on any replay drift.

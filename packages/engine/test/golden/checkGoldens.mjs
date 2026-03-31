@@ -9,16 +9,13 @@ const fixturesDir = path.join(__dirname, 'fixtures')
 const placeholderSha = '__REPLACE_BY_RUNNING_pnpm_golden_update__'
 const sha256Re = /^[0-9a-f]{64}$/
 
-function envFlag(name) {
-  const raw = process.env[name]
-  if (!raw) return false
-  const v = String(raw).trim().toLowerCase()
-  return v !== '' && v !== '0' && v !== 'false' && v !== 'no'
-}
-
-const strict = process.argv.includes('--strict') || envFlag('GOLDEN_STRICT')
-
-const requiredFixtureFiles = ['examples_smoke_seed123.json', 'modules_powerups_seed999.json']
+// Phase 6 is complete: fixtures are checked in, so `golden:check` is always strict.
+const requiredFixtureFiles = [
+  'examples_smoke_seed123.json',
+  'examples_patrol_seed456.json',
+  'modules_powerups_seed999.json',
+  'modules_saw_rush_seed777.json',
+]
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -34,7 +31,7 @@ function validateFixture(fixture, relPath) {
 
   if (!isPlainObject(fixture)) {
     addError('fixture must be a JSON object')
-    return { errors, hasPlaceholder: false }
+    return errors
   }
 
   if (typeof fixture.name !== 'string') addError('name must be a string')
@@ -50,13 +47,10 @@ function validateFixture(fixture, relPath) {
   }
 
   const core = fixture.coreReplaySha256
-  const hasPlaceholder = core === placeholderSha
 
-  if (hasPlaceholder) {
-    if (strict) {
-      addError('coreReplaySha256 is a placeholder; run `pnpm golden:update` and commit the generated fixture hashes')
-    }
-    return { errors, hasPlaceholder }
+  if (core === placeholderSha) {
+    addError('coreReplaySha256 is a placeholder; run `pnpm golden:update` and commit the generated fixture hashes')
+    return errors
   }
 
   if (typeof core !== 'string') addError('coreReplaySha256 must be a string')
@@ -85,33 +79,19 @@ function validateFixture(fixture, relPath) {
     }
   }
 
-  return { errors, hasPlaceholder }
+  return errors
 }
 
 const files = (await readdir(fixturesDir)).filter((f) => f.endsWith('.json')).sort()
-const missingRequired = requiredFixtureFiles.filter((f) => !files.includes(f))
-
-// Bootstrap behavior (non-strict): allow landing scaffolding.
-if (!strict) {
-  if (files.length === 0) {
-    process.stderr.write('golden fixtures are not generated yet; run `pnpm golden:update`\n')
-    process.exit(0)
-  }
-
-  if (missingRequired.length > 0) {
-    process.stderr.write(
-      `golden fixtures are missing required files (${missingRequired.join(', ')}); run \`pnpm golden:update\`\n`
-    )
-    process.exit(0)
-  }
-}
 
 const allErrors = []
-let placeholderCount = 0
 
-if (strict) {
-  if (files.length === 0) allErrors.push('packages/engine/test/golden/fixtures: no fixture JSON files found')
-  for (const required of missingRequired) {
+if (files.length === 0) {
+  allErrors.push('packages/engine/test/golden/fixtures: no fixture JSON files found')
+}
+
+for (const required of requiredFixtureFiles) {
+  if (!files.includes(required)) {
     allErrors.push(`packages/engine/test/golden/fixtures: missing required fixture file: ${required}`)
   }
 }
@@ -128,25 +108,7 @@ for (const file of files) {
     continue
   }
 
-  const { errors, hasPlaceholder } = validateFixture(fixture, relPath)
-  if (hasPlaceholder) placeholderCount++
-  allErrors.push(...errors)
-}
-
-// Bootstrap behavior (non-strict): if any fixtures are placeholders, do not fail.
-// This allows landing the harness/scenarios incrementally and generating fixtures later.
-if (!strict && placeholderCount > 0) {
-  process.stderr.write('golden fixtures are not fully generated yet; run `pnpm golden:update` to populate hashes\n')
-  process.exit(0)
-}
-
-// Strict behavior: placeholders fail.
-if (placeholderCount > 0) {
-  if (placeholderCount === files.length) {
-    allErrors.push('golden fixtures contain placeholders; run `pnpm golden:update` and commit the generated fixture hashes')
-  } else {
-    allErrors.push('golden fixtures are partially generated (some placeholders remain); rerun `pnpm golden:update`')
-  }
+  allErrors.push(...validateFixture(fixture, relPath))
 }
 
 if (allErrors.length > 0) {

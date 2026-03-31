@@ -64,6 +64,16 @@ writeFixture(
 )
 
 writeFixture(
+  'examples_patrol_seed456',
+  buildScenario({ name: 'examples_patrol_seed456', seed: 456, tickCap: 80, botNums: [1, 2, 3, 0] })
+)
+
+writeFixture(
   'modules_powerups_seed999',
   buildScenario({ name: 'modules_powerups_seed999', seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
+)
+
+writeFixture(
+  'modules_saw_rush_seed777',
+  buildScenario({ name: 'modules_saw_rush_seed777', seed: 777, tickCap: 90, botNums: [4, 6, 5, 0] })
 )
