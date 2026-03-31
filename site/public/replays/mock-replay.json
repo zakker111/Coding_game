@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "0.1.0",
-  "rulesetVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
+  "rulesetVersion": "0.2.0",
   "ticksPerSecond": 1,
   "matchSeed": 12345,
   "tickCap": 2,
@@ -27,6 +27,7 @@
       "slotId": "BOT4",
       "displayName": "Saw Rusher",
       "appearance": { "kind": "COLOR", "color": "#fbbf24" },
+      "loadout": [null, null, null],
       "sourceText": "LABEL LOOP\nWAIT 1\nGOTO LOOP\n"
     }
   ],

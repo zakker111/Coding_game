@@ -1,4 +1,4 @@
-# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.2.0`, schemaVersion `0.1.0`)
+# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.2.0`, schemaVersion `0.2.0`)
 
 This document describes the deterministic match simulation currently implemented by `packages/engine` (`rulesetVersion = 0.2.0`).
 
@@ -9,7 +9,7 @@ Implemented simulation code lives in:
 - `packages/engine/src/sim/constants.js`
 
 Replays emitted by `packages/engine` currently use:
-- `schemaVersion = 0.1.0` (event/state schema)
+- `schemaVersion = 0.2.0` (event/state schema)
 - `rulesetVersion = 0.2.0` (simulation behavior)
 
 Related docs:

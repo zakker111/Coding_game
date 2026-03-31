@@ -9,8 +9,8 @@ function getArgValue(args, name) {
 
 function generateMockReplay(seed) {
   return {
-    schemaVersion: '0.1.0',
-    rulesetVersion: '0.1.0',
+    schemaVersion: '0.2.0',
+    rulesetVersion: '0.2.0',
     ticksPerSecond: 1,
     matchSeed: seed,
     tickCap: 2,
@@ -31,6 +31,7 @@ function generateMockReplay(seed) {
         slotId: 'BOT3',
         displayName: 'Corner Bunker',
         appearance: { kind: 'COLOR', color: '#f472b6' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
       {

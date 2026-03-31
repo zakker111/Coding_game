@@ -526,7 +526,7 @@ export function runMatchToReplay(params) {
   }
 
   return {
-    schemaVersion: '0.1.0',
+    schemaVersion: '0.2.0',
     rulesetVersion: RULESET_VERSION,
     ticksPerSecond: DEFAULT_TICKS_PER_SECOND,
     matchSeed: params.seed,

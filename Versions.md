@@ -20,7 +20,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ## Unreleased
 
 ### Updated
-- Docs/spec alignment for the current engine contract (`rulesetVersion = 0.2.0`, `schemaVersion = 0.1.0`):
+- Docs/spec alignment for the current engine contract (`rulesetVersion = 0.2.0`, `schemaVersion = 0.2.0`):
   - `Ruleset.md`, `ReplayViewerPlan.md`, `BotInstructions.md`, `SpecAlignment.md`
   - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`)
 - Spec clarifications for `rulesetVersion = 0.2.0`:
@@ -29,7 +29,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `ARMOR` passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering
 
 ### Changed
-- Deploy Workshop build tag bumped to **v0.3.2** (user-visible example script updates).
+- Deploy Workshop build tag bumped to **v0.3.3** (schemaVersion bump to 0.2.0 + example script updates).
 - Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
   - `;@slot1 <MODULE|EMPTY>`
   - `;@slot2 <MODULE|EMPTY>`
@@ -108,7 +108,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Workspace configuration (`pnpm-workspace.yaml`) includes `apps/*` and `packages/*`, excluding legacy `site/`.
 
 ### Notes
-- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.2.0` (replay `schemaVersion` remains `0.1.0`).
+- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.2.0` (replay `schemaVersion = 0.2.0`).
 - `packages/replay` remains a legacy/sample generator and should not be treated as authoritative.
 
 ---

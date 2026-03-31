@@ -1,4 +1,4 @@
-# Spec alignment to current engine behavior (rulesetVersion `0.2.0`, schemaVersion `0.1.0`)
+# Spec alignment to current engine behavior (rulesetVersion `0.2.0`, schemaVersion `0.2.0`)
 
 ## Goal
 
@@ -28,7 +28,7 @@ If you change any of these, bump `rulesetVersion` and update all relevant docs/t
 - Bullet mitigation ordering when both apply: `SHIELD` then `ARMOR`.
 
 ### Replay header
-- `schemaVersion` is emitted as `'0.1.0'`.
+- `schemaVersion` is emitted as `'0.2.0'`.
 - `rulesetVersion` is emitted as `'0.2.0'`.
 - `bots[i].loadout` is a 3-slot array (`[slot1, slot2, slot3]`), where each entry is a module id (`"BULLET"|"SAW"|"SHIELD"|"ARMOR"`) or `null`.
 - `bots[i].loadoutIssues` may be present (informational) if the engine had to normalize an invalid loadout.
