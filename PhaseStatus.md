@@ -99,17 +99,17 @@ Key items left:
 
 Status:
 - ✅ Fixtures committed (golden hash fixtures under `packages/engine/test/golden/fixtures/`).
-- ✅ CI-enforced (QA workflow sets `GOLDEN_STRICT=1`).
+- ✅ CI-enforced (QA runs `pnpm golden:check` and the golden tests).
 
 Commands:
 - Generate fixtures: `pnpm golden:update`
 - Run golden-only tests: `pnpm test:golden`
 
 Automation:
-- You can also run the GitHub Actions workflow **"Golden fixtures update (Phase 6)"** (see `.github/workflows/golden-update.yml`) to generate fixtures and open a PR automatically.
+- You can also run the GitHub Actions workflow **"Golden fixtures update (Phase 6)"** (see `.github/workflows/golden-update.yml`) to regenerate fixtures and upload them as a CI artifact (with a diff in the job summary).
 
 Key items left:
-- When simulation behavior changes intentionally, re-run `pnpm golden:update` (or the GH workflow) and merge the fixture update PR.
+- When simulation behavior changes intentionally, re-run `pnpm golden:update` (or the GH workflow) and commit the updated fixtures.
 
 Notes:
 - `pnpm golden:check` is strict: missing fixtures / placeholders fail.

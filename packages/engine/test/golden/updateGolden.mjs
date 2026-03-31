@@ -18,8 +18,8 @@ function loadExampleBot(n) {
 }
 
 function stablePrettyJson(obj) {
-  // Ensure stable key ordering across runs/Node versions.
-  return JSON.stringify(JSON.parse(stableStringify(obj)), null, 2)
+  // Keep fixtures compact (single-line) but with stable key ordering.
+  return stableStringify(obj)
 }
 
 function writeFixture(name, obj) {
