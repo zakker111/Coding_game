@@ -10,9 +10,10 @@ Primary specs (authoritative for `rulesetVersion = 0.2.0`):
 
 ## Current status
 
-Slice 2.A (docs-only):
-- Bring docs/specs back in line with the implemented `rulesetVersion = 0.2.0` engine behavior.
-- No code changes (especially none under `packages/engine/**`) in this slice.
+Current slice (Phase 2 + 2.1):
+- Wire explicit per-bot 3-slot `loadout` through all match runners/frontends (so local runs don’t silently use `[null, null, null]`).
+- Workshop: loadout editor + inspector rendering of resolved `loadout` and any `loadoutIssues` (non-blocking warning).
+- ARMOR: keep deterministic tests for mitigation/ordering/speed penalty and make the effects easy to inspect in the replay UI.
 
 Implemented:
 - Deterministic local engine (`packages/engine`) with replay output (`runMatchToReplay`).
@@ -33,11 +34,13 @@ Done (shipped)
 - [x] Raw tick events include `nameMap` + `eventsWithNames`.
 - [x] `pnpm qa:workshop` Playwright smoke covers: run/preview, opponent selects, randomize opponents, tick-events All/Raw/Filter + raw JSON shape.
 
-Not done yet (next milestones)
-- [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
-- [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
+Not done yet (current focus: Phase 2 + 2.1)
 - [ ] Wire explicit per-bot `loadout` through all frontends that call `runMatchToReplay` (e.g. `apps/web` worker) so local runs match the `rulesetVersion = 0.2.0` engine.
+- [ ] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues` warnings.
+- [ ] Add/keep explicit engine regression tests covering ARMOR mitigation math (odd amounts), SHIELD→ARMOR ordering, and the ARMOR speed penalty.
 - [ ] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
+- [ ] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
+- [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
 - [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
 - [ ] Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
 

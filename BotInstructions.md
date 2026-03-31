@@ -350,16 +350,6 @@ Current engine module behavior when used via `USE_SLOTn` / `FIRE_SLOTn`:
 - **SHIELD**: same as `SHIELD ON` (target ignored).
 - **ARMOR**: passive module; `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops.
 
-Armor note:
-- `ARMOR` is a passive module (no active use).
-- In rulesetVersion `0.2.0` (current engine behavior), if equipped in any slot:
-  - mitigates **all incoming damage** (not just bullets)
-  - applies a movement speed penalty
-- Slot semantics for passive modules (`ARMOR`) (v1 stable):
-  - `SLOT_READY(<SLOT>)` is `true` if equipped in that slot.
-  - `SLOT_ACTIVE(<SLOT>)` is always `false`.
-  - `USE_SLOTn ...` and `STOP_SLOTn` are deterministic no-ops (and should not spend ammo/energy or start cooldowns).
-
 Optional convenience:
 - `FIRE_TARGET <SLOT>`: use the given slot against the current `targetBotId` (no valid bot target → no-op; target powerup → no-op).
 

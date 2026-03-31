@@ -1,11 +1,16 @@
+import type { Loadout } from '@coding-game/replay'
+
+import { applyLoadoutHeaderDirectives, DEFAULT_WORKSHOP_LOADOUT, parseLoadoutHeaderDirectives } from './loadout'
+
 export type LocalBot = {
   id: string
   name: string
   sourceText: string
+  loadout: Loadout
 }
 
-export type LocalBotLibraryV1 = {
-  version: 1
+export type LocalBotLibraryV2 = {
+  version: 2
   selectedBotId: string
   bots: LocalBot[]
 }
@@ -17,15 +22,27 @@ const LEGACY_DRAFTS_STORAGE_KEY = 'nowt:workshop:drafts:v1'
 
 type LegacyDrafts = Partial<Record<'BOT1' | 'BOT2' | 'BOT3' | 'BOT4', string>>
 
-export function createDefaultLocalBotLibrary(starterSourceText: string): LocalBotLibraryV1 {
+function isLoadout(v: unknown): v is Loadout {
+  if (!Array.isArray(v) || v.length !== 3) return false
+  return v.every((slot) => slot === null || slot === 'BULLET' || slot === 'SAW' || slot === 'SHIELD' || slot === 'ARMOR')
+}
+
+function deriveInitialLoadoutFromSource(sourceText: string): Loadout {
+  const parsed = parseLoadoutHeaderDirectives(sourceText)
+  return parsed.hasDirectives ? parsed.loadout : DEFAULT_WORKSHOP_LOADOUT
+}
+
+function normalizeBotFromSource(id: string, name: string, sourceText: string, loadout?: Loadout): LocalBot {
+  const nextLoadout = loadout ?? deriveInitialLoadoutFromSource(sourceText)
+  const nextSourceText = applyLoadoutHeaderDirectives(sourceText, nextLoadout)
+  return { id, name, sourceText: nextSourceText, loadout: nextLoadout }
+}
+
+export function createDefaultLocalBotLibrary(starterSourceText: string): LocalBotLibraryV2 {
   return {
-    version: 1,
+    version: 2,
     selectedBotId: 'my-bot-1',
-    bots: [1, 2, 3].map((i) => ({
-      id: `my-bot-${i}`,
-      name: `my-bot-${i}`,
-      sourceText: starterSourceText,
-    })),
+    bots: [1, 2, 3].map((i) => normalizeBotFromSource(`my-bot-${i}`, `my-bot-${i}`, starterSourceText)),
   }
 }
 
@@ -33,7 +50,7 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0
 }
 
-function normalizeParsedLibrary(parsed: unknown, starterSourceText: string): LocalBotLibraryV1 {
+function normalizeParsedLibrary(parsed: unknown, starterSourceText: string): LocalBotLibraryV2 {
   if (!parsed || typeof parsed !== 'object') return createDefaultLocalBotLibrary(starterSourceText)
 
   const anyParsed = parsed as any
@@ -53,7 +70,8 @@ function normalizeParsedLibrary(parsed: unknown, starterSourceText: string): Loc
           if (typeof name !== 'string') return null
           if (typeof sourceText !== 'string') return null
 
-          return { id, name, sourceText }
+          const loadout: unknown = anyB.loadout
+          return normalizeBotFromSource(id, name, sourceText, isLoadout(loadout) ? loadout : undefined)
         })
         .filter((b): b is LocalBot => b != null)
     : []
@@ -71,7 +89,7 @@ function normalizeParsedLibrary(parsed: unknown, starterSourceText: string): Loc
   const selectedExists = uniqueBots.some((b) => b.id === selectedBotId)
 
   return {
-    version: 1,
+    version: 2,
     selectedBotId: selectedExists ? selectedBotId : uniqueBots[0].id,
     bots: uniqueBots,
   }
@@ -96,28 +114,25 @@ function readLegacyDrafts(): LegacyDrafts | null {
   }
 }
 
-function createLibraryFromLegacyDrafts(legacy: LegacyDrafts, starterSourceText: string): LocalBotLibraryV1 {
+function createLibraryFromLegacyDrafts(legacy: LegacyDrafts, starterSourceText: string): LocalBotLibraryV2 {
   const bots: LocalBot[] = [1, 2, 3].map((i) => {
-    const slot = (i === 1 ? 'BOT1' : i === 2 ? 'BOT2' : 'BOT3') as const
-    return {
-      id: `my-bot-${i}`,
-      name: `my-bot-${i}`,
-      sourceText: legacy[slot] ?? starterSourceText,
-    }
+    const slotId = (i === 1 ? 'BOT1' : i === 2 ? 'BOT2' : 'BOT3') as const
+    const sourceText = legacy[slotId] ?? starterSourceText
+    return normalizeBotFromSource(`my-bot-${i}`, `my-bot-${i}`, sourceText)
   })
 
   if (typeof legacy.BOT4 === 'string' && legacy.BOT4.length > 0) {
-    bots.push({ id: 'my-bot-4', name: 'my-bot-4', sourceText: legacy.BOT4 })
+    bots.push(normalizeBotFromSource('my-bot-4', 'my-bot-4', legacy.BOT4))
   }
 
   return {
-    version: 1,
+    version: 2,
     selectedBotId: bots[0].id,
     bots,
   }
 }
 
-export function loadLocalBotLibrary(starterSourceText: string): LocalBotLibraryV1 {
+export function loadLocalBotLibrary(starterSourceText: string): LocalBotLibraryV2 {
   try {
     const raw = localStorage.getItem(LOCAL_BOTS_STORAGE_KEY)
 
@@ -148,7 +163,7 @@ export function loadLocalBotLibrary(starterSourceText: string): LocalBotLibraryV
   }
 }
 
-export function saveLocalBotLibrary(state: LocalBotLibraryV1) {
+export function saveLocalBotLibrary(state: LocalBotLibraryV2) {
   try {
     localStorage.setItem(LOCAL_BOTS_STORAGE_KEY, JSON.stringify(state))
   } catch {

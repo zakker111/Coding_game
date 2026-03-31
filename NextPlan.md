@@ -8,9 +8,9 @@ This repo already has a working, end-to-end *local* loop:
 
 The docs in this repo are already organized into “phases” (`PhaseStatus.md`, `Todo.md`). This plan is a **decision + execution checklist** for the next concrete slice.
 
-Slice 2.A (docs-only):
-- Update docs/specs to match the implemented `rulesetVersion = 0.2.0` engine.
-- No code edits in this slice (especially none under `packages/engine/**`).
+Current slice (Phase 2 + 2.1):
+- Implement Phase 2 wiring: pass explicit per-bot `loadout` into the engine from all runners/frontends.
+- Implement Phase 2.1 wiring/UX: make ARMOR behavior visible and debuggable (tests + inspector).
 
 ---
 
@@ -59,131 +59,49 @@ Until goldens are real + enforced, it’s too easy to break determinism while �
 
 ---
 
-## 4) Decision: pick the next slice
-
-Pick **one** slice to execute next.
-
-### Option A (recommended): Phase 0.3 + Phase 6 — determinism lock-in
+## 4) Current slice: Phase 2 + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
 
 Outcome:
-- `pnpm qa:phase1` actually defends determinism across commits.
+- module availability is an explicit match input (no source scanning)
+- replay headers are self-describing via per-bot `loadout` (+ optional `loadoutIssues`)
+- ARMOR semantics are locked (mitigation + speed penalty) and debuggable
 
-This unlocks safe iteration on all later mechanics.
+### Execution checklist
 
-### Option B: Phase 2 + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
+1) Wire `loadout` through all runners/frontends
+- Workshop (`apps/web` worker boundary)
+- any deploy-time runners that still pass implicit/legacy loadouts
 
-Outcome:
-- makes module availability an explicit match input + replay header field (loadout is authoritative)
-- locks loadout default-empty + deterministic normalization rules in the ruleset
-- removes remaining legacy “scan source text for SAW/SHIELD” shortcuts in non-authoritative runners (notably `deploy/engine`)
-- wires Workshop UI state → engine loadout so matches don’t silently run with an all-empty loadout
+2) Workshop UX
+- per-bot loadout selection/editing + persistence
+- inspector rendering for resolved `loadout`
+- non-blocking warning + detail view for `loadoutIssues`
 
-### Option C: Phase 3 — bullet targeting + evasion primitive
+3) Tests
+- engine regressions for:
+  - loadout normalization + issue recording
+  - ARMOR mitigation math (incl. odd amounts)
+  - SHIELD→ARMOR ordering for bullets
+  - ARMOR speed penalty when equipped
+- integration smoke ensuring Workshop actually passes non-empty loadouts into the worker → engine pipeline
 
-Outcome:
-- bots can treat bullets as first-class targets (better AI behaviors)
-
-### Option D: Phase 8 — server runner MVP
-
-Outcome:
-- deterministic headless runner + bot submissions + replay storage
-
----
-
-## 5) Execution plan for Option A (recommended)
-
-### A1) Make Phase 1 QA a reliable baseline
-
-Run and make green:
+4) QA commands (run locally before merging)
 
 ```bash
-pnpm qa:phase1
-# (Optional but recommended)
+pnpm -C packages/engine test
+pnpm test:all
+pnpm build:all
+pnpm qa
+# optional but recommended if deploy/workshop is touched
 pnpm check:deploy
 pnpm check:deploy:imports
 pnpm qa:workshop -- --serve --url http://127.0.0.1:8787
 ```
 
-If anything fails, fix *one thing at a time* and add regression tests.
-
-### A2) Fix the golden harness to match the real replay schema
-
-Target files:
-
-- `packages/engine/test/golden/updateGolden.mjs`
-- `packages/engine/test/golden/goldenReplays.test.js`
-
-Fix:
-- stop reading `replay.header?.bots`
-- use `replay.bots` (the actual header bots array)
-
-Also decide whether goldens should include bot source text in hashes:
-- Recommended: **exclude** `bots[].sourceText` from the golden hash so comment-only edits don’t churn fixtures.
-
-### A3) Generate and commit real fixtures
-
-```bash
-pnpm golden:update
-```
-
-This should replace placeholders in:
-
-- `packages/engine/test/golden/fixtures/examples_smoke_seed123.json`
-- `packages/engine/test/golden/fixtures/modules_powerups_seed999.json`
-
-### A4) Enforce goldens in CI (no more placeholder pass)
-
-Once fixtures are real:
-
-- change `packages/engine/test/golden/checkGoldens.mjs` to **fail** if *any* fixture contains the placeholder
-- keep `pnpm qa:phase1` gated by `pnpm golden:check` (already wired in root `package.json`)
-
-### A5) Optional quick doc cleanup to reduce confusion
-
-These aren’t engine changes, but they reduce reader confusion:
-
-- Ensure built-in examples clearly communicate their intended loadouts (and that Workshop wiring passes those loadouts into `runMatchToReplay`).
-  - `examples/bot5.md` is the canonical **BULLET + ARMOR** example; it should only be used in UIs that actually pass a loadout to the engine.
-
 ---
 
-## 6) What Option B/C/D look like (high-level only)
+## 5) Up next (after Phase 2 + 2.1)
 
-### Option B: explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
-
-Primary work items (remaining)
-- Wire `loadout` through all local runners/frontends (notably `apps/web` worker) so matches don’t silently run with an all-empty loadout.
-- Workshop UX:
-  - add per-bot loadout selection/editing + persistence
-  - show resolved `loadout` + `loadoutIssues` warnings in the inspector
-- Deployment unification:
-  - remove/upgrade legacy `deploy/engine` copy that still uses source-scanning (`rulesetVersion = 0.1.0`) semantics
-  - ensure deploy Workshop matches are either loadout-aware or clearly marked legacy
-- Tests:
-  - keep explicit engine regression tests for loadouts + ARMOR
-  - add an integration smoke test that exercises the full Workshop → worker → engine pipeline with a **non-empty** loadout (e.g. ARMOR affects speed/mitigation)
-
-### Option C: bullet targeting
-
-Primary work items:
-- VM/DSL: `TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET()`, `DIST_TO_TARGET_BULLET()`
-- add movement primitive: `MOVE_AWAY_FROM_TARGET` (or a dedicated evade instruction)
-- determinism rules: bullet id tie-breaks must be specified + tested
-
-### Option D: server runner MVP
-
-Primary work items:
-- build a headless runner that uses `packages/engine` deterministically
-- minimal bot storage + submissions validation
-- replay storage + retrieval API
-
----
-
-## 7) Immediate question to answer before we start
-
-Choose the next slice:
-
-- **A**: Determinism lock-in (goldens + QA hardening)
-- **B**: Explicit loadouts + ARMOR
-- **C**: Bullet targeting + evasion
-- **D**: Server runner MVP
+- Phase 6 determinism lock-in (commit/enforce golden fixtures)
+- Phase 3 bullet-as-target + evasion
+- Phase 8 server runner MVP

@@ -5,9 +5,10 @@ This repo already has a working end-to-end local loop:
 - Deterministic simulation + replay generation (`packages/engine/src/sim/runMatchToReplay.js`)
 - Workshop UI running the engine in a worker (`apps/web/src/worker`)
 
-Slice 2.A (docs-only):
-- Align docs/specs to the implemented `rulesetVersion = 0.2.0` engine contract.
-- Do not modify `packages/engine/**` in this slice.
+Current slice (Phase 2 + 2.1 — loadouts + ARMOR):
+- Wire explicit per-bot `loadout` through all runners/frontends (Workshop worker, deploy runners) so matches don’t silently run with `[null, null, null]`.
+- Workshop UX: loadout editor + inspector display of resolved `loadout` and any `loadoutIssues` warnings.
+- ARMOR QA/UX: keep deterministic tests for mitigation/ordering/speed penalty and surface the effects in replay inspection.
 
 Recent gameplay changes already shipped:
 - Example bots now dodge bullets using `BULLET_IN_SAME_SECTOR()` / `BULLET_IN_ADJ_SECTOR()`.
@@ -15,7 +16,7 @@ Recent gameplay changes already shipped:
 
 ---
 
-## Phase 1 — Spec + implementation alignment (highest priority)
+## Phase 1 — Spec + implementation alignment
 
 Goal: make docs, engine behavior, and replay schema agree so future work doesn’t create regressions.
 
@@ -136,8 +137,8 @@ Key items left:
 
 ---
 
-## Suggested next slice (pick one)
+## Suggested next slice (after Phase 2 + 2.1)
 
-1) Spec/schema alignment
-2) Real loadouts + ARMOR
-3) Bullet-as-target
+1) Phase 6 determinism lock-in (commit/enforce golden fixtures)
+2) Phase 3 bullet-as-target + evasion
+3) Phase 8 server runner MVP

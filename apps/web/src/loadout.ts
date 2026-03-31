@@ -4,6 +4,8 @@ function normalizeNewlines(s: string): string {
   return s.replace(/\r\n?/g, '\n')
 }
 
+export const DEFAULT_WORKSHOP_LOADOUT: Loadout = ['BULLET', null, null]
+
 const KNOWN_MODULES: readonly ModuleId[] = ['BULLET', 'SAW', 'SHIELD', 'ARMOR']
 
 function parseModuleId(raw: string): ModuleId | null {
@@ -12,6 +14,66 @@ function parseModuleId(raw: string): ModuleId | null {
   if ((KNOWN_MODULES as readonly string[]).includes(upper)) return upper as ModuleId
   // Unknown module => treat as empty.
   return null
+}
+
+function formatModuleId(mod: ModuleId | null): string {
+  return mod == null ? 'EMPTY' : mod
+}
+
+export function formatLoadoutHeaderDirectives(loadout: Loadout): string {
+  const a = Array.isArray(loadout) ? loadout : ([null, null, null] as Loadout)
+  return [`;@slot1 ${formatModuleId(a[0])}`, `;@slot2 ${formatModuleId(a[1])}`, `;@slot3 ${formatModuleId(a[2])}`].join(
+    '\n',
+  )
+}
+
+/**
+ * Rewrites a script so the first 3 non-blank lines are the locked loadout directives.
+ *
+ * Any existing ;@slotN directives found in the leading comment header are removed.
+ */
+export function applyLoadoutHeaderDirectives(sourceText: string, loadout: Loadout): string {
+  const lines = normalizeNewlines(String(sourceText ?? '')).split('\n')
+
+  // Strip leading blank lines so directives become the first 3 non-blank lines.
+  let i = 0
+  while (i < lines.length && !lines[i].trim()) i++
+
+  const headerLines: string[] = []
+  const directiveRe = /^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i
+
+  let j = i
+
+  // If the script starts with a comment header, preserve it (minus directives).
+  if (j < lines.length && lines[j].trim().startsWith(';')) {
+    while (j < lines.length) {
+      const trimmed = lines[j].trim()
+      if (!trimmed) {
+        headerLines.push(lines[j])
+        j++
+        continue
+      }
+
+      if (!trimmed.startsWith(';')) break
+
+      if (!directiveRe.test(trimmed)) {
+        headerLines.push(lines[j])
+      }
+
+      j++
+    }
+  }
+
+  // Avoid double-blank lines between directives and the preserved header.
+  while (headerLines.length && !headerLines[0]!.trim()) headerLines.shift()
+
+  const restLines = lines.slice(j)
+
+  const outLines = [formatLoadoutHeaderDirectives(loadout), '', ...headerLines, ...restLines]
+
+  // Join and keep a trailing newline to match how the app stores sources.
+  const out = outLines.join('\n').replace(/\s+$/, '')
+  return out.length ? `${out}\n` : ''
 }
 
 export type LoadoutParseResult = {

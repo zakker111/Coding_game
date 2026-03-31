@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 
-import { deriveLoadoutForSlot, parseLoadoutHeaderDirectives } from './loadout'
+import { applyLoadoutHeaderDirectives, deriveLoadoutForSlot, parseLoadoutHeaderDirectives } from './loadout'
 
 describe('loadout header directives', () => {
   it('parses ;@slotN directives from the first 3 non-blank comment lines', () => {
@@ -26,5 +26,20 @@ describe('loadout header directives', () => {
 
     const src = [';@slot1 EMPTY', ';@slot2 EMPTY', ';@slot3 EMPTY', 'WAIT 1'].join('\n')
     expect(deriveLoadoutForSlot('BOT1', src)).toEqual([null, null, null])
+  })
+
+  it('can apply locked header directives and keeps them as the first 3 non-blank lines', () => {
+    const src = ['\n', '; bot header', ';@slot1 SAW', 'WAIT 1', ''].join('\n')
+
+    const next = applyLoadoutHeaderDirectives(src, ['BULLET', null, 'ARMOR'])
+
+    const nonBlank = next
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+
+    expect(nonBlank.slice(0, 3)).toEqual([';@slot1 BULLET', ';@slot2 EMPTY', ';@slot3 ARMOR'])
+    expect(next).toContain('; bot header')
+    expect(next).toContain('WAIT 1')
   })
 })

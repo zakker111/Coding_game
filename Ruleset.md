@@ -24,7 +24,7 @@ Related docs:
 - `0.2.0` — **implemented** (current behavior):
   - explicit per-bot 3-slot `loadout` (default-empty)
   - deterministic loadout normalization with issues surfaced in replay metadata
-  - `ARMOR` module: passive mitigation applies to all damage + speed penalty
+  - `ARMOR` module: passive mitigation (~33%) applies to all damage + speed penalty
   - mitigation ordering on bullet hits when both apply: `SHIELD` then `ARMOR`
 
 - `0.1.0` — **legacy**:
@@ -227,7 +227,7 @@ On death, emit `BOT_DIED { victimBotId, creditedBotId? }` where `creditedBotId =
 
 - Applies to **all** `DAMAGE` sources/kinds (`ENV` wall bumps, `BOT` bumps, `BULLET` hits, `SAW` hits).
 - Mitigation math (integer) on an incoming `amount`:
-  - `amount := amount - floor(amount / 3)`
+  - `amount := amount - floor(amount / 3)` (33% mitigation)
 - Bullet ordering when both apply (important):
   1) apply `SHIELD`
   2) apply `ARMOR` to the post-shield `amount`

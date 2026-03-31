@@ -106,7 +106,7 @@ A replay should support 2 independent requirements:
 Compatibility rules (reader + writer):
 - Replay readers must **ignore unknown header fields** (forward-compatible).
 - Fields documented as optional may be omitted in older schema/ruleset versions; readers must apply the defaults described below.
-- For `rulesetVersion >= 0.2.0` (including `0.2.0`), replay writers are expected to include `bots[].loadout` (and may include `bots[].loadoutIssues` when applicable).
+- For `rulesetVersion >= 0.2.0` (including `0.2.0`), replay writers are expected to include `bots[].loadout` and may include `bots[].loadoutIssues` (recommended when non-empty).
 
 - `schemaVersion`
 - `rulesetVersion`

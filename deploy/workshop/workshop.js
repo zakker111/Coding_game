@@ -101,19 +101,28 @@ function fnv1a32(str) {
   return h >>> 0
 }
 
+function loadoutSig(loadout) {
+  const a = Array.isArray(loadout) ? loadout : [null, null, null]
+  return a
+    .slice(0, 3)
+    .map((s) => (s == null ? 'EMPTY' : String(s)))
+    .join(',')
+}
+
 function mixSeed(seed, bots) {
   let h = seed >>> 0
   for (const b of bots) {
-    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n`)
+    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n${loadoutSig(b.loadout)}\n`)
     h = Math.imul(h, 2654435761) >>> 0
   }
   return h >>> 0
 }
 
-function computeRunSignature(seed, tickCap, sources) {
+function computeRunSignature(seed, tickCap, specsBySlot) {
   let h = fnv1a32(`seed:${seed}\ntickCap:${tickCap}\n`)
   for (const slotId of SLOT_IDS) {
-    h ^= fnv1a32(`${slotId}\n${sources[slotId] ?? ''}\n`)
+    const spec = specsBySlot?.[slotId]
+    h ^= fnv1a32(`${slotId}\n${spec?.sourceText ?? ''}\n${loadoutSig(spec?.loadout)}\n`)
     h = Math.imul(h, 2654435761) >>> 0
   }
   return h >>> 0
@@ -161,9 +170,19 @@ function parseLoadoutFromSource(sourceText) {
   }
 
   // If no explicit loadout is declared in the script, default to all-empty.
-  if (!sawDirective) return [null, null, null]
+  if (!sawDirective) return { loadout: [null, null, null], hasDirectives: false }
 
-  return loadout
+  return { loadout, hasDirectives: true }
+}
+
+function deriveLoadoutForSlot(slotId, sourceText) {
+  const parsed = parseLoadoutFromSource(sourceText)
+  if (parsed.hasDirectives) return parsed.loadout
+
+  // Deploy workshop fallback: if BOT1 has no directives, give it a weapon so the page is playable.
+  if (slotId === 'BOT1') return ['BULLET', null, null]
+
+  return [null, null, null]
 }
 
 function createEl(tag, props = {}, children = []) {
@@ -1177,7 +1196,14 @@ function currentRunSignature() {
     BOT4: opp4?.sourceText ?? EXAMPLE_BOTS.bot4.sourceText,
   }
 
-  return computeRunSignature(seed, tickCap, sources)
+  const specsBySlot = {
+    BOT1: { sourceText: sources.BOT1, loadout: deriveLoadoutForSlot('BOT1', sources.BOT1) },
+    BOT2: { sourceText: sources.BOT2, loadout: deriveLoadoutForSlot('BOT2', sources.BOT2) },
+    BOT3: { sourceText: sources.BOT3, loadout: deriveLoadoutForSlot('BOT3', sources.BOT3) },
+    BOT4: { sourceText: sources.BOT4, loadout: deriveLoadoutForSlot('BOT4', sources.BOT4) },
+  }
+
+  return computeRunSignature(seed, tickCap, specsBySlot)
 }
 
 function markReplayStale() {
@@ -1308,7 +1334,18 @@ async function run() {
     BOT4: opp4?.sourceText ?? EXAMPLE_BOTS.bot4.sourceText,
   }
 
-  const botsForMix = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sources[slotId] ?? '' }))
+  const specsBySlot = {
+    BOT1: { sourceText: sources.BOT1, loadout: deriveLoadoutForSlot('BOT1', sources.BOT1) },
+    BOT2: { sourceText: sources.BOT2, loadout: deriveLoadoutForSlot('BOT2', sources.BOT2) },
+    BOT3: { sourceText: sources.BOT3, loadout: deriveLoadoutForSlot('BOT3', sources.BOT3) },
+    BOT4: { sourceText: sources.BOT4, loadout: deriveLoadoutForSlot('BOT4', sources.BOT4) },
+  }
+
+  const botsForMix = SLOT_IDS.map((slotId) => ({
+    slotId,
+    sourceText: specsBySlot[slotId].sourceText ?? '',
+    loadout: specsBySlot[slotId].loadout,
+  }))
   const mixed = mixSeed(seed, botsForMix)
 
   const headerBots = [
@@ -1316,29 +1353,29 @@ async function run() {
       slotId: 'BOT1',
       displayName: bot1?.name ?? 'BOT1',
       appearance: SLOT_APPEARANCE.BOT1,
-      sourceText: sources.BOT1,
-      loadout: parseLoadoutFromSource(sources.BOT1),
+      sourceText: specsBySlot.BOT1.sourceText,
+      loadout: specsBySlot.BOT1.loadout,
     },
     {
       slotId: 'BOT2',
       displayName: opp2?.displayName ?? 'BOT2',
       appearance: SLOT_APPEARANCE.BOT2,
-      sourceText: sources.BOT2,
-      loadout: parseLoadoutFromSource(sources.BOT2),
+      sourceText: specsBySlot.BOT2.sourceText,
+      loadout: specsBySlot.BOT2.loadout,
     },
     {
       slotId: 'BOT3',
       displayName: opp3?.displayName ?? 'BOT3',
       appearance: SLOT_APPEARANCE.BOT3,
-      sourceText: sources.BOT3,
-      loadout: parseLoadoutFromSource(sources.BOT3),
+      sourceText: specsBySlot.BOT3.sourceText,
+      loadout: specsBySlot.BOT3.loadout,
     },
     {
       slotId: 'BOT4',
       displayName: opp4?.displayName ?? 'BOT4',
       appearance: SLOT_APPEARANCE.BOT4,
-      sourceText: sources.BOT4,
-      loadout: parseLoadoutFromSource(sources.BOT4),
+      sourceText: specsBySlot.BOT4.sourceText,
+      loadout: specsBySlot.BOT4.loadout,
     },
   ]
 
@@ -1363,7 +1400,7 @@ async function run() {
     })
 
     replay = { ...replayFromWorker, bots: mergedHeaderBots }
-    lastRunSignature = computeRunSignature(seed, tickCap, sources)
+    lastRunSignature = computeRunSignature(seed, tickCap, specsBySlot)
     replayStale = false
 
     tick = 0

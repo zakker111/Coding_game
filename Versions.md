@@ -22,7 +22,10 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Updated
 - Docs/spec alignment for the current engine contract (`rulesetVersion = 0.2.0`, `schemaVersion = 0.1.0`):
   - `Ruleset.md`, `ReplayViewerPlan.md`, `BotInstructions.md`, `SpecAlignment.md`
-  - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`, `README.md`)
+  - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`)
+- Spec clarifications for `rulesetVersion = 0.2.0`:
+  - explicit per-bot 3-slot loadouts (default-empty + deterministic normalization + `loadoutIssues`)
+  - `ARMOR` passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering
 
 ### Changed
 - Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
@@ -35,8 +38,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
 
 ### Deferred
-- Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues`.
-- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI.
+- Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues` (Phase 2; in progress).
+- Phase 6 determinism lock-in: commit golden fixtures and enforce in CI (next after Phase 2 + 2.1).
 
 ---
 

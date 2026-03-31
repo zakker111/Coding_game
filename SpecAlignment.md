@@ -16,6 +16,17 @@ Primary implementation references:
 
 ## Current implemented contract: `rulesetVersion = 0.2.0`
 
+### Locked items (0.2.0)
+If you change any of these, bump `rulesetVersion` and update all relevant docs/tests.
+
+- Per-bot `loadout`: exactly 3 slots (`[slot1, slot2, slot3]`), each `"BULLET"|"SAW"|"SHIELD"|"ARMOR"|null`.
+- Default-empty: missing/omitted loadout resolves to `[null, null, null]`.
+- Deterministic normalization + `loadoutIssues` surfacing (unknown → null, dedupe, max 1 weapon among `BULLET|SAW`).
+- `ARMOR` passive:
+  - mitigation for all damage: `amount - floor(amount/3)` (~33%)
+  - speed penalty when equipped: `floor(12 * 3/4) = 9`
+- Bullet mitigation ordering when both apply: `SHIELD` then `ARMOR`.
+
 ### Replay header
 - `schemaVersion` is emitted as `'0.1.0'`.
 - `rulesetVersion` is emitted as `'0.2.0'`.
