@@ -45,11 +45,12 @@ Implemented (authoritative engine: `packages/engine`):
   - speed penalty: `floor(12 * 3/4) = 9`
   - mitigation (all damage sources): `amount - floor(amount/3)`
 
-Remaining (wiring / consumers):
-- Remove/upgrade legacy deploy-time sim copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (`deploy/engine`).
+Consumers / wiring:
+- ✅ `apps/web` Workshop passes explicit per-bot loadouts through the worker into the engine.
+- ✅ Deploy Workshop uses the upgraded `deploy/engine` copy that matches `packages/engine` (`rulesetVersion = 0.2.0`).
 
 QA gates:
-- Add/keep deterministic engine tests proving loadout affects speed + mitigation.
+- ✅ Deterministic engine tests cover loadout effects (weapon availability, ARMOR speed + mitigation).
 
 ---
 
