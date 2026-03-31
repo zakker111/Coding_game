@@ -705,6 +705,7 @@ GOTO LOOP
       slotId: 'BOT4',
       displayName: 'Saw Rusher',
       appearance: { kind: 'COLOR', color: '#fbbf24' },
+      loadout: ['SAW', 'SHIELD', null],
       sourceText: `;@slot1 SAW
 ;@slot2 SHIELD
 ;@slot3 EMPTY

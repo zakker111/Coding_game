@@ -33,7 +33,7 @@ This is the best long-term fit, but for **early testing** (e.g., ~10 bots, ~10 m
 
 ### 2.1 Language/runtime
 
-**TypeScript + Node.js (LTS)**
+**JavaScript (ES modules) + Node.js (LTS)**
 
 Why this is the default recommendation:
 - easiest path to a **shared sim engine** that also runs in the browser
@@ -44,10 +44,14 @@ Why this is the default recommendation:
   - DB migrations
   - observability
 
+Notes:
+- Using **TypeScript** on the server is optional; the simulation/runtime contract should remain JavaScript-first.
+- Prefer JSDoc for public APIs in shared runtime code.
+
 ### 2.2 HTTP API framework
 
 - **Fastify** (recommended)
-  - fast, low overhead, good TS support
+  - fast, low overhead, good plugin ecosystem
 - Alternatives:
   - Express (simpler, more footguns)
   - NestJS (heavier, more structure)
@@ -97,7 +101,7 @@ Small-v1 shortcut:
 Given your expected initial scale (~10 bots, ~10 matches/day), you can start with fewer moving parts and still be aligned with the long-term architecture.
 
 Minimal setup:
-- Runtime: **Node.js + TypeScript**
+- Runtime: **Node.js + JavaScript (ESM)**
 - Deployment: **single process** (API + worker in one service) on a single server / docker-compose
 - DB: **PostgreSQL**
 - Queue: **DB-backed queue table** (polling) instead of Redis
@@ -190,7 +194,7 @@ Guideline:
 
 If you expect very large scale (e.g., tens of millions of ticks/day) or want much stricter resource control, consider:
 
-- keep API + DB in Node/TS
+- keep API + DB in Node (JavaScript-first; TypeScript optional)
 - move **match worker** to Go or Rust
 - keep a shared ruleset spec and replay schema
 
@@ -202,7 +206,7 @@ Tradeoff:
 ## 7) Recommended “v1 decision set”
 
 If you want a concrete default to proceed:
-- Runtime: **Node.js + TypeScript**
+- Runtime: **Node.js + JavaScript (ESM)** (TypeScript optional)
 - API: **Fastify**
 - DB: **PostgreSQL**
 - Queue: **Redis + BullMQ**

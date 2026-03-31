@@ -29,6 +29,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `ARMOR` passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering
 
 ### Changed
+- Deploy Workshop build tag bumped to **v0.3.2** (user-visible example script updates).
 - Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
   - `;@slot1 <MODULE|EMPTY>`
   - `;@slot2 <MODULE|EMPTY>`

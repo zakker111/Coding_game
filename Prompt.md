@@ -76,10 +76,11 @@ Non-goals (until explicitly requested):
 
 ## 3. Repository Layout & Module Boundaries
 
-**Implementation language (v1): TypeScript everywhere.**
+**Implementation language (v1): JavaScript (ES modules).**
 
-- Client and server are implemented in **TypeScript**.
-- The deterministic simulation core is a **shared TypeScript library** used by both client and server.
+- The game runtime (simulation, deploy artifacts) is implemented in **JavaScript (ESM)**.
+- Some packages may use **TypeScript** for UI ergonomics or ship `.d.ts` typing surfaces, but the runtime contract is JavaScript.
+- Use **JSDoc** (`/** ... */`) for exported/public APIs and non-obvious logic; include examples where helpful.
 - On the client, run the simulation in a **Web Worker** (UI communicates via structured-clone messages).
 
 The repo is currently minimal. As code is introduced, keep a clean separation by **domain**:
@@ -227,7 +228,7 @@ Code implements mechanics; data defines *what exists* and *with what numbers*.
 
 - Prefer clear, maintainable code over cleverness; small, well-named functions/modules.
 - Add comments for *why*, invariants, and tricky edge cases; avoid redundant comments that restate code.
-- In TypeScript, use TSDoc/JSDoc (`/** ... */`) for exported/public APIs and non-obvious logic; include examples where helpful.
+- Use JSDoc (`/** ... */`) for exported/public APIs and non-obvious logic; include examples where helpful.
 - Track larger TODOs in `Todo.md` rather than leaving many inline TODO comments.
 
 ---
