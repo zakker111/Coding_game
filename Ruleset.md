@@ -23,7 +23,7 @@ Related docs:
 
 - `0.2.0` — **implemented** (current behavior):
   - explicit per-bot 3-slot `loadout` (default-empty)
-  - deterministic loadout normalization with issues surfaced in replay metadata
+  - deterministic loadout normalization with issues surfaced in replay metadata (`loadoutIssues`)
   - `ARMOR` module: passive mitigation (~33%) applies to all damage + speed penalty
   - mitigation ordering on bullet hits when both apply: `SHIELD` then `ARMOR`
 
@@ -95,6 +95,10 @@ Loadout shape (input):
 - `loadout = [slot1, slot2, slot3]`
 - each entry is either a module id string or `null`
 - if a bot omits `loadout`, the default is the empty loadout: `[null, null, null]`
+
+Important:
+- The engine does **not** scan `sourceText` for module tokens like `SAW`/`SHIELD`.
+- The engine does **not** read `;@slot*` header directives; those are UI/serialization metadata only.
 
 Recognized module ids:
 - `BULLET | SAW | SHIELD | ARMOR`

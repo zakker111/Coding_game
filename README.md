@@ -6,7 +6,7 @@ This repo is **spec-first**, and includes a runnable prototype:
 
 - `packages/engine`: bot DSL compiler/VM + deterministic simulation + replay generation
 - `apps/web`: Vite + React workshop that runs local matches in a Web Worker and renders the replay
-- `packages/replay`: legacy replay schema + sample generator (not authoritative engine behavior)
+- `packages/replay`: legacy replay schema + sample generator (uses lightweight source heuristics like scanning for `SAW`/`SHIELD`; not authoritative engine behavior)
 
 ## Running the prototype
 

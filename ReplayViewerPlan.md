@@ -140,6 +140,7 @@ Compatibility rules (reader + writer):
         - `slot1 = (sourceText contains token "SAW" ? "SAW" : "BULLET")`
         - `slot2 = (sourceText contains token "SHIELD" ? "SHIELD" : null)`
         - `slot3 = null`
+      - This is a **viewer-only fallback** for old replays; it does not imply source scanning is part of the current engine (`rulesetVersion >= 0.2.0`).
       - if `sourceText` is not available (common for some server-run matches), default the display loadout to: `["BULLET", null, null]`
   - `loadoutIssues` (optional but recommended; informational only)
     - used by `rulesetVersion >= 0.2.0` when the engine had to normalize/coerce an invalid loadout

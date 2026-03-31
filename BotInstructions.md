@@ -53,9 +53,12 @@ Rules for these header directives (v1):
 - Workshop/UI should generate and maintain them; the editor treats them as **locked** (not user-editable).
 - These directives are **UI-generated metadata**, not gameplay input.
   - The compiler ignores them as comments.
+  - The simulation engine does **not** read these directives directly; only a match runner/UI may choose to parse them and pass a structured `loadout` into the engine.
   - In rulesetVersion `0.2.0`, the authoritative loadout comes from the match config (or Workshop structured state), not from these lines.
   - In `0.2.0`, the Workshop/UI may still round-trip these lines as a serialization of its structured `loadout` state (and replay exports may map that structured loadout into replay header `bots[].loadout`).
-- Default (if omitted): `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
+- If omitted: the loadout directives are **unspecified** (there is no directive-defined loadout).
+  - Match runners/UIs may choose a deterministic default.
+  - Current Workshop default (for playability): `SLOT1=BULLET`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
 
 ---
 
@@ -90,8 +93,9 @@ Notes:
 - Inline selectors (`CLOSEST_BOT`, `LOWEST_HEALTH_BOT`, etc.) are resolved deterministically when the instruction executes; they **do not** write the target register.
 - A deferred aim-direction target form (`DIR ...`) is **not** part of stable v1 (see `BotLanguageDesign.md`).
 
-Loadout notes (spec direction):
+Loadout notes (v1):
 - The language supports 3 slots (`SLOT1..SLOT3`) and slot-addressed actions.
+- **Current engine (`rulesetVersion = 0.2.0`)**: module availability comes only from the per-bot match-input `loadout` (or equivalent structured UI state). The engine does **not** infer modules from `sourceText` (no scanning for `SAW`/`SHIELD`), and it does not treat `;@slot*` directives as authoritative gameplay input.
 - Workshop/UI may generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines (see §0); these are UI-derived comments for UX/editor ergonomics and are not authoritative.
 - **rulesetVersion `0.2.0` (current engine behavior):** explicit per-bot loadout is authoritative and comes from match config (or Workshop structured state).
   - If `loadout` is missing/omitted, it defaults to `EMPTY/EMPTY/EMPTY`.
@@ -100,8 +104,8 @@ Loadout notes (spec direction):
     2. Unknown module ids → `EMPTY` (record `UNKNOWN_MODULE`).
     3. Deduplicate modules: keep the earliest occurrence; later duplicates → `EMPTY` (record `DUPLICATE`).
     4. Enforce weapon limit: keep only the earliest weapon among `{BULLET, SAW}`; later weapons → `EMPTY` (record `MULTI_WEAPON`).
-  - Important: if a match runner omits `loadout`, bots will have `EMPTY/EMPTY/EMPTY` and slot-based module instructions will no-op. Some UIs/runners may still need wiring updates.
-- **rulesetVersion `0.1.0` (legacy):** per-bot loadouts were not a first-class match input; module capability was inferred from source scanning:
+  - Important: if a match runner omits `loadout`, bots will have `EMPTY/EMPTY/EMPTY` and slot-based module instructions will no-op.
+- **rulesetVersion `0.1.0` (legacy; not current engine behavior):** per-bot loadouts were not a first-class match input; module capability was inferred from source scanning:
   - if the source contains token `SAW`: the bot is saw-capable
   - if the source contains token `SHIELD`: the bot is shield-capable
   - otherwise: `SLOT1=BULLET`, `SLOT2=EMPTY`, `SLOT3=EMPTY`
