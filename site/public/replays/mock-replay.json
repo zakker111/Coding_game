@@ -9,18 +9,21 @@
       "slotId": "BOT1",
       "displayName": "Player",
       "appearance": { "kind": "COLOR", "color": "#4ade80" },
+      "loadout": [null, null, null],
       "sourceText": "LABEL LOOP\nWAIT 1\nGOTO LOOP\n"
     },
     {
       "slotId": "BOT2",
       "displayName": "Chaser Shooter",
       "appearance": { "kind": "COLOR", "color": "#60a5fa" },
+      "loadout": [null, null, null],
       "sourceText": "LABEL LOOP\nSET_MOVE_TO_TARGET\nWAIT 1\nGOTO LOOP\n"
     },
     {
       "slotId": "BOT3",
       "displayName": "Corner Bunker",
       "appearance": { "kind": "COLOR", "color": "#f472b6" },
+      "loadout": [null, null, null],
       "sourceText": "LABEL LOOP\nWAIT 1\nGOTO LOOP\n"
     },
     {

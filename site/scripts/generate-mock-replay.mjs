@@ -19,12 +19,14 @@ function generateMockReplay(seed) {
         slotId: 'BOT1',
         displayName: 'Player',
         appearance: { kind: 'COLOR', color: '#4ade80' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
       {
         slotId: 'BOT2',
         displayName: 'Chaser Shooter',
         appearance: { kind: 'COLOR', color: '#60a5fa' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nSET_MOVE_TO_TARGET\nWAIT 1\nGOTO LOOP\n',
       },
       {
@@ -38,6 +40,7 @@ function generateMockReplay(seed) {
         slotId: 'BOT4',
         displayName: 'Saw Rusher',
         appearance: { kind: 'COLOR', color: '#fbbf24' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
     ],

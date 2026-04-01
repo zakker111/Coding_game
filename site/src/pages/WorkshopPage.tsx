@@ -22,7 +22,7 @@ type Playhead = {
 
 type BotName = 'me/bot1' | 'me/bot2' | 'me/bot3'
 
-type LoadoutSlot = '' | 'BULLET' | 'SAW' | 'SHIELD' | 'BOOST'
+type LoadoutSlot = '' | 'BULLET' | 'SAW' | 'SHIELD' | 'ARMOR'
 
 function clampInt(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.floor(v)))
@@ -433,7 +433,7 @@ export function WorkshopPage() {
                     <option value="BULLET">BULLET (weapon)</option>
                     <option value="SAW">SAW (weapon)</option>
                     <option value="SHIELD">SHIELD</option>
-                    <option value="BOOST">BOOST</option>
+                    <option value="ARMOR">ARMOR</option>
                   </select>
                 </div>
 
@@ -444,7 +444,7 @@ export function WorkshopPage() {
                     <option value="BULLET">BULLET (weapon)</option>
                     <option value="SAW">SAW (weapon)</option>
                     <option value="SHIELD">SHIELD</option>
-                    <option value="BOOST">BOOST</option>
+                    <option value="ARMOR">ARMOR</option>
                   </select>
                 </div>
 
@@ -455,7 +455,7 @@ export function WorkshopPage() {
                     <option value="BULLET">BULLET (weapon)</option>
                     <option value="SAW">SAW (weapon)</option>
                     <option value="SHIELD">SHIELD</option>
-                    <option value="BOOST">BOOST</option>
+                    <option value="ARMOR">ARMOR</option>
                   </select>
                 </div>
               </div>
