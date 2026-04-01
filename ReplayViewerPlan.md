@@ -108,6 +108,10 @@ Compatibility rules (reader + writer):
 - Fields documented as optional may be omitted in older schema/ruleset versions; readers must apply the defaults described below.
 - For `rulesetVersion >= 0.2.0` (including `0.2.0`), replay writers are expected to include `bots[].loadout` and may include `bots[].loadoutIssues` (recommended when non-empty).
 
+Current repo contract (engine output):
+- `schemaVersion = "0.2.0"`
+- `rulesetVersion = "0.2.0"`
+
 - `schemaVersion`
 - `rulesetVersion`
 - `ticksPerSecond` (so “1× playback” can mean real time for that ruleset version)

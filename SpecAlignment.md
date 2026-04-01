@@ -26,6 +26,10 @@ If you change any of these, bump `rulesetVersion` and update all relevant docs/t
   - mitigation for all damage: `amount - floor(amount/3)` (~33%)
   - speed penalty when equipped: `floor(12 * 3/4) = 9`
 - Bullet mitigation ordering when both apply: `SHIELD` then `ARMOR`.
+- Bullet targeting (v1):
+  - `TARGET_CLOSEST_BULLET` selects the closest enemy bullet by Manhattan distance.
+  - Tie-break is deterministic by numeric bullet creation order (`B1 < B2 < …`).
+  - `MOVE_AWAY_FROM_TARGET` uses the resolved target position (bot > bullet > powerup).
 
 ### Replay header
 - `schemaVersion` is emitted as `'0.2.0'`.

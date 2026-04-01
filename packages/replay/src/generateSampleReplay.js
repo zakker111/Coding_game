@@ -89,17 +89,8 @@ function bumpPairKey(a, b) {
   return a < b ? `${a}|${b}` : `${b}|${a}`
 }
 
-function botSourceHasSaw(sourceText) {
-  if (!sourceText) return false
-  // Stub heuristic: if the bot source mentions SAW anywhere (including comments/loadout),
-  // enable the sample melee behavior.
-  return /\bSAW\b/i.test(sourceText)
-}
-
-function botSourceHasShield(sourceText) {
-  if (!sourceText) return false
-  // Stub heuristic: if the bot source mentions SHIELD anywhere, enable sample shield behavior.
-  return /\bSHIELD\b/i.test(sourceText)
+function loadoutHasModule(loadout, moduleId) {
+  return Array.isArray(loadout) && loadout.includes(moduleId)
 }
 
 function stripBotSourceForHeuristics(sourceText) {
@@ -113,53 +104,6 @@ function stripBotSourceForHeuristics(sourceText) {
     .filter((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('//') && !line.startsWith(';'))
     .join('\n')
     .trim()
-}
-
-function parseLoadoutFromSourceHeader(sourceText) {
-  const lines = String(sourceText || '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-
-  /** @type {[any, any, any]} */
-  const loadout = [null, null, null]
-
-  let headerCommentLinesSeen = 0
-  let sawDirective = false
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-
-    // Only scan the leading comment header.
-    if (!trimmed.startsWith(';')) break
-
-    headerCommentLinesSeen++
-
-    // Accept both `;@slot1 BULLET` and `;@slot1: BULLET` / `;@slot1 = BULLET`.
-    const m = trimmed.match(/^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i)
-    if (m) {
-      sawDirective = true
-
-      const slot = Number(m[1])
-      const raw = String(m[2] || '')
-        .trim()
-        .toUpperCase()
-
-      if (slot < 1 || slot > 3) continue
-
-      if (raw === 'EMPTY' || raw === 'NONE') loadout[slot - 1] = null
-      else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') loadout[slot - 1] = raw
-      else loadout[slot - 1] = null
-    }
-
-    // Workshop contract: only the first 3 non-blank comment lines can contain directives.
-    if (headerCommentLinesSeen >= 3) break
-  }
-
-  // If no explicit loadout is declared in the script, default to all-empty.
-  if (!sawDirective) return [null, null, null]
-
-  return loadout
 }
 
 function botSourceLooksIdle(sourceText) {
@@ -443,7 +387,8 @@ function normalizeHeaderBots(input, fallback) {
 
     const sourceText = typeof b?.sourceText === 'string' ? b.sourceText : ''
 
-    let loadout = parseLoadoutFromSourceHeader(sourceText)
+    /** @type {[any, any, any]} */
+    let loadout = [null, null, null]
 
     if (Array.isArray(b?.loadout) && b.loadout.length === 3) {
       /** @type {[any, any, any]} */
@@ -759,17 +704,24 @@ GOTO LOOP
   })
 
   const sawCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
-    BOT1: botSourceHasSaw(headerById.BOT1?.sourceText),
-    BOT2: botSourceHasSaw(headerById.BOT2?.sourceText),
-    BOT3: botSourceHasSaw(headerById.BOT3?.sourceText),
-    BOT4: botSourceHasSaw(headerById.BOT4?.sourceText),
+    BOT1: loadoutHasModule(headerById.BOT1?.loadout, 'SAW'),
+    BOT2: loadoutHasModule(headerById.BOT2?.loadout, 'SAW'),
+    BOT3: loadoutHasModule(headerById.BOT3?.loadout, 'SAW'),
+    BOT4: loadoutHasModule(headerById.BOT4?.loadout, 'SAW'),
   })
 
   const shieldCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
-    BOT1: botSourceHasShield(headerById.BOT1?.sourceText),
-    BOT2: botSourceHasShield(headerById.BOT2?.sourceText),
-    BOT3: botSourceHasShield(headerById.BOT3?.sourceText),
-    BOT4: botSourceHasShield(headerById.BOT4?.sourceText),
+    BOT1: loadoutHasModule(headerById.BOT1?.loadout, 'SHIELD'),
+    BOT2: loadoutHasModule(headerById.BOT2?.loadout, 'SHIELD'),
+    BOT3: loadoutHasModule(headerById.BOT3?.loadout, 'SHIELD'),
+    BOT4: loadoutHasModule(headerById.BOT4?.loadout, 'SHIELD'),
+  })
+
+  const bulletCapableByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
+    BOT1: loadoutHasModule(headerById.BOT1?.loadout, 'BULLET'),
+    BOT2: loadoutHasModule(headerById.BOT2?.loadout, 'BULLET'),
+    BOT3: loadoutHasModule(headerById.BOT3?.loadout, 'BULLET'),
+    BOT4: loadoutHasModule(headerById.BOT4?.loadout, 'BULLET'),
   })
 
   const botIdleByBotId = /** @type {Record<import('./index.d.ts').SlotId, boolean>} */ ({
@@ -937,7 +889,7 @@ GOTO LOOP
         }
       }
 
-      const attemptShoot = bot.botId === 'BOT2' && !bot.sawCapable
+      const attemptShoot = bot.botId === 'BOT2' && bulletCapableByBotId[bot.botId]
       let shotExecuted = false
 
       if (attemptShoot) {

@@ -26,6 +26,8 @@ Related docs:
   - deterministic loadout normalization with issues surfaced in replay metadata (`loadoutIssues`) for **visible, non-blocking warnings/errors**
   - `ARMOR` module: passive mitigation (~33%) applies to all damage + speed penalty
   - mitigation ordering on bullet hits when both apply: `SHIELD` then `ARMOR`
+  - bullets are first-class targets (`TARGET_CLOSEST_BULLET`, `DIST_TO_TARGET_BULLET()`) and bots can evade via `MOVE_AWAY_FROM_TARGET`
+  - bullet target tie-break is deterministic by numeric bullet creation order (`B1 < B2 < …`)
 
 - `0.1.0` — **legacy**:
   - module capability was inferred from bot source text (temporary shortcut)

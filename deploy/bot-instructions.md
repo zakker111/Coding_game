@@ -183,7 +183,7 @@ Tie-break rule for “closest” / “lowest health”: **lowest bot id wins**.
 
 Bullets are first-class entities with stable `bulletId` ordering.
 
-Tie-break rule for `TARGET_CLOSEST_BULLET`: closest by Manhattan distance; ties break by **lowest bullet id**.
+Tie-break rule for `TARGET_CLOSEST_BULLET`: closest by Manhattan distance; ties break by **earliest creation order** (lowest numeric `bulletId`, e.g. `B1 < B2 < …`).
 
 | Instruction | Effect |
 |---|---|

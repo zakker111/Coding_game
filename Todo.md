@@ -2,7 +2,7 @@
 
 Near-term engineering tasks and the **current ruleset/engine contract**.
 
-Primary specs (authoritative for `rulesetVersion = 0.2.0`):
+Primary specs (authoritative for `rulesetVersion = 0.2.0`, `schemaVersion = 0.2.0`):
 - `Ruleset.md`
 - `ReplayViewerPlan.md` (schema contract)
 
@@ -10,44 +10,37 @@ Primary specs (authoritative for `rulesetVersion = 0.2.0`):
 
 ## Current status
 
-Current slice (Phase 2.A + 2.1 — spec-first lock + ARMOR):
-- Wire explicit per-bot 3-slot `loadout` through all match runners/frontends (so local runs don’t silently use `[null, null, null]`).
-- Workshop: loadout editor + inspector rendering of resolved `loadout` and any `loadoutIssues` (**visible, non-blocking warning/error**).
-- ARMOR: keep deterministic tests for mitigation/ordering/speed penalty and make the effects easy to inspect in the replay UI.
+Recently completed (this merge set)
+- `schemaVersion = 0.2.0` end-to-end (engine output + deploy artifacts + sample/mock replays).
+- Deploy Workshop build tag bumped to **v0.3.3**.
+- Example bots updated with locked loadout header directives (`;@slot1/2/3`).
+- `packages/replay` sample generator is now **loadout-driven** (no source scanning for SAW/SHIELD).
+- Bullet targeting + evasion v1 shipped (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET()`, `DIST_TO_TARGET_BULLET()`, `MOVE_AWAY_FROM_TARGET`) with deterministic tie-break by numeric bullet creation order.
+- Phase 6 golden determinism fixtures committed + enforced in CI.
 
-Implemented:
-- Deterministic local engine (`packages/engine`) with replay output (`runMatchToReplay`).
-- Workshop UI (`apps/web`) running the engine in a Worker.
-
-Legacy:
-- `packages/replay` is a sample replay generator and is not authoritative.
+Next slice (Phase 4 — simulation correctness + invariants hardening)
+- Harden bullet movement/collision edge cases (avoid any missed/ambiguous hits).
+- Add/extend invariants so replays never contain NaNs/out-of-bounds positions and every bullet despawns with a reason.
+- Keep golden determinism fixtures updated when intentional behavior changes occur.
 
 ### Checklist (done vs. not done)
 
 Done (shipped)
-- [x] Docs: `Ruleset.md` now reflects the implemented `rulesetVersion = 0.2.0` engine behavior (explicit loadouts + `ARMOR`).
-- [x] Deploy Workshop build tag chip (`WORKSHOP_BUILD`) visible in `/workshop/`.
-- [x] Inspector shows bot display names (beyond `BOT1/BOT2…`).
-- [x] Tick events list grouped by category (Movement/Combat/Resources/Other) with collapsible headers.
-- [x] Tick events modes: **All** toggle (scope), **Raw** toggle.
-- [x] Tick events filter/search (affects list + raw) + status line.
-- [x] Raw tick events include `nameMap` + `eventsWithNames`.
-- [x] `pnpm qa:workshop` Playwright smoke covers: run/preview, opponent selects, randomize opponents, tick-events All/Raw/Filter + raw JSON shape.
+- [x] Docs/spec alignment for `rulesetVersion = 0.2.0` / `schemaVersion = 0.2.0`.
+- [x] Workshop build tag visible in `/workshop/`.
+- [x] Example bots have `;@slot1/2/3` headers (first 3 non-blank lines in script).
+- [x] Explicit per-bot 3-slot loadouts are wired through Workshop/engine (no source scanning).
+- [x] ARMOR implemented and tested (mitigation + speed penalty; SHIELD→ARMOR ordering).
+- [x] Golden determinism fixtures committed and `pnpm golden:check` is strict.
+- [x] Bullet targeting + `MOVE_AWAY_FROM_TARGET` available and smoke-tested.
 
-Not done yet (current focus: Phase 2.A + 2.1)
-- [x] Wire explicit per-bot `loadout` through all frontends that call `runMatchToReplay` (e.g. `apps/web` worker) so local runs match the `rulesetVersion = 0.2.0` engine.
-- [x] Workshop UI: add loadout selection/editing per bot, persistence, and inspector rendering of resolved `loadout` + `loadoutIssues` visible warnings/errors.
-- [x] Add/keep explicit engine regression tests covering ARMOR mitigation math (odd amounts), SHIELD→ARMOR ordering, and the ARMOR speed penalty.
-- [x] Remove/upgrade legacy deploy-time engine copies that still implement `rulesetVersion = 0.1.0` source-scanning semantics (to avoid confusing drift).
-- [x] Phase 6: run `pnpm golden:update`, commit fixtures, and make `pnpm golden:check` CI-enforced.
-  - Tip: you can run the GitHub Actions workflow **"Golden fixtures update (Phase 6)"** to generate fixtures and open a PR automatically.
-- [ ] Phase 0.3+: close remaining spec/schema drift (`Ruleset.md` + `ReplayViewerPlan.md` vs engine output).
-- [ ] Phase 3: bullet targeting DSL (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET`, `DIST_TO_TARGET_BULLET`) + evasion primitive.
+Next up
+- [ ] Phase 4: correctness + invariants hardening.
 - [ ] Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
 
 ---
 
-## Current engine contract (rulesetVersion `0.2.0`)
+## Current engine contract (rulesetVersion `0.2.0`, schemaVersion `0.2.0`)
 
 ### Determinism
 - Seeded RNG per match.
@@ -219,30 +212,28 @@ QA checklist
 
 ---
 
-## Phase 3 — Bullet awareness “v2”: bullets as first-class targets
+## Phase 3 — Bullets as first-class targets (baseline shipped)
 
-Goal: upgrade from coarse bullet threat booleans to target-driven bullet evasion.
+Status: ✅ implemented baseline (engine + deploy)
 
-Concrete tasks
-- [ ] DSL/compiler/runtime:
+Completed (shipped)
+- [x] DSL/compiler/runtime support:
   - `TARGET_CLOSEST_BULLET`
   - `HAS_TARGET_BULLET()`
   - `DIST_TO_TARGET_BULLET()`
-- [ ] Movement primitive:
-  - add `MOVE_AWAY_FROM_TARGET` (or a dedicated `EVADE_*` instruction) and specify its semantics.
-- [ ] Deterministic tie-break rules:
-  - define bullet id + creation order tie-breaks in `Ruleset.md`.
-- [ ] Update example bots to demonstrate reliable evasion.
+- [x] Evasion primitive:
+  - `MOVE_AWAY_FROM_TARGET` (via canonical `MOVE { target: { kind: "TARGET_AWAY" } }`)
+- [x] Deterministic tie-break documented + implemented:
+  - closest-by-Manhattan; ties break by **numeric bullet creation order** (`B1 < B2 < …`).
 
-Acceptance criteria
-- Deterministic target selection (stable tie-breaks).
-- New example bot behavior is reproducible across runs and environments.
-- Replay log/inspector makes bullet targeting debuggable.
+Remaining hardening / UX polish
+- [ ] Add a determinism regression test that specifically covers bullet ids ≥ 10 (guards against accidental lexicographic compares like `B10 < B2`).
+- [ ] Update/extend example bots to demonstrate bullet-target-driven evasion (not just coarse threat booleans).
+- [ ] Replay/Workshop debug UX: surface `targetBulletId` (or related targeting state) so bullet targeting is inspectable.
 
 QA checklist
 - `pnpm -C packages/engine test`
 - `pnpm qa`
-- Optional: run Workshop smoke to validate replay viewer behavior
 
 ---
 

@@ -815,10 +815,26 @@ function findClosestEnemyBullet(selfBotId, selfPos, bullets) {
     if (b.ownerBotId === selfBotId) continue
 
     const d = manhattan(selfPos, b.pos)
-    if (!best || d < best.d || (d === best.d && String(b.bulletId) < String(best.b.bulletId))) best = { b, d }
+
+    // Tie-break: bullet creation order (lowest numeric bullet id: B1 < B2 < ...).
+    // Do NOT use lexicographic compare (B10 would sort before B2).
+    const thisIdN = parseBulletIdNumber(b.bulletId)
+    const bestIdN = best ? parseBulletIdNumber(best.b.bulletId) : null
+
+    if (!best || d < best.d || (d === best.d && thisIdN != null && bestIdN != null && thisIdN < bestIdN)) {
+      best = { b, d }
+    }
   }
 
   return best?.b ?? null
+}
+
+function parseBulletIdNumber(bulletId) {
+  if (typeof bulletId !== 'string') return null
+  const m = bulletId.match(/\d+/)
+  if (!m) return null
+  const n = Number(m[0])
+  return Number.isFinite(n) ? n : null
 }
 
 /**

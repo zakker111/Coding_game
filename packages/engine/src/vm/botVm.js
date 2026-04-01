@@ -47,7 +47,7 @@ export function initBotVm(program) {
     pc: 1,
     waitRemaining: 0,
     timers: { 1: 0, 2: 0, 3: 0 },
-    target: { botSelector: null, bulletId: null, powerupType: null },otSelector: null, bulletId: null,ll },
+    target: { botSelector: null, bulletId: null, powerupType: null },
     moveGoal: null,
   }
 }

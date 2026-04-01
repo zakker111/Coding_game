@@ -19,16 +19,11 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-### Updated
-- Docs/spec alignment for the current engine contract (`rulesetVersion = 0.2.0`, `schemaVersion = 0.2.0`):
-  - `Ruleset.md`, `ReplayViewerPlan.md`, `BotInstructions.md`, `SpecAlignment.md`
-  - tracker/doc map updates (`Todo.md`, `PhaseStatus.md`, `NextPlan.md`)
-- Spec clarifications for `rulesetVersion = 0.2.0`:
-  - explicit per-bot 3-slot loadouts (default-empty if omitted + deterministic normalization + `loadoutIssues`)
-  - invalid loadouts surface as **visible, non-blocking warnings/errors** via `loadoutIssues` (match still runs)
-  - `ARMOR` passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering
+### Added
+- Selftest improvements (coverage + diagnostics) for Workshop/engine integration.
 
 ### Changed
+- Engine/replay contract: `schemaVersion` bumped to `0.2.0` (and docs/plans aligned to `rulesetVersion = 0.2.0`).
 - Deploy Workshop build tag bumped to **v0.3.3** (schemaVersion bump to 0.2.0 + example script updates).
 - Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
   - `;@slot1 <MODULE|EMPTY>`
@@ -36,12 +31,22 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
   - `;@slot3 <MODULE|EMPTY>`
   These are UI/UX metadata comments; authoritative loadout is still the match config / structured UI state.
 
+### Updated
+- Spec clarifications for `rulesetVersion = 0.2.0` loadouts:
+  - explicit per-bot 3-slot loadouts (default-empty if omitted + deterministic normalization + `loadoutIssues`)
+  - invalid loadouts surface as **visible, non-blocking warnings/errors** via `loadoutIssues` (match still runs)
+- `ARMOR` semantics: passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering.
+
 ### Fixed
+- `packages/engine`: fixed VM init corruption in `initBotVm` (could break execution).
+- `TARGET_CLOSEST_BULLET` tie-break now uses numeric bullet creation order (`B1 < B2 < …`, not lexicographic).
+- `packages/replay` sample generator no longer source-scans for module capability; it is loadout-driven (consistent with `rulesetVersion = 0.2.0`).
 - Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
 - Phase 6: golden determinism fixtures committed + enforced in CI.
 
 ### Deferred
-- Workshop: full structured loadout editor + persistence + inspector warnings for `loadoutIssues` (Phase 2; in progress).
+- Workshop UX polish: make `loadoutIssues` more prominent (still non-blocking).
+- Phase 4+ correctness work: tighten invariants (no NaNs/out-of-bounds) and harden bullet collision edge cases.
 
 ---
 

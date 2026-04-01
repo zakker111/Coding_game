@@ -1,109 +1,70 @@
 # NextPlan.md — What to build next (post `0.0.3`)
 
-This repo already has a working, end-to-end *local* loop:
-
+This repo already has a working, end-to-end **local** loop:
 - **Engine**: deterministic bot DSL → VM → simulation → replay (`packages/engine`)
 - **Workshop UI**: runs the engine in a worker + replay viewer (`apps/web`)
 - **Static deploy**: buildless workshop prototype (`deploy/`)
 
-The docs in this repo are already organized into “phases” (`PhaseStatus.md`, `Todo.md`). This plan is a **decision + execution checklist** for the next concrete slice.
-
-Current slice (Phase 2.A + 2.1 — spec-first lock + ARMOR):
-- Implement Phase 2 wiring: pass explicit per-bot `loadout` into the engine from all runners/frontends.
-- Implement Phase 2.1 wiring/UX: make ARMOR behavior visible and debuggable (tests + inspector).
-- Ensure invalid loadouts produce deterministic normalization plus **visible, non-blocking warnings/errors** via `loadoutIssues`.
+This file is the **merge-time plan**: what we just shipped, what’s locked, and what we do next.
 
 ---
 
-## 1) What’s “locked” right now
+## 1) What’s “locked” right now (treat as contracts)
 
-If you change any of the below, treat it as a **contract change** and update `Versions.md` + any affected specs.
+If you change any of the below, update `Versions.md` + affected specs/tests:
+- `rulesetVersion = 0.2.0` behavior (`Ruleset.md`)
+- `schemaVersion = 0.2.0` replay contract (`ReplayViewerPlan.md`, `packages/replay/src/index.d.ts`)
+- Deterministic tick loop order (`Ruleset.md`, `SpecAlignment.md`)
 
-- `rulesetVersion = 0.2.0` behavior (see `Ruleset.md`)
-- Replay schema contract (see `ReplayViewerPlan.md` + `packages/replay/src/index.d.ts`)
-- Deterministic tick loop order (see `Ruleset.md` §5, `ServerSimulationPlan.md`, `SpecAlignment.md`)
-
----
-
-## 2) Repository document map (so we don’t “plan past” what exists)
-
-**Authoritative for v1 behavior**
-
-- `Ruleset.md` — engine-matching rules + constants for `0.2.0`
-- `BotInstructions.md` — stable v1 DSL contract
-- `ReplayViewerPlan.md` — replay/viewer contract (schema + UX semantics)
-- `ArenaPlan.md` — topology + units + collision model
-
-**Primary “what’s next” trackers**
-
-- `PhaseStatus.md` — prioritized phase list
-- `Todo.md` — executable checklist + current engine contract summary
-
-**Forward-looking (useful, but not binding until implemented)**
-
-- `BotLanguageDesign.md`, `FutureProofing.md`, `CombatPlan.md` — extensibility direction
-- `ServerPlan.md`, `ServerSimulationPlan.md`, `ServerTechStack.md`, `DailyCompetition.md` — server + daily competitions
-- `UIPlan.md`, `ArenaVisualPlan.md` — workshop UX + rendering requirements
+Determinism guardrail:
+- Phase 6 golden fixtures are committed and strict-checked in CI (`pnpm golden:check --strict`).
 
 ---
 
-## 3) The biggest *project risk* right now
+## 2) Recently completed (this merge set)
 
-Before adding more mechanics, the highest-leverage work is to **prevent silent determinism drift**.
-
-Concretely:
-
-- Phase 6 golden tests exist, fixtures are generated + checked in (see `packages/engine/test/golden/fixtures/*.json`).
-- The golden harness matches the current replay shape (`replay.bots`) and excludes `bots[].sourceText` from the core hash (so comment-only edits don’t churn fixtures).
-
-With strict checking enabled in CI (`GOLDEN_STRICT=1`), determinism drift should now be caught quickly.
+- Replay/engine contract bumped to `schemaVersion = 0.2.0` (docs + deploy artifacts + mock/sample replays updated).
+- Deploy Workshop build tag bumped to **v0.3.3**.
+- Example bots updated to include locked `;@slot1/2/3` header directives.
+- `packages/replay` sample generator is now **loadout-driven** (no SAW/SHIELD source scanning).
+- Bullet targeting + evasion v1 is available (`TARGET_CLOSEST_BULLET`, `DIST_TO_TARGET_BULLET()`, `MOVE_AWAY_FROM_TARGET`) with deterministic tie-break by numeric bullet creation order.
 
 ---
 
-## 4) Current slice: Phase 2.A + 2.1 — explicit loadouts + ARMOR (`rulesetVersion = 0.2.0`)
+## 3) Next slice: Phase 4 — simulation correctness + invariants hardening
 
-Outcome:
-- module availability is an explicit match input (no source scanning)
-- replay headers are self-describing via per-bot `loadout` (+ optional `loadoutIssues`)
-- invalid loadouts produce deterministic normalization plus visible, non-blocking warnings/errors via `loadoutIssues`
-- ARMOR semantics are locked (mitigation + speed penalty) and debuggable
+Scope:
+- Harden bullet movement/collision edge cases (avoid missed/ambiguous hits).
+- Add/extend invariants so replays never contain NaNs/out-of-bounds positions.
+- Ensure every bullet despawns with a reason and state/event consistency is enforced.
 
-### Execution checklist
+Acceptance criteria:
+- Engine tests cover invariants (no NaNs/out-of-bounds; bullet spawn/move/despawn consistency).
+- Golden fixtures updated only when behavior changes intentionally.
+- Workshop still runs a full match without errors.
 
-1) Wire `loadout` through all runners/frontends
-- Workshop (`apps/web` worker boundary)
-- any deploy-time runners that still pass implicit/legacy loadouts
+---
 
-2) Workshop UX
-- per-bot loadout selection/editing + persistence
-- inspector rendering for resolved `loadout`
-- non-blocking warning + detail view for `loadoutIssues`
-
-3) Tests
-- engine regressions for:
-  - loadout normalization + issue recording
-  - ARMOR mitigation math (incl. odd amounts)
-  - SHIELD→ARMOR ordering for bullets
-  - ARMOR speed penalty when equipped
-- integration smoke ensuring Workshop actually passes non-empty loadouts into the worker → engine pipeline
-
-4) QA commands (run locally before merging)
+## 4) Pre-merge checklist (run locally)
 
 ```bash
 pnpm -C packages/engine test
+pnpm -C packages/replay test
+pnpm -C apps/web test
 pnpm test:all
 pnpm build:all
 pnpm qa
-# optional but recommended if deploy/workshop is touched
 pnpm check:deploy
 pnpm check:deploy:imports
-pnpm qa:workshop -- --serve --url http://127.0.0.1:8787
+pnpm -C packages/engine test:golden
 ```
+
+Manual checks:
+- Workshop shows the expected build tag and can run a match.
+- Raw replay JSON includes `schemaVersion = 0.2.0`, `rulesetVersion = 0.2.0`, and `bots[].loadout`.
 
 ---
 
-## 5) Up next (after Phase 2.A + 2.1)
+## 5) After Phase 4
 
-- Phase 6 determinism lock-in (commit/enforce golden fixtures)
-- Phase 3 bullet-as-target + evasion
-- Phase 8 server runner MVP
+- Phase 8: server runner MVP (submissions + deterministic runs + replay storage).
