@@ -1261,9 +1261,16 @@ export function WorkshopPage() {
                 </div>
               )
             ) : (
-              <div className="muted" style={{ marginTop: 8 }}>
-                Run a match to see events.
-              </div>
+              <pre
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  borderRadius: 10,
+                  background: 'rgba(0,0,0,0.35)',
+                  overflow: 'auto',
+                  height: 240,
+                }}
+              >{'Run a match to see events.'}</pre>
             )}
           </div>
 
