@@ -57,7 +57,10 @@ export function stepBullets(bullets, bots, tickEvents) {
       y: bullet.pos.y + bullet.vel.y,
     }
 
-    const path = bresenhamPoints(fromPos, candidateTo)
+    // Phase 4 hardening: use supercover stepping so we don't miss
+    // corner-crossings, and include the starting point to catch
+    // start-of-tick overlaps deterministically.
+    const path = supercoverPoints(fromPos, candidateTo)
 
     /** @type {{ kind: 'NONE' } | { kind: 'WALL', pos: {x:number,y:number} } | { kind: 'BOT', pos: {x:number,y:number}, victim: any }} */
     let hit = { kind: 'NONE' }
