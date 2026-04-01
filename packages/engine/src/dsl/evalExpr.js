@@ -42,6 +42,10 @@ import { parseExpression } from './expr.js'
  * @property {Record<string, boolean> | ((slot: 1|2|3) => boolean)} [slotActive]
  *
  * @property {boolean | (() => boolean)} [hasTargetBot]
+ * @property {boolean | (() => boolean)} [hasTargetBullet]
+ *
+ * @property {number | (() => number)} [distToTargetBullet]
+ *
  * @property {boolean | (() => boolean)} [bumpedBot]
  *
  * @property {Record<string, (...args: (number|boolean)[]) => (number|boolean)>} [functions]
@@ -231,6 +235,13 @@ function evalNode(node, ctx) {
       if (node.arguments.length !== 0) return err('ARITY', 'DIST_TO_TARGET_BOT expects 0 arguments')
       const d = resolveDistToTargetBot(ctx)
       if (!isInt(d)) return err('MISSING', 'DIST_TO_TARGET_BOT not available in ctx')
+      return ok(d)
+    }
+
+    if (fn === 'DIST_TO_TARGET_BULLET') {
+      if (node.arguments.length !== 0) return err('ARITY', 'DIST_TO_TARGET_BULLET expects 0 arguments')
+      const d = resolveDistToTargetBullet(ctx)
+      if (!isInt(d)) return err('MISSING', 'DIST_TO_TARGET_BULLET not available in ctx')
       return ok(d)
     }
 
@@ -441,6 +452,13 @@ function evalNode(node, ctx) {
       if (node.arguments.length !== 0) return err('ARITY', 'HAS_TARGET_BOT expects 0 arguments')
       const v = resolveBoolish(ctx?.hasTargetBot)
       if (v == null) return err('MISSING', 'HAS_TARGET_BOT not available in ctx')
+      return ok(v)
+    }
+
+    if (fn === 'HAS_TARGET_BULLET') {
+      if (node.arguments.length !== 0) return err('ARITY', 'HAS_TARGET_BULLET expects 0 arguments')
+      const v = resolveBoolish(/** @type {any} */ (ctx)?.hasTargetBullet)
+      if (v == null) return err('MISSING', 'HAS_TARGET_BULLET not available in ctx')
       return ok(v)
     }
 
@@ -726,6 +744,13 @@ function resolveDistToBot(ctx, botId) {
 /** @param {EvalCtx} ctx */
 function resolveDistToTargetBot(ctx) {
   const v = /** @type {any} */ (ctx)?.distToTargetBot
+  if (typeof v === 'function') return v()
+  return v
+}
+
+/** @param {EvalCtx} ctx */
+function resolveDistToTargetBullet(ctx) {
+  const v = /** @type {any} */ (ctx)?.distToTargetBullet
   if (typeof v === 'function') return v()
   return v
 }

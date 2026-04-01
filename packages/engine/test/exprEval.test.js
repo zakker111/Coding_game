@@ -118,6 +118,7 @@ test('evalExpr: extended built-ins (sector/zone/dist/powerups/bumps)', () => {
   assert.deepStrictEqual(evalExpr('BOT_IN_ADJ_SECTOR(BOT3)', ctx), { ok: true, value: true })
   assert.deepStrictEqual(evalExpr('DIST_TO_BOT(BOT2) == 5', ctx), { ok: true, value: true })
   assert.deepStrictEqual(evalExpr('DIST_TO_TARGET_BOT() == 7', ctx), { ok: true, value: true })
+  assert.deepStrictEqual(evalExpr('HAS_TARGET_BULLET() && DIST_TO_TARGET_BULLET() == 9', ctx), { ok: true, value: true })
   assert.deepStrictEqual(evalExpr('DIST_TO_SECTOR(1) == 0', ctx), { ok: true, value: true })
   assert.deepStrictEqual(evalExpr('DIST_TO_SECTOR_ZONE(1, 2) == 11', ctx), { ok: true, value: true })
 

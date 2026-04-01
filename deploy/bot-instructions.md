@@ -13,7 +13,7 @@
 ## What bots can do
 
 - Branch (`GOTO`, `IF ... GOTO`, `IF ... DO ...`) and wait (`WAIT`, timers).
-- Select targets (bot targets and powerup-type targets).
+- Select targets (bot targets, bullet targets, and powerup-type targets).
 - Move immediately (`MOVE`, `MOVE_TO_*`) or set a persistent navigation goal (`SET_MOVE_TO_*`).
 - Use equipped modules (module-type sugar like `FIRE_BULLET`, or slot-addressed `USE_SLOTn` / `STOP_SLOTn`).
 
@@ -164,6 +164,7 @@ Aliases are for readability and are deterministic.
 
 Bot state:
 - `targetBotId` (optional)
+- `targetBulletId` (optional)
 - `targetPowerupType` (optional)
 
 ### 3.1 Bot target register writes
@@ -178,7 +179,17 @@ Tie-break rule for “closest” / “lowest health”: **lowest bot id wins**.
 | `TARGET_NEXT` | Advance target to next bot (details in engine/rules). |
 | `TARGET_NEXT_IF_DEAD` | Like `TARGET_NEXT`, but only if current target is dead/invalid. |
 
-### 3.2 Powerup target register writes
+### 3.2 Bullet target register writes
+
+Bullets are first-class entities with stable `bulletId` ordering.
+
+Tie-break rule for `TARGET_CLOSEST_BULLET`: closest by Manhattan distance; ties break by **lowest bullet id**.
+
+| Instruction | Effect |
+|---|---|
+| `TARGET_CLOSEST_BULLET` | Set `targetBulletId` to the closest enemy bullet. If none exist, clears `targetBulletId`. |
+
+### 3.3 Powerup target register writes
 
 Bots have global knowledge of powerup locations.
 
@@ -196,13 +207,14 @@ Powerup target invalidation:
 Priority:
 - If both `targetBotId` and `targetPowerupType` are set, `MOVE_TO_TARGET` prefers the bot target unless you clear it.
 
-### 3.3 Clearing targets
+### 3.4 Clearing targets
 
 | Instruction | Effect |
 |---|---|
 | `CLEAR_TARGET_BOT` | Clear `targetBotId`. |
+| `CLEAR_TARGET_BULLET` | Clear `targetBulletId`. |
 | `CLEAR_TARGET_POWERUP` | Clear `targetPowerupType`. |
-| `CLEAR_TARGET` | Clear both. |
+| `CLEAR_TARGET` | Clear all targets. |
 
 ---
 
@@ -228,7 +240,8 @@ General rules:
 | `MOVE_TO_LOWEST_HEALTH_BOT` | Move toward lowest-health alive bot (ties: lowest bot id). |
 | `MOVE_TO_ARENA_EDGE UP|DOWN|LEFT|RIGHT` | Move toward outer boundary in that direction; if already touching, no-op. |
 | `MOVE_TO_WALL UP|DOWN|LEFT|RIGHT` | Alias of `MOVE_TO_ARENA_EDGE ...`. |
-| `MOVE_TO_TARGET` | If valid `targetBotId`: like `MOVE_TO_BOT <targetBotId>`; else if valid `targetPowerupType`: like `MOVE_TO_POWERUP <type>`; else no-op. |
+| `MOVE_TO_TARGET` | If valid `targetBotId`: like `MOVE_TO_BOT <targetBotId>`; else if valid `targetBulletId`: move away/toward uses bullet position; else if valid `targetPowerupType`: like `MOVE_TO_POWERUP <type>`; else no-op. |
+| `MOVE_AWAY_FROM_TARGET` | Move away from the currently selected target. Resolution priority: `targetBotId` (alive) > `targetBulletId` (exists) > `targetPowerupType` (exists). |
 
 Direction vectors for `MOVE <DIR>` (components in `{-1,0,+1}`):
 - `UP` → `(0, -1)`
@@ -386,6 +399,7 @@ Expression language is deterministic and C-like.
 
 Bot / target state:
 - `HAS_TARGET_BOT()` → bool
+- `HAS_TARGET_BULLET()` → bool
 - `BOT_ALIVE(<BOT>)` → bool
 
 Location (derived from continuous position; tie-break boundaries deterministically, recommended lowest id):
@@ -402,6 +416,7 @@ Distances (world units; Manhattan):
 - Unless otherwise stated, distances are between entity centers (bots/powerups) or between bot center and a named point (sector/zone center).
 - `DIST_TO_BOT(<BOT>)` → int
 - `DIST_TO_TARGET_BOT()` → int (no valid target bot → `999`)
+- `DIST_TO_TARGET_BULLET()` → int (no valid target bullet → `999`)
 - `DIST_TO_CLOSEST_BOT()` → int (none alive → `999`)
 - `DIST_TO_SECTOR(<SECTOR>)` → int
 - `DIST_TO_SECTOR_ZONE(<SECTOR>, <ZONE>)` → int

@@ -256,14 +256,12 @@ export function runMatchToReplay(params) {
       const vmBefore = bot.vm
       const instrBefore = vmBefore?.program?.instructions?.[vmBefore.pc - 1] ?? { kind: 'INVALID' }
       const prevTargetSelector = vmBefore?.target?.botSelector ?? null
+      const prevTargetBullet = vmBefore?.target?.bulletId ?? null
 
       const { vm: vmAfter, effects, debug } = stepBotVm(vmBefore, observation)
       bot.vm = vmAfter
 
-      // If this tick wrote the bot's target register using a dynamic selector
-      // (CLOSEST_BOT / LOWEST_HEALTH_BOT / NEXT...), resolve it deterministically
-      // to a concrete bot id *at execution time*.
-      normalizeTargetRegister(bot, bots, prevTargetSelector)
+      normalizeTargetRegister(bot, bots, prevTargetSelector, prevTargetBullet, bullets)
 
       // Track whether a USE_SLOT succeeded for BOT_EXEC reporting.
       let botExecResult = debug.executedKind === 'INVALID' ? 'NOP' : 'EXECUTED'
@@ -437,7 +435,7 @@ export function runMatchToReplay(params) {
     stepToggleDrains(bots, tickEvents)
 
     // 3) Movement + collision resolution
-    resolveMovement(bots, powerupState, tickEvents)
+    resolveMovement(bots, bullets, powerupState, tickEvents)
 
     // 4) SAW melee damage
     stepSawDamage(bots, tickEvents)
@@ -615,6 +613,9 @@ function buildObservation(bot, bots, bullets, powerupState) {
       ? botsById(bots, targetBotId)
       : null
 
+  const targetBulletId = bot.vm?.target?.bulletId
+  const targetBullet = typeof targetBulletId === 'string' ? bullets.find((b) => b?.bulletId === targetBulletId) : null
+
   const timers = bot.vm?.timers ?? { 1: 0, 2: 0, 3: 0 }
 
   const targetPowerupType = bot.vm?.target?.powerupType
@@ -653,6 +654,10 @@ function buildObservation(bot, bots, bullets, powerupState) {
     },
     distToTargetBot: () => {
       if (targetBot && targetBot.alive) return manhattan(bot.pos, targetBot.pos)
+      return 999
+    },
+    distToTargetBullet: () => {
+      if (targetBullet) return manhattan(bot.pos, targetBullet.pos)
       return 999
     },
     distToSector: (s) => {
@@ -699,8 +704,9 @@ function buildObservation(bot, bots, bullets, powerupState) {
     bulletInSameSector: bulletThreat.sameSector,
     bulletInAdjSector: bulletThreat.adjSector,
 
-    // Exposed for HAS_TARGET_BOT() (see botVm.js).
+    // Exposed for HAS_TARGET_BOT() / HAS_TARGET_BULLET() (see botVm.js).
     hasTargetBot: () => Boolean(targetBot && targetBot.alive),
+    hasTargetBullet: () => Boolean(targetBullet),
 
     // Slots
     hasModule: (slot) => {
@@ -800,16 +806,38 @@ function normalizeMoveTargetAtSetTime(target, pos) {
   return target
 }
 
+function findClosestEnemyBullet(selfBotId, selfPos, bullets) {
+  /** @type {{ b: any, d: number } | null} */
+  let best = null
+
+  for (const b of bullets) {
+    if (!b) continue
+    if (b.ownerBotId === selfBotId) continue
+
+    const d = manhattan(selfPos, b.pos)
+    if (!best || d < best.d || (d === best.d && String(b.bulletId) < String(best.b.bulletId))) best = { b, d }
+  }
+
+  return best?.b ?? null
+}
+
 /**
- * Normalize the bot target register after a bot executes a target-selection
- * instruction.
- *
- * In stable v1, selectors like CLOSEST_BOT / LOWEST_HEALTH_BOT are resolved
- * *when the instruction executes*, and the target register stores the resolved
- * concrete bot id.
+ * Normalize the bot target registers after a bot executes a target-selection instruction.
  */
-function normalizeTargetRegister(bot, bots, prevTargetSelector = null) {
+function normalizeTargetRegister(bot, bots, prevTargetSelector = null, prevBulletSelector = null, bullets = []) {
   const selector = bot?.vm?.target?.botSelector
+  const bulletSelector = bot?.vm?.target?.bulletId
+
+  if (bulletSelector != null && bulletSelector !== prevBulletSelector) {
+    if (bulletSelector === 'CLOSEST_BULLET') {
+      const b = findClosestEnemyBullet(bot.botId, bot.pos, bullets)
+      bot.vm.target.bulletId = b ? b.bulletId : null
+    } else {
+      const exists = bullets.some((b) => b && b.bulletId === bulletSelector)
+      if (!exists) bot.vm.target.bulletId = null
+    }
+  }
+
   if (selector == null) return
 
   // Concrete ids already.
@@ -847,7 +875,6 @@ function normalizeTargetRegister(bot, bots, prevTargetSelector = null) {
     return
   }
 
-  // Unknown selector => clear.
   bot.vm.target.botSelector = null
 }
 
@@ -857,7 +884,7 @@ function nextTargetId(selfId, currentTargetId) {
   return order[(idx + 1) % order.length]
 }
 
-function resolveMovement(bots, powerupState, tickEvents) {
+function resolveMovement(bots, bullets, powerupState, tickEvents) {
   // Apply at most one bump-damage instance per bot-pair per tick.
   const bumpDamagePairs = new Set()
 
@@ -871,11 +898,11 @@ function resolveMovement(bots, powerupState, tickEvents) {
     let requestFromGoal = false
 
     if (move) {
-      request = resolveMoveEffect(bot, move, bots, powerupState)
+      request = resolveMoveEffect(bot, move, bots, bullets, powerupState)
     } else if (bot.vm?.moveGoal) {
       requestFromGoal = true
       const speed = computeBotSpeedUnitsPerTick(bot)
-      request = resolveMoveTarget(bot, bot.vm.moveGoal, bots, powerupState, true, speed)
+      request = resolveMoveTarget(bot, bot.vm.moveGoal, bots, bullets, powerupState, true, speed)
     }
 
     if (!request) continue
@@ -1074,7 +1101,7 @@ function applyBotBumpDamage(botA, botB, tickEvents, pairKey) {
   }
 }
 
-function resolveMoveEffect(bot, move, bots, powerupState) {
+function resolveMoveEffect(bot, move, bots, bullets, powerupState) {
   const speed = computeBotSpeedUnitsPerTick(bot)
 
   if (move.kind === 'MOVE_DIR') {
@@ -1084,39 +1111,44 @@ function resolveMoveEffect(bot, move, bots, powerupState) {
 
   if (move.kind === 'MOVE') {
     const target = normalizeMoveTargetAtSetTime(move.target, bot.pos)
-    return resolveMoveTarget(bot, target, bots, powerupState, false, speed)
+    return resolveMoveTarget(bot, target, bots, bullets, powerupState, false, speed)
   }
 
   return null
 }
 
-function resolveMoveTarget(bot, target, bots, powerupState, clearGoalOnInvalid, speed) {
+function resolveMoveTarget(bot, target, bots, bullets, powerupState, clearGoalOnInvalid, speed) {
   if (!target || typeof target !== 'object') return null
 
-  if (target.kind === 'TARGET') {
+  if (target.kind === 'TARGET' || target.kind === 'TARGET_AWAY') {
     const botTargetId = bot.vm?.target?.botSelector
     const botTarget =
       botTargetId === 'BOT1' || botTargetId === 'BOT2' || botTargetId === 'BOT3' || botTargetId === 'BOT4'
         ? botsById(bots, botTargetId)
         : null
 
-    if (botTarget && botTarget.alive) {
-      const dx = botTarget.pos.x - bot.pos.x
-      const dy = botTarget.pos.y - bot.pos.y
-      const scaled = scaleDeltaToMaxLen(dx, dy, speed)
-      return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
-    }
+    /** @type {{x:number,y:number} | null} */
+    let goalPos = null
+
+    if (botTarget && botTarget.alive) goalPos = botTarget.pos
+
+    const bulletTargetId = bot.vm?.target?.bulletId
+    const bulletTarget =
+      !goalPos && typeof bulletTargetId === 'string' ? bullets.find((b) => b && b.bulletId === bulletTargetId) : null
+
+    if (!goalPos && bulletTarget) goalPos = bulletTarget.pos
 
     const type = bot.vm?.target?.powerupType
-    if (type) {
+    if (!goalPos && type) {
       const loc = findClosestPowerupLoc(powerupState, bot.pos, type)
-      if (loc) {
-        const pos = locToWorld(loc)
-        const dx = pos.x - bot.pos.x
-        const dy = pos.y - bot.pos.y
-        const scaled = scaleDeltaToMaxLen(dx, dy, speed)
-        return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
-      }
+      if (loc) goalPos = locToWorld(loc)
+    }
+
+    if (goalPos) {
+      const dx = target.kind === 'TARGET' ? goalPos.x - bot.pos.x : bot.pos.x - goalPos.x
+      const dy = target.kind === 'TARGET' ? goalPos.y - bot.pos.y : bot.pos.y - goalPos.y
+      const scaled = scaleDeltaToMaxLen(dx, dy, speed)
+      return { dx: scaled.dx, dy: scaled.dy, dir: dirFromDelta(dx, dy) }
     }
 
     if (clearGoalOnInvalid) bot.vm.moveGoal = null
@@ -1319,6 +1351,7 @@ function formatInstr(instr) {
   if (kind === 'CLEAR_MOVE') return 'CLEAR_MOVE'
 
   if (kind === 'SET_TARGET_BOT') return `SET_TARGET ${instr.selector}`
+  if (kind === 'SET_TARGET_BULLET') return `SET_TARGET_BULLET ${instr.selector}`
   if (kind === 'SET_TARGET_POWERUP') return `TARGET_POWERUP ${instr.type}`
   if (kind === 'CLEAR_TARGET') return `CLEAR_TARGET ${instr.which ?? 'ALL'}`
 
@@ -1342,6 +1375,7 @@ function formatMoveTarget(target) {
   if (!target || typeof target !== 'object') return ''
 
   if (target.kind === 'TARGET') return 'TARGET'
+  if (target.kind === 'TARGET_AWAY') return 'TARGET_AWAY'
   if (target.kind === 'BOT') return `BOT ${target.token}`
   if (target.kind === 'POWERUP') return `POWERUP ${target.type}`
   if (target.kind === 'SECTOR') return target.zone ? `SECTOR ${target.sector} ZONE ${target.zone}` : `SECTOR ${target.sector}`
