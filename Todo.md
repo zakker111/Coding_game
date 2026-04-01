@@ -12,7 +12,7 @@ Primary specs (authoritative for `rulesetVersion = 0.2.0`, `schemaVersion = 0.2.
 
 Recently completed (this merge set)
 - `schemaVersion = 0.2.0` end-to-end (engine output + deploy artifacts + sample/mock replays).
-- Deploy Workshop build tag bumped to **v0.3.3**.
+- Deploy Workshop build tag bumped to **v0.3.4**.
 - Example bots updated with locked loadout header directives (`;@slot1/2/3`).
 - `packages/replay` sample generator is now **loadout-driven** (no source scanning for SAW/SHIELD).
 - Bullet targeting + evasion v1 shipped (`TARGET_CLOSEST_BULLET`, `HAS_TARGET_BULLET()`, `DIST_TO_TARGET_BULLET()`, `MOVE_AWAY_FROM_TARGET`) with deterministic tie-break by numeric bullet creation order.

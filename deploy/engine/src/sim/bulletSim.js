@@ -7,7 +7,7 @@ import {
   BULLET_SPEED_UNITS_PER_TICK,
   SLOT_IDS,
 } from './constants.js'
-import { bresenhamPoints } from './bresenham.js'
+import { supercoverPoints } from './bresenham.js'
 import { clonePos, normalizeToLen, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
 
 

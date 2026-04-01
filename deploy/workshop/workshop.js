@@ -548,7 +548,7 @@ const scrub = document.getElementById('scrub')
 
 const canvas = document.getElementById('arenaCanvas')
 
-const WORKSHOP_BUILD = '0.3.3'
+const WORKSHOP_BUILD = '0.3.4'
 if (workshopBuildTag) workshopBuildTag.textContent = `v${WORKSHOP_BUILD}`
 
 // State

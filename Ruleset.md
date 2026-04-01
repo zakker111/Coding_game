@@ -322,7 +322,7 @@ On fire:
 
 Movement + collision:
 - Each tick, each bullet advances from `fromPos → candidateToPos`.
-- The engine walks integer points on the segment using Bresenham and finds the first collision:
+- The engine walks integer points on the segment using supercover stepping (includes `fromPos`) and finds the first collision:
   - wall (outside arena bounds)
   - bot AABB (excluding owner)
 - On hit:

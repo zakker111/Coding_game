@@ -24,7 +24,7 @@ Determinism guardrail:
 ## 2) Recently completed (this merge set)
 
 - Replay/engine contract bumped to `schemaVersion = 0.2.0` (docs + deploy artifacts + mock/sample replays updated).
-- Deploy Workshop build tag bumped to **v0.3.3**.
+- Deploy Workshop build tag bumped to **v0.3.4**.
 - Example bots updated to include locked `;@slot1/2/3` header directives.
 - `packages/replay` sample generator is now **loadout-driven** (no SAW/SHIELD source scanning).
 - Bullet targeting + evasion v1 is available (`TARGET_CLOSEST_BULLET`, `DIST_TO_TARGET_BULLET()`, `MOVE_AWAY_FROM_TARGET`) with deterministic tie-break by numeric bullet creation order.

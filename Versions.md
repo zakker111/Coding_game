@@ -24,7 +24,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Changed
 - Engine/replay contract: `schemaVersion` bumped to `0.2.0` (and docs/plans aligned to `rulesetVersion = 0.2.0`).
-- Deploy Workshop build tag bumped to **v0.3.3** (schemaVersion bump to 0.2.0 + example script updates).
+- Deploy Workshop build tag bumped to **v0.3.4** (bullet collision hardening + Phase 4 invariant test additions).
 - Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
   - `;@slot1 <MODULE|EMPTY>`
   - `;@slot2 <MODULE|EMPTY>`
@@ -40,6 +40,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Fixed
 - `packages/engine`: fixed VM init corruption in `initBotVm` (could break execution).
 - `TARGET_CLOSEST_BULLET` tie-break now uses numeric bullet creation order (`B1 < B2 < …`, not lexicographic).
+- Bullet collision hardening: bullets now use **supercover stepping** (including `fromPos`) to reduce corner-crossing / point-blank miss cases.
 - `packages/replay` sample generator no longer source-scans for module capability; it is loadout-driven (consistent with `rulesetVersion = 0.2.0`).
 - Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
 - Phase 6: golden determinism fixtures committed + enforced in CI.
