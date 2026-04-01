@@ -21,6 +21,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Added
 - Selftest improvements (coverage + diagnostics) for Workshop/engine integration.
+- Replay invariant checker + multi-seed invariant test coverage (Phase 4 Slice 0).
+- Bullet lifecycle invariant checker (spawn/move/despawn consistency) + multi-seed test coverage (Phase 4 Slice 1).
 
 ### Changed
 - Engine/replay contract: `schemaVersion` bumped to `0.2.0` (and docs/plans aligned to `rulesetVersion = 0.2.0`).
@@ -47,7 +49,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Deferred
 - Workshop UX polish: make `loadoutIssues` more prominent (still non-blocking).
-- Phase 4+ correctness work: tighten invariants (no NaNs/out-of-bounds) and harden bullet collision edge cases.
+- Phase 4+ correctness work: tighten invariants (no NaNs/out-of-bounds) and continue hardening bullet collision edge cases.
 
 ---
 
