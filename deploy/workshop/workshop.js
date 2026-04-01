@@ -101,22 +101,88 @@ function fnv1a32(str) {
   return h >>> 0
 }
 
+function loadoutSig(loadout) {
+  const a = Array.isArray(loadout) ? loadout : [null, null, null]
+  return a
+    .slice(0, 3)
+    .map((s) => (s == null ? 'EMPTY' : String(s)))
+    .join(',')
+}
+
 function mixSeed(seed, bots) {
   let h = seed >>> 0
   for (const b of bots) {
-    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n`)
+    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n${loadoutSig(b.loadout)}\n`)
     h = Math.imul(h, 2654435761) >>> 0
   }
   return h >>> 0
 }
 
-function computeRunSignature(seed, tickCap, sources) {
+function computeRunSignature(seed, tickCap, specsBySlot) {
   let h = fnv1a32(`seed:${seed}\ntickCap:${tickCap}\n`)
   for (const slotId of SLOT_IDS) {
-    h ^= fnv1a32(`${slotId}\n${sources[slotId] ?? ''}\n`)
+    const spec = specsBySlot?.[slotId]
+    h ^= fnv1a32(`${slotId}\n${spec?.sourceText ?? ''}\n${loadoutSig(spec?.loadout)}\n`)
     h = Math.imul(h, 2654435761) >>> 0
   }
   return h >>> 0
+}
+
+function parseLoadoutFromSource(sourceText) {
+  const lines = String(sourceText || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+
+  /** @type {[any, any, any]} */
+  const loadout = [null, null, null]
+
+  let headerCommentLinesSeen = 0
+  let sawDirective = false
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Only scan the leading comment header.
+    if (!trimmed.startsWith(';')) break
+
+    headerCommentLinesSeen++
+
+    // Accept `;@slot1 BULLET` as well as `;@slot1: BULLET` / `;@slot1 = BULLET`.
+    const m = trimmed.match(/^;\s*@slot([123])\s*[:=]?\s*(\S+)\s*$/i)
+    if (m) {
+      sawDirective = true
+
+      const slot = Number(m[1])
+      const raw = String(m[2] || '')
+        .trim()
+        .toUpperCase()
+
+      if (slot < 1 || slot > 3) continue
+
+      if (raw === 'EMPTY' || raw === 'NONE') loadout[slot - 1] = null
+      else if (raw === 'BULLET' || raw === 'SAW' || raw === 'SHIELD' || raw === 'ARMOR') loadout[slot - 1] = raw
+      else loadout[slot - 1] = null
+    }
+
+    // Workshop contract: only the first 3 non-blank comment lines are considered.
+    if (headerCommentLinesSeen >= 3) break
+  }
+
+  // If no explicit loadout is declared in the script, default to all-empty.
+  if (!sawDirective) return { loadout: [null, null, null], hasDirectives: false }
+
+  return { loadout, hasDirectives: true }
+}
+
+function deriveLoadoutForSlot(slotId, sourceText) {
+  const parsed = parseLoadoutFromSource(sourceText)
+  if (parsed.hasDirectives) return parsed.loadout
+
+  // Deploy workshop fallback: if BOT1 has no directives, give it a weapon so the page is playable.
+  if (slotId === 'BOT1') return ['BULLET', null, null]
+
+  return [null, null, null]
 }
 
 function createEl(tag, props = {}, children = []) {
@@ -482,7 +548,7 @@ const scrub = document.getElementById('scrub')
 
 const canvas = document.getElementById('arenaCanvas')
 
-const WORKSHOP_BUILD = '0.3'
+const WORKSHOP_BUILD = '0.3.3'
 if (workshopBuildTag) workshopBuildTag.textContent = `v${WORKSHOP_BUILD}`
 
 // State
@@ -1130,7 +1196,14 @@ function currentRunSignature() {
     BOT4: opp4?.sourceText ?? EXAMPLE_BOTS.bot4.sourceText,
   }
 
-  return computeRunSignature(seed, tickCap, sources)
+  const specsBySlot = {
+    BOT1: { sourceText: sources.BOT1, loadout: deriveLoadoutForSlot('BOT1', sources.BOT1) },
+    BOT2: { sourceText: sources.BOT2, loadout: deriveLoadoutForSlot('BOT2', sources.BOT2) },
+    BOT3: { sourceText: sources.BOT3, loadout: deriveLoadoutForSlot('BOT3', sources.BOT3) },
+    BOT4: { sourceText: sources.BOT4, loadout: deriveLoadoutForSlot('BOT4', sources.BOT4) },
+  }
+
+  return computeRunSignature(seed, tickCap, specsBySlot)
 }
 
 function markReplayStale() {
@@ -1261,7 +1334,18 @@ async function run() {
     BOT4: opp4?.sourceText ?? EXAMPLE_BOTS.bot4.sourceText,
   }
 
-  const botsForMix = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sources[slotId] ?? '' }))
+  const specsBySlot = {
+    BOT1: { sourceText: sources.BOT1, loadout: deriveLoadoutForSlot('BOT1', sources.BOT1) },
+    BOT2: { sourceText: sources.BOT2, loadout: deriveLoadoutForSlot('BOT2', sources.BOT2) },
+    BOT3: { sourceText: sources.BOT3, loadout: deriveLoadoutForSlot('BOT3', sources.BOT3) },
+    BOT4: { sourceText: sources.BOT4, loadout: deriveLoadoutForSlot('BOT4', sources.BOT4) },
+  }
+
+  const botsForMix = SLOT_IDS.map((slotId) => ({
+    slotId,
+    sourceText: specsBySlot[slotId].sourceText ?? '',
+    loadout: specsBySlot[slotId].loadout,
+  }))
   const mixed = mixSeed(seed, botsForMix)
 
   const headerBots = [
@@ -1269,25 +1353,29 @@ async function run() {
       slotId: 'BOT1',
       displayName: bot1?.name ?? 'BOT1',
       appearance: SLOT_APPEARANCE.BOT1,
-      sourceText: sources.BOT1,
+      sourceText: specsBySlot.BOT1.sourceText,
+      loadout: specsBySlot.BOT1.loadout,
     },
     {
       slotId: 'BOT2',
       displayName: opp2?.displayName ?? 'BOT2',
       appearance: SLOT_APPEARANCE.BOT2,
-      sourceText: sources.BOT2,
+      sourceText: specsBySlot.BOT2.sourceText,
+      loadout: specsBySlot.BOT2.loadout,
     },
     {
       slotId: 'BOT3',
       displayName: opp3?.displayName ?? 'BOT3',
       appearance: SLOT_APPEARANCE.BOT3,
-      sourceText: sources.BOT3,
+      sourceText: specsBySlot.BOT3.sourceText,
+      loadout: specsBySlot.BOT3.loadout,
     },
     {
       slotId: 'BOT4',
       displayName: opp4?.displayName ?? 'BOT4',
       appearance: SLOT_APPEARANCE.BOT4,
-      sourceText: sources.BOT4,
+      sourceText: specsBySlot.BOT4.sourceText,
+      loadout: specsBySlot.BOT4.loadout,
     },
   ]
 
@@ -1295,11 +1383,24 @@ async function run() {
     const replayFromWorker = await runMatchInEngineWorker({
       seed: mixed,
       tickCap,
-      bots: headerBots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText })),
+      bots: headerBots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText, loadout: b.loadout })),
     })
 
-    replay = { ...replayFromWorker, bots: headerBots }
-    lastRunSignature = computeRunSignature(seed, tickCap, sources)
+    // Preserve engine-normalized loadout + loadoutIssues (if any), but keep the
+    // Workshop UI's displayName/appearance.
+    const mergedHeaderBots = (replayFromWorker.bots || []).map((engineBot) => {
+      const uiBot = headerBots.find((b) => b.slotId === engineBot.slotId)
+      if (!uiBot) return engineBot
+      return {
+        ...engineBot,
+        displayName: uiBot.displayName,
+        appearance: uiBot.appearance,
+        sourceText: uiBot.sourceText,
+      }
+    })
+
+    replay = { ...replayFromWorker, bots: mergedHeaderBots }
+    lastRunSignature = computeRunSignature(seed, tickCap, specsBySlot)
     replayStale = false
 
     tick = 0

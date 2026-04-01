@@ -27,6 +27,7 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'SET_TIMER', timer: 1 | 2 | 3, ticks: number }
  *   | { kind: 'CLEAR_TIMER', timer: 1 | 2 | 3 }
  *   | { kind: 'TARGET_CLOSEST' }
+ *   | { kind: 'TARGET_CLOSEST_BULLET' }
  *   | { kind: 'TARGET_LOWEST_HEALTH' }
  *   | { kind: 'TARGET_NEXT' }
  *   | { kind: 'TARGET_NEXT_IF_DEAD' }
@@ -42,6 +43,7 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'SET_MOVE_TO_POWERUP', type: PowerupType }
  *   | { kind: 'SET_MOVE_TO_BOT', target: string }
  *   | { kind: 'MOVE_TO_TARGET' }
+ *   | { kind: 'MOVE_AWAY_FROM_TARGET' }
  *   | { kind: 'MOVE_TO_ZONE', zone: 1 | 2 | 3 | 4 }
  *   | { kind: 'MOVE_TO_SECTOR', sector: 1|2|3|4|5|6|7|8|9, zone?: 1|2|3|4 }
  *   | { kind: 'MOVE_TO_BOT', target: string }
@@ -380,6 +382,8 @@ function parseSimpleInstruction(line, lineNo, errors) {
 
   if (op === 'TARGET_CLOSEST') return { kind: 'TARGET_CLOSEST' }
 
+  if (op === 'TARGET_CLOSEST_BULLET') return { kind: 'TARGET_CLOSEST_BULLET' }
+
   if (op === 'TARGET_LOWEST_HEALTH') return { kind: 'TARGET_LOWEST_HEALTH' }
 
   if (op === 'TARGET_NEXT') return { kind: 'TARGET_NEXT' }
@@ -480,6 +484,14 @@ function parseSimpleInstruction(line, lineNo, errors) {
       return { kind: 'INVALID' }
     }
     return { kind: 'MOVE_TO_TARGET' }
+  }
+
+  if (op === 'MOVE_AWAY_FROM_TARGET') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'MOVE_AWAY_FROM_TARGET expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_AWAY_FROM_TARGET' }
   }
 
   if (op === 'MOVE_TO_ZONE') {

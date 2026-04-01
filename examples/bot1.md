@@ -1,14 +1,14 @@
 # Built-in bot: Zone Patrol Shooter (BULLET)
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = BULLET`
 - `SLOT2 = (empty)`
 - `SLOT3 = (empty)`
 
 **Intended behavior**
 - Demonstrates a **zone patrol loop** inside the bot’s current sector that reliably cycles through all 4 zones.
-- If bullets are nearby, briefly dodges (helps avoid standing still in crossfire).
   - To keep the script simple (no extra state), this bot patrols in an axis-aligned loop: **1 → 2 → 4 → 3 → 1**.
+- If bullets are nearby, briefly dodges (helps avoid standing still in crossfire).
 - If a bot is **very close** (or we just bumped), briefly backs off toward the center before resuming patrol.
 - If health is low and a HEALTH powerup exists, commits briefly to a healing run.
 - If ammo is low and an AMMO powerup exists (and we’re not currently healing), commits briefly to an ammo run.
@@ -17,6 +17,9 @@
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
 ; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: patrol zones 1→2→4→3→1 (current sector); avoid bump-lock; detour for HEALTH/AMMO when low; dodge bullets; fire at NEAREST_BOT.

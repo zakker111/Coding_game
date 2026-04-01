@@ -1,11 +1,11 @@
-import type { Replay, SlotId } from '@coding-game/replay'
+import type { Loadout, Replay, SlotId } from '@coding-game/replay'
 import type { RunLocalMessage } from './messages'
 import { isRunResultMessage } from './messages'
 
 export type RunLocalParams = {
   seed: number
   tickCap: number
-  bots: Array<{ slotId: SlotId; sourceText: string }>
+  bots: Array<{ slotId: SlotId; sourceText: string; loadout: Loadout }>
 }
 
 let nextRequestId = 1

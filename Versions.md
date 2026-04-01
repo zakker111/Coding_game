@@ -19,7 +19,34 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ## Unreleased
 
-- (none)
+### Added
+- Selftest improvements (coverage + diagnostics) for Workshop/engine integration.
+
+### Changed
+- Engine/replay contract: `schemaVersion` bumped to `0.2.0` (and docs/plans aligned to `rulesetVersion = 0.2.0`).
+- Deploy Workshop build tag bumped to **v0.3.3** (schemaVersion bump to 0.2.0 + example script updates).
+- Example bot scripts now include locked loadout header directives as the first 3 non-blank lines:
+  - `;@slot1 <MODULE|EMPTY>`
+  - `;@slot2 <MODULE|EMPTY>`
+  - `;@slot3 <MODULE|EMPTY>`
+  These are UI/UX metadata comments; authoritative loadout is still the match config / structured UI state.
+
+### Updated
+- Spec clarifications for `rulesetVersion = 0.2.0` loadouts:
+  - explicit per-bot 3-slot loadouts (default-empty if omitted + deterministic normalization + `loadoutIssues`)
+  - invalid loadouts surface as **visible, non-blocking warnings/errors** via `loadoutIssues` (match still runs)
+- `ARMOR` semantics: passive mitigation (~33%) + speed penalty + SHIELD→ARMOR ordering.
+
+### Fixed
+- `packages/engine`: fixed VM init corruption in `initBotVm` (could break execution).
+- `TARGET_CLOSEST_BULLET` tie-break now uses numeric bullet creation order (`B1 < B2 < …`, not lexicographic).
+- `packages/replay` sample generator no longer source-scans for module capability; it is loadout-driven (consistent with `rulesetVersion = 0.2.0`).
+- Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
+- Phase 6: golden determinism fixtures committed + enforced in CI.
+
+### Deferred
+- Workshop UX polish: make `loadoutIssues` more prominent (still non-blocking).
+- Phase 4+ correctness work: tighten invariants (no NaNs/out-of-bounds) and harden bullet collision edge cases.
 
 ---
 
@@ -29,7 +56,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 
 ### Added
 - Deploy Workshop (buildless static):
-  - Visible build tag chip in header (`WORKSHOP_BUILD`), currently **v0.3**.
+  - Visible build tag chip in header (`WORKSHOP_BUILD`), **v0.3.1**.
   - Inspector improvements:
     - bot display names shown in Inspector + event formatting
     - tick events grouped (Movement/Combat/Resources/Other) with collapsible headers
@@ -86,7 +113,7 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 - Workspace configuration (`pnpm-workspace.yaml`) includes `apps/*` and `packages/*`, excluding legacy `site/`.
 
 ### Notes
-- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.1.0`.
+- `packages/engine` is the authoritative simulation core for `rulesetVersion = 0.2.0` (replay `schemaVersion = 0.2.0`).
 - `packages/replay` remains a legacy/sample generator and should not be treated as authoritative.
 
 ---

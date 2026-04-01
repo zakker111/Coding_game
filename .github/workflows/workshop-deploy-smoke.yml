@@ -1,0 +1,52 @@
+name: Workshop Deploy Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Deployed base URL to smoke test (e.g. https://p3ljjkbpfft1.cosine.page)'
+        required: true
+        type: string
+      headed:
+        description: 'Run headed (debug)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Workshop smoke against deployed URL
+        run: |
+          set -euo pipefail
+
+          ARGS=("--url=${{ inputs.url }}")
+          if [ "${{ inputs.headed }}" = "true" ]; then
+            ARGS+=("--headed")
+          fi
+
+          node scripts/qa-workshop.mjs "${ARGS[@]}"

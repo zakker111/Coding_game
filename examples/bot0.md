@@ -2,7 +2,7 @@
 
 This is the **default BOT1 script** the Workshop should load when the user has **no saved bot draft** yet.
 
-**Suggested v1 loadout**
+**Suggested loadout**
 - `SLOT1 = BULLET`
 - `SLOT2 = (empty)`
 - `SLOT3 = (empty)`
@@ -24,6 +24,9 @@ This starter intentionally uses a few core v1 patterns:
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
 ; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
 ; Summary: chase+shoot the closest bot; avoid bump-lock; detour for HEALTH/AMMO when low; dodge enemy bullets when threatened.

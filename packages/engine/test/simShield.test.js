@@ -8,14 +8,16 @@ test('runMatchToReplay: SHIELD reduces bullet damage and drains energy', () => {
   const bots = [
     {
       slotId: 'BOT1',
+      loadout: ['BULLET', null, null],
       sourceText: ['LABEL LOOP', 'IF (SLOT_READY(SLOT1)) DO FIRE_SLOT1 BOT2', 'GOTO LOOP', ''].join('\n'),
     },
     {
       slotId: 'BOT2',
+      loadout: ['SHIELD', null, null],
       sourceText: ['LABEL LOOP', 'SHIELD ON', 'GOTO LOOP', ''].join('\n'),
     },
-    { slotId: 'BOT3', sourceText: 'WAIT 1\n' },
-    { slotId: 'BOT4', sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT3', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
+    { slotId: 'BOT4', loadout: [null, null, null], sourceText: 'WAIT 1\n' },
   ]
 
   const replay = runMatchToReplay({ seed: 123, tickCap: 60, bots })

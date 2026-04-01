@@ -1,8 +1,9 @@
 # Built-in bot: Corner Bunker (BULLET)
 
-**Current engine note (rulesetVersion `0.1.0`)**
-- The engine does not yet support explicit loadouts.
-- This script does **not** reference `SAW` or `SHIELD`, so it runs as a **BULLET-only** bot.
+**Suggested loadout**
+- `SLOT1 = BULLET`
+- `SLOT2 = (empty)`
+- `SLOT3 = (empty)`
 
 **Intended behavior**
 - Defaults to a fixed “home” location.
@@ -15,7 +16,11 @@
 ## Script
 
 ```text
+;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
 ; bot3 — Corner Bunker
+; Loadout: SLOT1=BULLET
 ; Summary: hold a home corner; avoid bump-lock; dodge bullets; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1

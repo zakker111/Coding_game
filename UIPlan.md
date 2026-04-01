@@ -46,7 +46,7 @@ It builds on:
          - `;@slot2 <MODULE|EMPTY>`
          - `;@slot3 <MODULE|EMPTY>`
        - the editor treats these lines as non-editable; dropdown changes rewrite them deterministically
-       - default for a new bot: all slots `EMPTY`
+       - default for a new bot: `SLOT1=BULLET`, `SLOT2=EMPTY`, `SLOT3=EMPTY` (so the Workshop is immediately playable)
      - v1 note: loadout affects **local preview** only; server-run matches store/run only bot code in v1
    - **Run a local match (4 bots)**
      - BOT1 = your selected bot (editable)

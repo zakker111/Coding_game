@@ -6,7 +6,7 @@ This repo is **spec-first**, and includes a runnable prototype:
 
 - `packages/engine`: bot DSL compiler/VM + deterministic simulation + replay generation
 - `apps/web`: Vite + React workshop that runs local matches in a Web Worker and renders the replay
-- `packages/replay`: legacy replay schema + sample generator (not authoritative engine behavior)
+- `packages/replay`: legacy replay schema + sample generator (uses lightweight source heuristics like scanning for `SAW`/`SHIELD`; not authoritative engine behavior)
 
 ## Running the prototype
 
@@ -33,11 +33,29 @@ pnpm -C packages/engine test
 
 Phase 1 QA is intended to be fully reproducible in CI and locally.
 
+Fast path:
+
 ```bash
 pnpm qa:phase1
 ```
 
-This runs workspace-wide tests + builds (including `apps/web` and `packages/engine`).
+Full sequence (same steps as CI should run):
+
+```bash
+pnpm install --no-frozen-lockfile
+pnpm check:deploy
+pnpm check:deploy:imports
+pnpm -C packages/engine test
+pnpm -C packages/replay test
+pnpm -C apps/web test
+pnpm qa:phase1
+```
+
+Or run the one-shot gate runner (writes `phase1-gate.log`):
+
+```bash
+pnpm gate:phase1
+```
 
 Additional recommended checks (deploy/workshop):
 
@@ -73,15 +91,14 @@ Notes:
 - Each bot executes **exactly 1 instruction per tick** in a small DSL (with beginner-friendly aliases like `TARGET_CLOSEST`, `MOVE_TO_ZONE`, `IN_ZONE`, etc.; these are intended to normalize to a small canonical core at parse/compile time and do not affect determinism)
 - Arena is a **3×3 grid of sectors** (1–9). Each sector has **4 zones** (2×2). Bots have continuous world positions (`pos = {x,y}` in a 192×192 arena) and a **16×16 hitbox** (centered at `pos`); sector/zone are UI/rules regions derived from `pos`.
   - Bots do **not** move anchor-to-anchor or snap to sector/zone centers; only powerups use anchor locations for compact encoding.
-- Module/loadout note (rulesetVersion `0.1.0`): explicit 3-slot loadouts are not implemented yet; the engine infers whether a bot has `SAW`/`SHIELD` by scanning the bot source text.
-  - Planned: Workshop will represent loadout as 3 locked source header directives (`;@slot1`, `;@slot2`, `;@slot3`) and future rulesets will default to `SLOT1=EMPTY` if no loadout is provided.
+- Module/loadout note (rulesetVersion `0.2.0` in `packages/engine`): bots have an explicit 3-slot `loadout` in the match input (`[slot1, slot2, slot3]`). If omitted, it defaults to all-empty (`[null, null, null]`) and is deterministically normalized (see `Ruleset.md` §1.1.1).
 - Powerups (`HEALTH|AMMO|ENERGY`) spawn at deterministic anchors (seeded RNG) every **10–20 ticks** and are picked up when a bot’s AABB overlaps the anchor point.
 - Matches end by rules: last bot alive, or `tickCap`, or `STALEMATE` (no bot-vs-bot damage for a configured window) — see `Ruleset.md`.
-- Matches are fully replayable from `(rulesetVersion, matchSeed, bot source snapshots)` (and future: explicit loadouts).
+- Matches are fully replayable from `(rulesetVersion, matchSeed, bot source snapshots, loadouts)`.
 
 ## Where to look (recommended reading order)
 
-1. `Ruleset.md` — core gameplay rules (stats, speed model, damage/kill credit, powerups)
+1. `Ruleset.md` — core gameplay rules for `rulesetVersion = 0.2.0` (stats, speed model, damage/kill credit, powerups)
 2. `BotInstructions.md` — the bot language
 3. `ArenaPlan.md` — arena topology + sectors/zones + movement model
 4. `UIPlan.md` + `ArenaVisualPlan.md` — client workshop UX and exact arena rendering spec

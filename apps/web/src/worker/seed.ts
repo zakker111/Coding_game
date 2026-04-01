@@ -18,7 +18,8 @@ export function fnv1a32(str: string): number {
 export function mixSeed(seed: number, bots: BotSpec[]): number {
   let h = seed >>> 0
   for (const b of bots) {
-    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n`)
+    const loadoutSig = (b.loadout || []).map((s) => (s == null ? 'EMPTY' : s)).join(',')
+    h ^= fnv1a32(`${b.slotId}\n${b.sourceText}\n${loadoutSig}\n`)
     h = Math.imul(h, 2654435761) >>> 0
   }
   return h >>> 0

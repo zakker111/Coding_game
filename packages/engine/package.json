@@ -25,6 +25,6 @@
     "test": "tsc -p tsconfig.json --noEmit && node --test",
     "test:golden": "node --test test/golden",
     "golden:update": "node test/golden/updateGolden.mjs",
-    "golden:check": "node test/golden/checkGoldens.mjs"
+    "golden:check": "node test/golden/checkGoldens.mjs --strict"
   }
 }

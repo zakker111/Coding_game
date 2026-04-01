@@ -9,8 +9,8 @@ function getArgValue(args, name) {
 
 function generateMockReplay(seed) {
   return {
-    schemaVersion: '0.1.0',
-    rulesetVersion: '0.1.0',
+    schemaVersion: '0.2.0',
+    rulesetVersion: '0.2.0',
     ticksPerSecond: 1,
     matchSeed: seed,
     tickCap: 2,
@@ -19,24 +19,28 @@ function generateMockReplay(seed) {
         slotId: 'BOT1',
         displayName: 'Player',
         appearance: { kind: 'COLOR', color: '#4ade80' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
       {
         slotId: 'BOT2',
         displayName: 'Chaser Shooter',
         appearance: { kind: 'COLOR', color: '#60a5fa' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nSET_MOVE_TO_TARGET\nWAIT 1\nGOTO LOOP\n',
       },
       {
         slotId: 'BOT3',
         displayName: 'Corner Bunker',
         appearance: { kind: 'COLOR', color: '#f472b6' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
       {
         slotId: 'BOT4',
         displayName: 'Saw Rusher',
         appearance: { kind: 'COLOR', color: '#fbbf24' },
+        loadout: [null, null, null],
         sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n',
       },
     ],

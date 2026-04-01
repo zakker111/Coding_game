@@ -10,6 +10,9 @@ jobs:
   qa:
     runs-on: ubuntu-latest
 
+    env:
+      GOLDEN_STRICT: '1'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,17 +22,92 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.3
+      - name: Setup pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.30.3 --activate
+          pnpm --version
 
       - name: Install dependencies
         # Repo currently does not include pnpm-lock.yaml, and pnpm defaults to
         # frozen installs on CI. Allow lockfile generation for now.
         run: pnpm install --no-frozen-lockfile
 
-      - name: QA
+      - name: Phase 1 gate (with full logs)
         run: |
           set -euo pipefail
-          pnpm qa
+
+          # Install already completed above; gate runner will run everything else and
+          # capture stdout/stderr to a single file.
+          pnpm gate:phase1 -- --skip-install --log phase1-gate.ci.log
+
+      - name: Upload Phase 1 gate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-gate-log
+          path: phase1-gate.ci.log
+
+      - name: Phase 1 gate log (job summary)
+        if: always()
+        run: |
+          if [ -f phase1-gate.ci.log ]; then
+            {
+              echo "## Phase 1 gate log";
+              echo "";
+              echo "\`\`\`";
+              cat phase1-gate.ci.log;
+              echo "\`\`\`";
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "(no phase1-gate.ci.log produced)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Comment Phase 1 gate log on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'phase1-gate.ci.log';
+            const marker = '<!-- phase1-gate-log -->';
+
+            let log = '';
+            try {
+              log = fs.readFileSync(path, 'utf8');
+            } catch (e) {
+              log = '(no phase1-gate.ci.log produced)';
+            }
+
+            // GitHub comment body limit is finite; keep to a safe size.
+            const MAX = 60000;
+            if (log.length > MAX) {
+              log = log.slice(0, MAX) + `\n\n… truncated (${log.length - MAX} chars omitted) …`;
+            }
+
+            const body = `${marker}\n## Phase 1 gate log (from CI)\n\n\`\`\`\n${log}\n\`\`\`\n`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(c => typeof c.body === 'string' && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      # Playwright is a devDependency, but browsers are not always preinstalled on CI runners.
+      - name: Install Playwright browsers (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Workshop smoke (local serve)
+        run: pnpm qa:workshop -- --serve

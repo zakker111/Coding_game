@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 
-import type { Replay, ReplayEvent, SlotId } from '@coding-game/replay'
+import type { Loadout, ModuleId, Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
 import { EXAMPLE_BOTS, EXAMPLE_OPPONENT_IDS } from '../exampleBots'
 import {
@@ -9,15 +9,31 @@ import {
   createDefaultLocalBotLibrary,
   loadLocalBotLibrary,
   saveLocalBotLibrary,
-  type LocalBotLibraryV1,
+  type LocalBotLibraryV2,
 } from '../localBots'
 import { selectDistinctFromPool } from '../opponents'
+import { applyLoadoutHeaderDirectives, DEFAULT_WORKSHOP_LOADOUT, parseLoadoutHeaderDirectives } from '../loadout'
 import { fnv1a32 } from '../worker/seed'
 
 import { initialPlaybackState, playbackReducer } from '../replay/playbackReducer'
 import { getAppearanceColorMap, getBotsForPlayback, SLOT_IDS } from '../replay/interpolate'
 import { ArenaCanvas, type ArenaRenderState } from '../ui/arena'
 import { runLocalInWorker } from '../worker/runLocalInWorker'
+
+const LOADOUT_OPTION_VALUES = ['EMPTY', 'BULLET', 'SAW', 'SHIELD', 'ARMOR'] as const
+type LoadoutOptionValue = (typeof LOADOUT_OPTION_VALUES)[number]
+
+function parseLoadoutOptionValue(v: string): ModuleId | null {
+  const upper = String(v ?? '').toUpperCase()
+  if (upper === 'EMPTY') return null
+  if (upper === 'BULLET' || upper === 'SAW' || upper === 'SHIELD' || upper === 'ARMOR') return upper
+  return null
+}
+
+function formatLoadoutOptionValue(mod: ModuleId | null): LoadoutOptionValue {
+  if (mod === 'BULLET' || mod === 'SAW' || mod === 'SHIELD' || mod === 'ARMOR') return mod
+  return 'EMPTY'
+}
 
 const OPPONENT_NONCE_KEY = 'nowt:workshop:opponentNonce:v1'
 const OPPONENT_ASSIGNMENTS_KEY = 'nowt:workshop:opponents:v1'
@@ -148,10 +164,16 @@ function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
   }
 }
 
+function deriveLoadoutFromScriptOrDefault(sourceText: string): Loadout {
+  const parsed = parseLoadoutHeaderDirectives(sourceText)
+  return parsed.hasDirectives ? parsed.loadout : DEFAULT_WORKSHOP_LOADOUT
+}
+
 type OpponentOption = {
   id: string
   displayName: string
   sourceText: string
+  loadout: Loadout
 }
 
 type AppliedRunInfo = {
@@ -159,7 +181,7 @@ type AppliedRunInfo = {
   tickCap: number
   bot1Id: string
   bot1Name: string
-  sourceHashBySlot: Record<SlotId, number>
+  botSpecHashBySlot: Record<SlotId, number>
 }
 
 export function WorkshopPage() {
@@ -168,7 +190,7 @@ export function WorkshopPage() {
 
   const starterSourceText = EXAMPLE_BOTS.bot0.sourceText
 
-  const [myBots, setMyBots] = React.useState<LocalBotLibraryV1>(() =>
+  const [myBots, setMyBots] = React.useState<LocalBotLibraryV2>(() =>
     createDefaultLocalBotLibrary(starterSourceText),
   )
   const [opponents, setOpponents] = React.useState<OpponentAssignments>({
@@ -221,6 +243,7 @@ export function WorkshopPage() {
       id,
       displayName: EXAMPLE_BOTS[id].displayName,
       sourceText: EXAMPLE_BOTS[id].sourceText,
+      loadout: deriveLoadoutFromScriptOrDefault(EXAMPLE_BOTS[id].sourceText),
     }))
 
     const localOpponents: OpponentOption[] = myBots.bots
@@ -231,6 +254,7 @@ export function WorkshopPage() {
         id: b.id,
         displayName: `${b.name} (my bot)`,
         sourceText: b.sourceText,
+        loadout: b.loadout,
       }))
 
     return [...exampleOpponents, ...localOpponents]
@@ -255,6 +279,15 @@ export function WorkshopPage() {
     }
   }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.sourceText])
 
+  const loadoutBySlot: Record<SlotId, Loadout> = React.useMemo(() => {
+    return {
+      BOT1: selectedMyBot.loadout ?? DEFAULT_WORKSHOP_LOADOUT,
+      BOT2: opponentPoolById.get(opponents.BOT2)?.loadout ?? DEFAULT_WORKSHOP_LOADOUT,
+      BOT3: opponentPoolById.get(opponents.BOT3)?.loadout ?? DEFAULT_WORKSHOP_LOADOUT,
+      BOT4: opponentPoolById.get(opponents.BOT4)?.loadout ?? DEFAULT_WORKSHOP_LOADOUT,
+    }
+  }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.loadout])
+
   const displayNameBySlot: Record<SlotId, string> = React.useMemo(() => {
     const normalizeOpponentLabel = (name: string) => name.replace(/\s+\(my bot\)$/, '')
 
@@ -266,14 +299,16 @@ export function WorkshopPage() {
     }
   }, [opponents.BOT2, opponents.BOT3, opponents.BOT4, opponentPoolById, selectedMyBot.name])
 
-  const currentSourceHashBySlot: Record<SlotId, number> = React.useMemo(() => {
+  const currentBotSpecHashBySlot: Record<SlotId, number> = React.useMemo(() => {
+    const sig = (loadout: Loadout) => loadout.map((s) => (s == null ? 'EMPTY' : s)).join(',')
+
     return {
-      BOT1: fnv1a32(sourcesBySlot.BOT1),
-      BOT2: fnv1a32(sourcesBySlot.BOT2),
-      BOT3: fnv1a32(sourcesBySlot.BOT3),
-      BOT4: fnv1a32(sourcesBySlot.BOT4),
+      BOT1: fnv1a32(`${sourcesBySlot.BOT1}\n${sig(loadoutBySlot.BOT1)}\n`),
+      BOT2: fnv1a32(`${sourcesBySlot.BOT2}\n${sig(loadoutBySlot.BOT2)}\n`),
+      BOT3: fnv1a32(`${sourcesBySlot.BOT3}\n${sig(loadoutBySlot.BOT3)}\n`),
+      BOT4: fnv1a32(`${sourcesBySlot.BOT4}\n${sig(loadoutBySlot.BOT4)}\n`),
     }
-  }, [sourcesBySlot])
+  }, [loadoutBySlot, sourcesBySlot])
 
   const previewUpToDate = React.useMemo(() => {
     if (!playback.replay || !appliedRun) return false
@@ -281,8 +316,8 @@ export function WorkshopPage() {
     if (appliedRun.tickCap !== tickCap) return false
     if (appliedRun.bot1Id !== selectedMyBot.id) return false
 
-    return SLOT_IDS.every((slotId) => appliedRun.sourceHashBySlot[slotId] === currentSourceHashBySlot[slotId])
-  }, [appliedRun, currentSourceHashBySlot, playback.replay, seed, selectedMyBot.id, tickCap])
+    return SLOT_IDS.every((slotId) => appliedRun.botSpecHashBySlot[slotId] === currentBotSpecHashBySlot[slotId])
+  }, [appliedRun, currentBotSpecHashBySlot, playback.replay, seed, selectedMyBot.id, tickCap])
 
   const previewStatusText = !playback.replay ? 'Not run yet' : previewUpToDate ? 'Applied' : 'Out of date'
 
@@ -597,10 +632,12 @@ export function WorkshopPage() {
   function createNewBot() {
     setMyBots((prev) => {
       const id = createNewLocalBotId(prev.bots.map((b) => b.id))
+      const loadout = deriveLoadoutFromScriptOrDefault(starterSourceText)
+
       return {
-        version: 1,
+        version: 2,
         selectedBotId: id,
-        bots: [...prev.bots, { id, name: id, sourceText: starterSourceText }],
+        bots: [...prev.bots, { id, name: id, sourceText: applyLoadoutHeaderDirectives(starterSourceText, loadout), loadout }],
       }
     })
     setEditingBotId('BOT1')
@@ -632,7 +669,7 @@ export function WorkshopPage() {
       const nextSelectedBotId = remaining[0]?.id ?? prev.selectedBotId
 
       return {
-        version: 1,
+        version: 2,
         selectedBotId: nextSelectedBotId,
         bots: remaining.length ? remaining : prev.bots,
       }
@@ -647,11 +684,35 @@ export function WorkshopPage() {
   }
 
   function loadStarter() {
+    const loadout = deriveLoadoutFromScriptOrDefault(starterSourceText)
+
     setMyBots((prev) => ({
       ...prev,
-      bots: prev.bots.map((b) => (b.id === prev.selectedBotId ? { ...b, sourceText: starterSourceText } : b)),
+      bots: prev.bots.map((b) =>
+        b.id === prev.selectedBotId
+          ? { ...b, loadout, sourceText: applyLoadoutHeaderDirectives(starterSourceText, loadout) }
+          : b,
+      ),
     }))
     setEditingBotId('BOT1')
+  }
+
+  function setMyBotLoadoutSlot(slotIndex: 0 | 1 | 2, nextMod: ModuleId | null) {
+    setMyBots((prev) => ({
+      ...prev,
+      bots: prev.bots.map((b) => {
+        if (b.id !== prev.selectedBotId) return b
+
+        const nextLoadout = [...(b.loadout ?? DEFAULT_WORKSHOP_LOADOUT)] as Loadout
+        nextLoadout[slotIndex] = nextMod
+
+        return {
+          ...b,
+          loadout: nextLoadout,
+          sourceText: applyLoadoutHeaderDirectives(b.sourceText, nextLoadout),
+        }
+      }),
+    }))
   }
 
   function setOpponent(slot: keyof OpponentAssignments, id: string) {
@@ -673,7 +734,11 @@ export function WorkshopPage() {
     setRunError(null)
 
     try {
-      const bots = SLOT_IDS.map((slotId) => ({ slotId, sourceText: sourcesBySlot[slotId] }))
+      const bots = SLOT_IDS.map((slotId) => {
+        const sourceText = sourcesBySlot[slotId]
+        const loadout = loadoutBySlot[slotId]
+        return { slotId, sourceText, loadout }
+      })
       const nextReplay: Replay = await runLocalInWorker({ seed, tickCap, bots })
 
       setAppliedRun({
@@ -681,12 +746,7 @@ export function WorkshopPage() {
         tickCap,
         bot1Id: selectedMyBot.id,
         bot1Name: selectedMyBot.name,
-        sourceHashBySlot: {
-          BOT1: fnv1a32(sourcesBySlot.BOT1),
-          BOT2: fnv1a32(sourcesBySlot.BOT2),
-          BOT3: fnv1a32(sourcesBySlot.BOT3),
-          BOT4: fnv1a32(sourcesBySlot.BOT4),
-        },
+        botSpecHashBySlot: currentBotSpecHashBySlot,
       })
 
       dispatch({ type: 'LOAD_REPLAY', replay: nextReplay })
@@ -709,6 +769,28 @@ export function WorkshopPage() {
 
   const editorSourceText = sourcesBySlot[editingBotId]
   const editorReadOnly = editingBotId !== 'BOT1'
+
+  const bot1LoadoutWarnings = React.useMemo(() => {
+    const loadout = selectedMyBot.loadout ?? DEFAULT_WORKSHOP_LOADOUT
+
+    const counts = new Map<ModuleId, number>()
+    for (const mod of loadout) {
+      if (mod == null) continue
+      counts.set(mod, (counts.get(mod) ?? 0) + 1)
+    }
+
+    const dupes = [...counts.entries()]
+      .filter(([, n]) => n > 1)
+      .map(([m]) => m)
+
+    const weaponCount = loadout.filter((m) => m === 'BULLET' || m === 'SAW').length
+
+    const warnings: string[] = []
+    if (dupes.length) warnings.push(`Duplicate modules: ${dupes.join(', ')}`)
+    if (weaponCount > 1) warnings.push('More than one weapon selected (BULLET/SAW)')
+
+    return warnings
+  }, [selectedMyBot.loadout])
 
   return (
     <>
@@ -894,6 +976,65 @@ export function WorkshopPage() {
             </div>
           ) : null}
 
+          {!editorReadOnly ? (
+            <>
+              <div className="controls" style={{ marginTop: 10 }}>
+                <label className="mini-field">
+                  <div className="mini-label">slot1</div>
+                  <select
+                    className="mini-input"
+                    value={formatLoadoutOptionValue((selectedMyBot.loadout ?? DEFAULT_WORKSHOP_LOADOUT)[0] ?? null)}
+                    onChange={(e) => setMyBotLoadoutSlot(0, parseLoadoutOptionValue(e.target.value))}
+                  >
+                    {LOADOUT_OPTION_VALUES.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="mini-field">
+                  <div className="mini-label">slot2</div>
+                  <select
+                    className="mini-input"
+                    value={formatLoadoutOptionValue((selectedMyBot.loadout ?? DEFAULT_WORKSHOP_LOADOUT)[1] ?? null)}
+                    onChange={(e) => setMyBotLoadoutSlot(1, parseLoadoutOptionValue(e.target.value))}
+                  >
+                    {LOADOUT_OPTION_VALUES.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="mini-field">
+                  <div className="mini-label">slot3</div>
+                  <select
+                    className="mini-input"
+                    value={formatLoadoutOptionValue((selectedMyBot.loadout ?? DEFAULT_WORKSHOP_LOADOUT)[2] ?? null)}
+                    onChange={(e) => setMyBotLoadoutSlot(2, parseLoadoutOptionValue(e.target.value))}
+                  >
+                    {LOADOUT_OPTION_VALUES.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {bot1LoadoutWarnings.length ? (
+                <div style={{ marginTop: 10, color: '#fecaca', fontSize: 12, lineHeight: 1.5 }}>
+                  {bot1LoadoutWarnings.map((w) => (
+                    <div key={w}>{w}</div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
           <textarea
             className="code-editor"
             value={editorSourceText}
@@ -901,18 +1042,23 @@ export function WorkshopPage() {
             onChange={(e) => {
               if (editingBotId !== 'BOT1') return
               const nextSourceText = e.target.value
-              setMyBots((prev) => ({
-                ...prev,
-                bots: prev.bots.map((b) =>
-                  b.id === prev.selectedBotId ? { ...b, sourceText: nextSourceText } : b,
-                ),
-              }))
+              setMyBots((prev) => {
+                const current = prev.bots.find((b) => b.id === prev.selectedBotId)
+                if (!current) return prev
+
+                const nextText = applyLoadoutHeaderDirectives(nextSourceText, current.loadout ?? DEFAULT_WORKSHOP_LOADOUT)
+
+                return {
+                  ...prev,
+                  bots: prev.bots.map((b) => (b.id === prev.selectedBotId ? { ...b, sourceText: nextText } : b)),
+                }
+              })
             }}
             spellCheck={false}
           />
 
           <div className="muted" style={{ marginTop: 10 }}>
-            Tip: mentioning <code>SAW</code> in a bot source enables the sample melee behavior.
+            Loadout directives <code>;@slot1</code>, <code>;@slot2</code>, <code>;@slot3</code> are locked and kept in sync with the dropdowns.
           </div>
         </section>
 
@@ -1115,17 +1261,68 @@ export function WorkshopPage() {
                 </div>
               )
             ) : (
-              <div className="muted" style={{ marginTop: 8 }}>
-                Run a match to see events.
-              </div>
+              <pre
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  borderRadius: 10,
+                  background: 'rgba(0,0,0,0.35)',
+                  overflow: 'auto',
+                  height: 240,
+                }}
+              >{'Run a match to see events.'}</pre>
             )}
           </div>
 
           <div style={{ marginTop: 18 }}>
             <div className="panel-title">Loadout</div>
-            <div className="muted" style={{ marginTop: 8 }}>
-              Loadouts are not configurable yet (rulesetVersion 0.1.0). Current engine behavior: mentioning <code>SAW</code> enables SAW in SLOT1; mentioning <code>SHIELD</code> enables SHIELD in SLOT2.
-            </div>
+            {(() => {
+              const configured = loadoutBySlot[selectedBotId] ?? DEFAULT_WORKSHOP_LOADOUT
+              const headerBot = replay?.bots?.find((b) => b.slotId === selectedBotId)
+              const resolved = headerBot?.loadout ?? configured
+              const issues = headerBot?.loadoutIssues ?? []
+
+              const row = (label: string, l: Loadout) => (
+                <div style={{ marginTop: 6, lineHeight: 1.5 }}>
+                  <div className="muted" style={{ fontSize: 12 }}>{label}</div>
+                  <div>
+                    slot1:{' '}
+                    <strong style={{ color: 'var(--text)' }}>{formatLoadoutOptionValue(l?.[0] ?? null)}</strong>
+                    {'  '}slot2:{' '}
+                    <strong style={{ color: 'var(--text)' }}>{formatLoadoutOptionValue(l?.[1] ?? null)}</strong>
+                    {'  '}slot3:{' '}
+                    <strong style={{ color: 'var(--text)' }}>{formatLoadoutOptionValue(l?.[2] ?? null)}</strong>
+                  </div>
+                </div>
+              )
+
+              const showResolved =
+                Boolean(replay) && (resolved[0] !== configured[0] || resolved[1] !== configured[1] || resolved[2] !== configured[2])
+
+              return (
+                <div className="muted" style={{ marginTop: 8 }}>
+                  {row('Configured (input)', configured)}
+                  {showResolved ? row('Resolved by engine', resolved) : null}
+
+                  {issues.length ? (
+                    <div style={{ marginTop: 10, color: '#fecaca', fontSize: 12, lineHeight: 1.5 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text)' }}>Loadout issues</div>
+                      {issues.map((i, idx) => (
+                        <div key={idx}>
+                          {i.kind} (slot {i.slot}{i.module ? `: ${i.module}` : ''})
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {selectedBotId === 'BOT1' ? (
+                    <div style={{ marginTop: 10 }}>
+                      Edit BOT1 loadout in the bot editor. The <code>;@slot</code> header directives are locked and kept in sync with the dropdowns.
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })()}
           </div>
 
           <div style={{ marginTop: 18 }}>

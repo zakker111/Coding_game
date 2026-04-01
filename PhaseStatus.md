@@ -5,127 +5,85 @@ This repo already has a working end-to-end local loop:
 - Deterministic simulation + replay generation (`packages/engine/src/sim/runMatchToReplay.js`)
 - Workshop UI running the engine in a worker (`apps/web/src/worker`)
 
-Recent gameplay changes already shipped:
-- Example bots now dodge bullets using `BULLET_IN_SAME_SECTOR()` / `BULLET_IN_ADJ_SECTOR()`.
-- Bot-to-bot collisions (`BUMP_BOT`) now deal ramming damage (`BOT_BUMP_DAMAGE = 1`) with kill credit.
+---
+
+## Next slice: Phase 4 — simulation correctness + invariants hardening
+
+Goals:
+- Improve bullet collision math edge cases (current stepped approach can miss/alias rare geometries).
+- Strengthen invariants (no NaNs/out-of-bounds; bullet spawn/move/despawn consistency).
+- Keep golden determinism fixtures updated when intentional behavior changes occur.
 
 ---
 
-## Phase 1 — Spec + implementation alignment (highest priority)
+## Phase 1 — Spec + implementation alignment
 
-Goal: make docs, engine behavior, and replay schema agree so future work doesn’t create regressions.
-
-Completion criteria (Phase 1 is “done” once these are green):
-- QA gates:
-  - `pnpm -C packages/engine test`
-  - `pnpm qa`
-
-Recommended (but optional) smoke checks:
-- `pnpm check:deploy:imports`
-- `pnpm qa:workshop -- --serve --url http://127.0.0.1:8787`
-
-Optional cleanup:
-- Unify/remove legacy docs that still describe the old `packages/replay` sample generator as authoritative.
-
----
-
-## Phase 2 — Real loadouts + module model (v1 completeness)
-
-Goal: remove the sim shortcut that infers module availability from source text.
-
-Key items left:
-- Add explicit per-bot loadout input (`SLOT1..SLOT3`)
-- Enforce v1 constraints (no duplicates; at most one weapon)
-- Implement ARMOR fully:
-  - heavy speed penalty
-  - passive mitigation rules
+Status: ✅ done
 
 QA gates:
-- Add deterministic tests proving loadout affects speed + mitigation.
+- `pnpm -C packages/engine test`
+- `pnpm qa`
 
 ---
 
-## Phase 3 — Bullet awareness “v2”: bullets as first-class targets
+## Phase 2 — Real loadouts + module model (`rulesetVersion = 0.2.0`)
 
-Goal: upgrade from coarse threat booleans to bullet-target-driven behavior.
+Status: ✅ done
 
-Key items left:
-- DSL/compiler + runtime support for:
-  - `TARGET_CLOSEST_BULLET`
-  - `HAS_TARGET_BULLET()`
-  - `DIST_TO_TARGET_BULLET()`
-- Add an evasion movement primitive:
-  - `MOVE_AWAY_FROM_TARGET` (or a dedicated `EVADE_*` instruction)
-
-QA gates:
-- Unit tests for target selection determinism (tie-breaks by bullet id / creation order).
-- Sim tests demonstrating reliable evasion.
+Highlights:
+- Explicit per-bot 3-slot `loadout` input (`SLOT1..SLOT3`) with default-empty + deterministic normalization + `loadoutIssues`.
+- `ARMOR` implemented (speed penalty + mitigation; SHIELD→ARMOR bullet ordering).
+- Workshop and deploy runners pass explicit loadouts (no source scanning).
 
 ---
 
-## Phase 4 — Simulation correctness + invariants hardening
+## Phase 3 — Bullets as first-class targets (implemented baseline)
 
-Goal: tighten the sim so it matches the written rules and stays robust as mechanics expand.
+Status: ✅ done (baseline)
 
-Key items left:
-- Improve bullet collision math (current stepping approach may miss edge cases)
-- Optional: de-dupe `BUMP_BOT` events per bot-pair per tick (damage is already de-duped)
-- Add more invariants:
-  - bullets always despawn with a reason/pos
-  - no out-of-bounds / NaNs
+Implemented:
+- `TARGET_CLOSEST_BULLET`
+- `HAS_TARGET_BULLET()` / `DIST_TO_TARGET_BULLET()`
+- `MOVE_AWAY_FROM_TARGET`
+- Deterministic tie-break by numeric bullet creation order (`B1 < B2 < …`).
+
+Nice-to-have hardening:
+- Add a determinism test that covers bullet ids ≥ 10 (guards against accidental lexicographic comparisons).
 
 ---
 
 ## Phase 5 — Replay/UI polish (Workshop ergonomics)
 
-Key items left:
-- Bullet despawn-tick smoothing (avoid “pop” on HIT/WALL/TTL)
-- Richer debugging:
-  - executed instruction per tick + `pc` highlight
-  - prominent `BOT_EXEC.reason` display
+Status: ⏳ later
+
+Ideas:
+- Bullet despawn-tick smoothing (avoid “pop” on HIT/WALL/TTL).
+- Richer debugging UI (executed instruction per tick + prominent `BOT_EXEC.reason`).
 
 ---
 
-## Phase 6 — Determinism “golden replay” tests
+## Phase 6 — Determinism golden tests
 
-Status:
-- Scaffolded: golden tests + fixture generator exist.
-- Remaining: run the generator once and check in the generated fixture hashes.
+Status: ✅ done
 
-Commands:
-- Generate fixtures: `pnpm golden:update`
-- Run golden-only tests: `pnpm test:golden`
-
-Key items left:
-- Commit the generated fixture JSON under `packages/engine/test/golden/fixtures/`.
-- (After fixtures are committed) flip placeholder handling from “skip” to “fail” so CI enforces goldens.
+- Fixtures committed under `packages/engine/test/golden/fixtures/`.
+- CI-enforced (`GOLDEN_STRICT=1` + `pnpm golden:check`).
 
 ---
 
 ## Phase 7 — Deployment unification / reduce duplication
 
-Goal: prevent deploy-time copies drifting from the repo’s authoritative sources.
+Status: ✅ in place
 
-Implemented:
-- CI validation (via `packages/engine/test/deploySync.test.js`) that fails if:
-  - `deploy/bot-instructions.md` drifts from `BotInstructions.md`
-  - `deploy/workshop/exampleBots.js` drifts from `examples/bot*.md`
-- In-repo tooling:
-  - `pnpm sync:deploy` (regenerates deploy-time copies)
-  - `pnpm check:deploy` (fails fast if deploy-time copies drift)
+- `pnpm sync:deploy`, `pnpm check:deploy`, `pnpm check:deploy:imports`.
+- CI drift guardrails for `deploy/bot-instructions.md` and `deploy/workshop/exampleBots.js`.
 
 ---
 
 ## Phase 8 — Server: daily runner + submissions
 
-Key items left:
+Status: ⏳ later
+
+Key items:
 - Headless deterministic match runner (scheduling + storage + replay output)
 - Auth + bot submissions + versioning + validation
-
----
-
-## Suggested next slice (pick one)
-
-1) Spec/schema alignment
-2) Real loadouts + ARMOR
-3) Bullet-as-target

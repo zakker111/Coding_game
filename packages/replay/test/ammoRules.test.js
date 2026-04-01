@@ -11,7 +11,7 @@ test('ammo is consumable; ammo only increases via AMMO powerups', () => {
   // BOT2 must be non-idle so the sample generator doesn't short-circuit it.
   const bots = [
     { slotId: 'BOT1', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
-    { slotId: 'BOT2', sourceText: 'LABEL LOOP\nMOVE LEFT\nGOTO LOOP\n' },
+    { slotId: 'BOT2', sourceText: 'LABEL LOOP\nMOVE LEFT\nGOTO LOOP\n', loadout: ['BULLET', null, null] },
     { slotId: 'BOT3', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
     { slotId: 'BOT4', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
   ]

@@ -23,6 +23,7 @@ test('generateSampleReplay: SAW smoke test + determinism', () => {
     {
       slotId: 'BOT4',
       sourceText: 'LABEL LOOP\nSAW ON\nWAIT 1\nGOTO LOOP\n',
+      loadout: ['SAW', null, null],
     },
   ]
 

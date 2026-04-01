@@ -1,0 +1,94 @@
+name: Golden fixtures update (Phase 6)
+
+on:
+  workflow_dispatch:
+
+# NOTE: Keep this workflow free of third-party GitHub Actions.
+permissions:
+  contents: read
+
+jobs:
+  golden-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.30.3 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        # Repo currently does not include pnpm-lock.yaml, and pnpm defaults to
+        # frozen installs on CI. Allow lockfile generation for now.
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Update golden fixtures
+        run: pnpm golden:update
+
+      - name: Golden fixtures diff (job summary)
+        if: always()
+        run: |
+          set -euo pipefail
+
+          FIXTURES_DIR="packages/engine/test/golden/fixtures"
+
+          untracked="$(git ls-files --others --exclude-standard -- "$FIXTURES_DIR" || true)"
+
+          {
+            echo "## Golden fixtures diff"
+            echo ""
+
+            if git diff --quiet -- "$FIXTURES_DIR" && [ -z "$untracked" ]; then
+              echo "No changes in $FIXTURES_DIR"
+            else
+              echo "\`\`\`diff"
+
+              git diff -- "$FIXTURES_DIR" || true
+
+              if [ -n "$untracked" ]; then
+                while IFS= read -r f; do
+                  [ -n "$f" ] || continue
+                  git diff --no-index -- /dev/null "$f" || true
+                done <<< "$untracked"
+              fi
+
+              echo "\`\`\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload golden fixtures artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-fixtures
+          path: packages/engine/test/golden/fixtures
+          if-no-files-found: error
+
+      - name: Next steps (job summary)
+        if: always()
+        run: |
+          {
+            echo "## Next steps"
+            echo ""
+            echo "- Download the \`golden-fixtures\` artifact"
+            echo "- Copy its contents into \`packages/engine/test/golden/fixtures/\`"
+            echo "- Commit and open a PR"
+          } >> "$GITHUB_STEP_SUMMARY"
+         
+      - name: Golden strict check
+        run: pnpm golden:check
+
+      - name: Golden tests
+        run: pnpm test:golden
+
+      - name: Phase 1 QA (after goldens)
+        run: pnpm qa:phase1

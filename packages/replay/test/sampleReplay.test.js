@@ -140,3 +140,48 @@ test('generateSampleReplay can produce SAW events', () => {
 
   assert.ok(hasSawDamage || hasSawToggleExec)
 })
+
+test('generateSampleReplay: module capability is loadout-driven (not source-scanned)', () => {
+  const seed = 2025
+  const tickCap = 120
+
+  const botsSawInSourceOnly = [
+    { slotId: 'BOT1', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT2', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT3', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT4', sourceText: 'LABEL LOOP\nSAW ON\nMOVE LEFT\nGOTO LOOP\n' },
+  ]
+
+  const r0 = generateSampleReplay(seed, { tickCap, bots: botsSawInSourceOnly })
+
+  const flat0 = r0.events.flat()
+  const hasSaw0 = flat0.some(
+    (e) =>
+      (e.type === 'DAMAGE' && /** @type {any} */ (e).source === 'SAW') ||
+      (e.type === 'BOT_EXEC' &&
+        typeof /** @type {any} */ (e).instrText === 'string' &&
+        /^SAW\s+(ON|OFF)\b/i.test(/** @type {any} */ (e).instrText))
+  )
+
+  assert.equal(hasSaw0, false)
+
+  const botsSawInLoadoutOnly = [
+    { slotId: 'BOT1', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT2', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT3', sourceText: 'LABEL LOOP\nWAIT 1\nGOTO LOOP\n' },
+    { slotId: 'BOT4', sourceText: 'LABEL LOOP\nMOVE LEFT\nGOTO LOOP\n', loadout: ['SAW', null, null] },
+  ]
+
+  const r1 = generateSampleReplay(seed, { tickCap, bots: botsSawInLoadoutOnly })
+
+  const flat1 = r1.events.flat()
+  const hasSaw1 = flat1.some(
+    (e) =>
+      (e.type === 'DAMAGE' && /** @type {any} */ (e).source === 'SAW') ||
+      (e.type === 'BOT_EXEC' &&
+        typeof /** @type {any} */ (e).instrText === 'string' &&
+        /^SAW\s+(ON|OFF)\b/i.test(/** @type {any} */ (e).instrText))
+  )
+
+  assert.equal(hasSaw1, true)
+})

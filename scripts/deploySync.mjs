@@ -22,13 +22,42 @@ export function extractTextFence(md) {
 }
 
 /**
+ * Parse an example bot's display name from its script.
+ *
+ * Historically the first line was:
+ *   `; bot0 — Aggressive Skirmisher (starter)`
+ *
+ * The Workshop now supports (and our examples may include) locked header directives
+ * like `;@slot1 BULLET` as the first non-blank lines. These are still comments, and
+ * should be skipped when parsing the display name.
+ *
  * @param {string} sourceText
  */
 export function parseDisplayNameFromScript(sourceText) {
-  const firstLine = normalizeNewlines(sourceText).split('\n')[0] ?? ''
-  const m = firstLine.match(/^;\s*bot\d+\s*—\s*(.+?)\s*$/)
-  if (!m) throw new Error(`Unable to parse display name from first script line: ${JSON.stringify(firstLine)}`)
-  return m[1]
+  const lines = normalizeNewlines(sourceText).split('\n')
+
+  // Only consider the leading comment header for the display name. This avoids
+  // accidentally matching a mid-script comment that happens to look like
+  // `; bot3 — ...`.
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Skip Workshop "locked header directive" comment lines.
+    // Accept both `;@slot1 ...` and `; @slot1 ...`.
+    if (/^;\s*@/i.test(trimmed)) continue
+
+    // Once we hit a non-comment instruction, the header is over.
+    if (!trimmed.startsWith(';')) break
+
+    const m = trimmed.match(/^;\s*bot\d+\s*—\s*(.+?)\s*$/)
+    if (m) return m[1]
+  }
+
+  const preview = lines.slice(0, 6).join('\n')
+  throw new Error(
+    `Unable to parse display name from script header (expected a line like "; bot3 — My Bot"). Header preview:\n${preview}`
+  )
 }
 
 /**
@@ -130,6 +159,11 @@ export async function syncDeployFiles(repoRoot) {
   const exampleBotsDst = path.join(repoRoot, 'deploy', 'workshop', 'exampleBots.js')
   const generated = await generateWorkshopExampleBotsJs(repoRoot)
   await fs.writeFile(exampleBotsDst, generated)
+
+  const sampleReplaySrc = path.join(repoRoot, 'packages', 'replay', 'src', 'generateSampleReplay.js')
+  const sampleReplayDst = path.join(repoRoot, 'deploy', 'replay', 'generateSampleReplay.js')
+  const sampleReplay = await fs.readFile(sampleReplaySrc, 'utf8')
+  await fs.writeFile(sampleReplayDst, sampleReplay)
 }
 
 /**
@@ -143,6 +177,15 @@ export async function checkDeployFiles(repoRoot) {
   const dst = normalizeNewlines(await fs.readFile(botInstructionsDst, 'utf8')).trimEnd()
   if (src !== dst) {
     throw new Error('deploy/bot-instructions.md is out of sync with BotInstructions.md')
+  }
+
+  const sampleReplaySrc = path.join(repoRoot, 'packages', 'replay', 'src', 'generateSampleReplay.js')
+  const sampleReplayDst = path.join(repoRoot, 'deploy', 'replay', 'generateSampleReplay.js')
+
+  const sampleSrc = normalizeNewlines(await fs.readFile(sampleReplaySrc, 'utf8')).trimEnd()
+  const sampleDst = normalizeNewlines(await fs.readFile(sampleReplayDst, 'utf8')).trimEnd()
+  if (sampleSrc !== sampleDst) {
+    throw new Error('deploy/replay/generateSampleReplay.js is out of sync with packages/replay/src/generateSampleReplay.js')
   }
 
   const exampleBotsPath = path.join(repoRoot, 'deploy', 'workshop', 'exampleBots.js')

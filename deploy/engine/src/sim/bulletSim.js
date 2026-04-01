@@ -19,8 +19,11 @@ export function createBullet(shooter, target) {
   // Ruleset.md §5.1: Euclidean normalization (direction locked at fire time).
   const vel = normalizeToLen(dx, dy, BULLET_SPEED_UNITS_PER_TICK)
 
-  // Spawn bullets from the shooter "muzzle" rather than bot center.
-  // Use L∞ normalization so the bullet starts outside the shooter's 16x16 AABB even diagonally.
+  // Visual + collision quality: spawn bullets from the shooter "muzzle" rather than
+  // from the bot center, to avoid immediate overlap and to match player expectations.
+  //
+  // Important: this offset must be outside the shooter's 16x16 AABB even diagonally.
+  // To achieve that, use an L∞ normalization for the muzzle offset.
   const muzzleOffset = normalizeToMaxAxis(dx, dy, BOT_HALF_SIZE + 2)
 
   const spawn = {
@@ -28,6 +31,7 @@ export function createBullet(shooter, target) {
     y: shooter.pos.y + muzzleOffset.y,
   }
 
+  // Keep the spawn point inside the arena bounds (the step loop will handle wall hits).
   const pos = {
     x: Math.max(ARENA_MIN, Math.min(ARENA_MAX, spawn.x)),
     y: Math.max(ARENA_MIN, Math.min(ARENA_MAX, spawn.y)),
@@ -96,7 +100,8 @@ export function stepBullets(bullets, bots, tickEvents) {
     if (hit.kind === 'BOT') {
       const victim = hit.victim
 
-      const damage = victim.shieldActive ? BULLET_DAMAGE - Math.floor(BULLET_DAMAGE / 2) : BULLET_DAMAGE
+      let damage = victim.shieldActive ? BULLET_DAMAGE - Math.floor(BULLET_DAMAGE / 2) : BULLET_DAMAGE
+      if (victim.armorEquipped) damage = damage - Math.floor(damage / 3)
 
       tickEvents.push({
         type: 'BULLET_HIT',

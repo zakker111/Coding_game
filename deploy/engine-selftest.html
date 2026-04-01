@@ -45,7 +45,7 @@
 
         const e0 = Array.isArray(replay?.events?.[0]) ? replay.events[0].length : 'n/a'
 
-        out.textContent = `OK\nreplay.tickCap=${replay.tickCap}\nstate.length=${replay.state.length}\nevents[0].length=${e0}`
+        out.textContent = `OK\nschemaVersion=${replay.schemaVersion}\nrulesetVersion=${replay.rulesetVersion}\nreplay.tickCap=${replay.tickCap}\nstate.length=${replay.state.length}\nevents[0].length=${e0}`
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         out.textContent = `ERROR\n${msg}`

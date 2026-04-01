@@ -5,7 +5,10 @@ export const EXAMPLE_BOTS = {
   bot0: {
     id: 'bot0',
     displayName: 'Aggressive Skirmisher (starter)',
-    sourceText: `; bot0 — Aggressive Skirmisher (starter)
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot0 — Aggressive Skirmisher (starter)
 ; Loadout: SLOT1=BULLET
 ; Summary: chase+shoot the closest bot; avoid bump-lock; detour for HEALTH/AMMO when low; dodge enemy bullets when threatened.
 
@@ -75,7 +78,10 @@ GOTO LOOP
   bot1: {
     id: 'bot1',
     displayName: 'Zone Patrol Shooter',
-    sourceText: `; bot1 — Zone Patrol Shooter
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot1 — Zone Patrol Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: patrol zones 1→2→4→3→1 (current sector); avoid bump-lock; detour for HEALTH/AMMO when low; dodge bullets; fire at NEAREST_BOT.
 
@@ -145,7 +151,10 @@ GOTO LOOP
   bot2: {
     id: 'bot2',
     displayName: 'Chaser Shooter',
-    sourceText: `; bot2 — Chaser Shooter
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot2 — Chaser Shooter
 ; Loadout: SLOT1=BULLET
 ; Summary: choose a target (BOT1→BOT3→BOT4), chase it, shoot it; avoid bump-lock; detour for HEALTH/AMMO; dodge enemy bullets.
 
@@ -217,7 +226,11 @@ GOTO LOOP
   bot3: {
     id: 'bot3',
     displayName: 'Corner Bunker',
-    sourceText: `; bot3 — Corner Bunker
+    sourceText: `;@slot1 BULLET
+;@slot2 EMPTY
+;@slot3 EMPTY
+; bot3 — Corner Bunker
+; Loadout: SLOT1=BULLET
 ; Summary: hold a home corner; avoid bump-lock; dodge bullets; run to powerups when low (with a short WAIT); shoot NEAREST_BOT when close.
 
 SET_MOVE_TO_SECTOR 1 ZONE 1
@@ -278,7 +291,10 @@ GOTO LOOP
   bot4: {
     id: 'bot4',
     displayName: 'Saw Rusher',
-    sourceText: `; bot4 — Saw Rusher
+    sourceText: `;@slot1 SAW
+;@slot2 SHIELD
+;@slot3 EMPTY
+; bot4 — Saw Rusher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
 ; Summary: chase CLOSEST_BOT; bump/close→saw burst; bullets nearby→shield burst; sidestep when too close.
 
@@ -320,7 +336,10 @@ GOTO LOOP
   bot5: {
     id: 'bot5',
     displayName: 'Burst Hunter',
-    sourceText: `; bot5 — Burst Hunter
+    sourceText: `;@slot1 BULLET
+;@slot2 ARMOR
+;@slot3 EMPTY
+; bot5 — Burst Hunter
 ; Loadout: SLOT1=BULLET, SLOT2=ARMOR
 ; Summary: center control + burst windows; detours for HEALTH/AMMO; avoid bump-lock; dodge bullets when threatened.
 
@@ -382,7 +401,10 @@ GOTO LOOP
   bot6: {
     id: 'bot6',
     displayName: 'Energy Saw Skirmisher',
-    sourceText: `; bot6 — Energy Saw Skirmisher
+    sourceText: `;@slot1 SAW
+;@slot2 SHIELD
+;@slot3 EMPTY
+; bot6 — Energy Saw Skirmisher
 ; Loadout: SLOT1=SAW, SLOT2=SHIELD
 ; Summary: chase CLOSEST_BOT; bump/close→SAW burst; bullets→SHIELD burst; low ENERGY→TARGET_POWERUP ENERGY.
 

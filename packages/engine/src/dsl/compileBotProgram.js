@@ -30,10 +30,12 @@ import { parseExpression } from './expr.js'
  *   | { kind: 'TARGET_LOWEST_HEALTH' }
  *   | { kind: 'TARGET_NEXT' }
  *   | { kind: 'TARGET_NEXT_IF_DEAD' }
+ *   | { kind: 'TARGET_CLOSEST_BULLET' }
  *   | { kind: 'TARGET_POWERUP', type: PowerupType }
  *   | { kind: 'SET_TARGET', bot: BotId }
  *   | { kind: 'CLEAR_TARGET_BOT' }
  *   | { kind: 'CLEAR_TARGET_POWERUP' }
+ *   | { kind: 'CLEAR_TARGET_BULLET' }
  *   | { kind: 'CLEAR_TARGET' }
  *   | { kind: 'MOVE_DIR', dir: MoveDir }
  *   | { kind: 'SET_MOVE_TO_TARGET' }
@@ -382,6 +384,8 @@ function parseSimpleInstruction(line, lineNo, errors) {
 
   if (op === 'TARGET_LOWEST_HEALTH') return { kind: 'TARGET_LOWEST_HEALTH' }
 
+  if (op === 'TARGET_CLOSEST_BULLET') return { kind: 'TARGET_CLOSEST_BULLET' }
+
   if (op === 'TARGET_NEXT') return { kind: 'TARGET_NEXT' }
 
   if (op === 'TARGET_NEXT_IF_DEAD') return { kind: 'TARGET_NEXT_IF_DEAD' }
@@ -406,6 +410,7 @@ function parseSimpleInstruction(line, lineNo, errors) {
 
   if (op === 'CLEAR_TARGET_BOT') return { kind: 'CLEAR_TARGET_BOT' }
   if (op === 'CLEAR_TARGET_POWERUP') return { kind: 'CLEAR_TARGET_POWERUP' }
+  if (op === 'CLEAR_TARGET_BULLET') return { kind: 'CLEAR_TARGET_BULLET' }
   if (op === 'CLEAR_TARGET') return { kind: 'CLEAR_TARGET' }
 
   if (op === 'MOVE') {
@@ -480,6 +485,14 @@ function parseSimpleInstruction(line, lineNo, errors) {
       return { kind: 'INVALID' }
     }
     return { kind: 'MOVE_TO_TARGET' }
+  }
+
+  if (op === 'MOVE_AWAY_FROM_TARGET') {
+    if (parts.length !== 1) {
+      errors.push({ line: lineNo, message: 'MOVE_AWAY_FROM_TARGET expects no arguments' })
+      return { kind: 'INVALID' }
+    }
+    return { kind: 'MOVE_AWAY_FROM_TARGET' }
   }
 
   if (op === 'MOVE_TO_ZONE') {

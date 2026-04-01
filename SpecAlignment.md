@@ -1,8 +1,9 @@
-# Spec alignment to current engine behavior (rulesetVersion `0.1.0`)
+# Spec alignment to current engine behavior (rulesetVersion `0.2.0`, schemaVersion `0.2.0`)
 
 ## Goal
 
-Make the Markdown “spec” documents match (and therefore **lock**) the behavior of the currently implemented deterministic engine in `packages/engine/src/sim/runMatchToReplay.js`.
+Make the Markdown “spec” documents match (and therefore **lock**) the behavior of the deterministic engine in:
+- `packages/engine/src/sim/runMatchToReplay.js`
 
 Primary implementation references:
 - `packages/engine/src/sim/runMatchToReplay.js`
@@ -13,18 +14,35 @@ Primary implementation references:
 
 ---
 
-## What is now considered “locked” for `rulesetVersion = 0.1.0`
+## Current implemented contract: `rulesetVersion = 0.2.0`
 
-### Replay schema / event contract
-- `BOT_EXEC` for invalid instructions:
-  - emitted as `result = NOP`, `reason = INVALID_INSTR`, `pcAfter = 1`
-- Powerup event payloads:
-  - use `powerupType` (because `type` is reserved as the event discriminator)
-- `DAMAGE` event fields:
-  - required: `victimBotId`, `amount`, `source`, `kind`
-  - optional: `sourceBotId`, `sourceRef`
-  - current `source` values: `ENV | BOT | BULLET | SAW`
-  - current `kind` values: `BUMP_WALL | BUMP_BOT | DIRECT`
+### Locked items (0.2.0)
+If you change any of these, bump `rulesetVersion` and update all relevant docs/tests.
+
+- Per-bot `loadout`: exactly 3 slots (`[slot1, slot2, slot3]`), each `"BULLET"|"SAW"|"SHIELD"|"ARMOR"|null`.
+- Default-empty: missing/omitted loadout resolves to `[null, null, null]`.
+- Deterministic normalization + `loadoutIssues` surfacing (unknown → null, dedupe, max 1 weapon among `BULLET|SAW`), intended to be shown as a **visible, non-blocking warning/error** in consumers.
+- `ARMOR` passive:
+  - mitigation for all damage: `amount - floor(amount/3)` (~33%)
+  - speed penalty when equipped: `floor(12 * 3/4) = 9`
+- Bullet mitigation ordering when both apply: `SHIELD` then `ARMOR`.
+- Bullet targeting (v1):
+  - `TARGET_CLOSEST_BULLET` selects the closest enemy bullet by Manhattan distance.
+  - Tie-break is deterministic by numeric bullet creation order (`B1 < B2 < …`).
+  - `MOVE_AWAY_FROM_TARGET` uses the resolved target position (bot > bullet > powerup).
+
+### Replay header
+- `schemaVersion` is emitted as `'0.2.0'`.
+- `rulesetVersion` is emitted as `'0.2.0'`.
+- `bots[i].loadout` is a 3-slot array (`[slot1, slot2, slot3]`), where each entry is a module id (`"BULLET"|"SAW"|"SHIELD"|"ARMOR"`) or `null`.
+- `bots[i].loadoutIssues` may be present (informational) if the engine had to normalize an invalid loadout.
+
+### Loadout rules (v0.2.0)
+- Default-empty loadout rule: if `loadout` is missing/omitted at match input time, treat it as `[null, null, null]`.
+- Invalid loadouts do not abort the match; they are **deterministically normalized** and issues are recorded.
+  - Unknown module id → `null` + `UNKNOWN_MODULE`
+  - Duplicate module → keep earliest slot, later duplicates → `null` + `DUPLICATE`
+  - Multiple weapons (more than one of `BULLET|SAW`) → keep earliest weapon, later weapons → `null` + `MULTI_WEAPON`
 
 ### Tick ordering (engine phase order)
 1. Bot VM execution (`BOT1..BOT4`) + `BOT_EXEC` (bullets may spawn here)
@@ -36,26 +54,29 @@ Primary implementation references:
 7. End-of-tick maintenance (cooldowns, bump flags shift to `*LastTick`, powerup TTL, powerup spawns, target-powerup invalidation)
 8. Match end check + `MATCH_END`
 
-### Movement + collision (important edge case)
-- Bot movement uses integer deltas with `speedUnitsPerTick = 12`.
-- Collision detection walks integer points along the segment using Bresenham.
-- **Wall bump damage is suppressed if a bot bump occurs** (current engine behavior).
+### Movement + collision
+- Base speed is `12` units/tick.
+- With `ARMOR` equipped: `floor(12 * 3/4) = 9` units/tick.
+- Collision detection walks integer points along the move segment using Bresenham.
+- **Wall bump damage is suppressed if a bot bump occurs**.
 
 ### Weapons / modules
-- Explicit loadouts are **not implemented** yet.
-  - The engine infers SAW/SHIELD capability by scanning bot source text for `SAW` / `SHIELD` tokens.
 - Bullets:
   - damage `10`, speed `16`, TTL `18`, ammo cost `1`, cooldown `4`
-  - muzzle-offset spawn (outside shooter AABB)
+  - muzzle-offset spawn is outside shooter AABB (`BOT_HALF_SIZE + 2 = 10` via L∞ normalization)
   - collision via Bresenham-stepped points (not analytic time-of-impact)
 - SAW:
   - damage `6` per tick, energy drain `1` per tick, range `18` units (Euclidean check)
 - SHIELD:
   - energy drain `1` per tick
   - bullet mitigation: 50% reduction (`amount - floor(amount/2)`)
-- Bumps:
-  - wall bump damage `2`
-  - bot bump damage `1` to both bots (attributed to the other bot for kill credit)
+- ARMOR:
+  - passive mitigation (all damage sources): `amount - floor(amount/3)`
+  - ordering for bullet hits when SHIELD is active: apply SHIELD first, then ARMOR
+
+### Environmental damage
+- Wall bump damage `2`.
+- Bot bump damage `1` to both bots (attributed to the other bot for kill credit), applied at most once per unordered bot-pair per tick.
 
 ### Powerups
 - Spawn interval: uniform `10..20` ticks
@@ -70,47 +91,15 @@ Primary implementation references:
 
 ---
 
-## Files updated
+## Legacy notes: `rulesetVersion = 0.1.0`
 
-### Core rules + schema docs
-- `Ruleset.md`
-  - rewritten as an **engine-matching** ruleset reference for `rulesetVersion 0.1.0`
-  - includes constants, tick ordering, collision semantics, powerups, and weapon rules
-- `ReplayViewerPlan.md`
-  - aligned `BOT_EXEC` invalid instruction semantics (`NOP`, not `ERROR`)
-  - renamed powerup kind field to `powerupType`
-  - aligned `DAMAGE` schema and documented current `source` / `kind` values
-- `ServerSimulationPlan.md`
-  - tick loop updated to match the implemented phase order
-
-### Bot language reference + examples
-- `BotInstructions.md`
-  - restored full reference and aligned current-engine notes:
-    - modules inferred from source text (temporary simplification)
-    - SHIELD mitigation documented as 50% for `0.1.0`
-    - ARMOR marked not implemented
-- `examples/bot3.md`
-  - removed invalid nested control flow: `IF (...) DO WAIT n` → label-based `GOTO` + `WAIT`
-  - updated header to reflect that ARMOR/loadouts are not active in current engine
-- `BotModelPlan.md`
-  - updated the “Corner Bunker” snippet to avoid nested `WAIT`
-
-### Project tracking docs
-- `Todo.md`
-  - rewritten to summarize the current engine contract and the next priorities
-- `PhaseStatus.md`
-  - Phase 1 “spec drift” items removed; now focused on running QA + optional cleanup
-- `README.md`
-  - updated to point to `packages/engine` as the runnable prototype core
-  - clarified that explicit loadouts are not implemented in `0.1.0`
-- `Versions.md`
-  - updated `Unreleased` notes to reflect the spec-alignment work
+- No explicit per-bot loadouts; module capability was inferred by scanning `sourceText` for tokens like `SAW` / `SHIELD`.
+- `ARMOR` did not exist.
 
 ---
 
-## Recommended follow-on cleanups (optional)
+## Canonical docs
 
-- Add CI validation so deploy-time copies cannot drift:
-  - assert `deploy/bot-instructions.md` equals `BotInstructions.md`
-  - assert `deploy/workshop/exampleBots.js` matches `examples/` (or generate it)
-- Add a “ruleset constants table” in one place (either `Ruleset.md` or a new `RulesetConstants.md`) if you want a single canonical reference for balance numbers.
+- `Ruleset.md` — gameplay rules for the currently implemented engine (`rulesetVersion = 0.2.0`).
+- `ReplayViewerPlan.md` — replay schema/viewer expectations.
+- `UIPlan.md` — Workshop loadout UX, including how derived `;@slot*` lines relate to structured loadout state.

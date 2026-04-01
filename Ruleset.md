@@ -1,14 +1,38 @@
-# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.1.0`)
+# Ruleset.md — Core Gameplay Rules (rulesetVersion `0.2.0`, schemaVersion `0.2.0`)
 
-This document describes the **current implemented simulation rules** (not bot language syntax).
+This document describes the deterministic match simulation currently implemented by `packages/engine` (`rulesetVersion = 0.2.0`).
 
-Implementation reference:
-- `packages/engine/src/sim/runMatchToReplay.js` (+ `bulletSim.js`, `powerupSim.js`, `constants.js`)
+Implemented simulation code lives in:
+- `packages/engine/src/sim/runMatchToReplay.js`
+- `packages/engine/src/sim/bulletSim.js`
+- `packages/engine/src/sim/powerupSim.js`
+- `packages/engine/src/sim/constants.js`
+
+Replays emitted by `packages/engine` currently use:
+- `schemaVersion = 0.2.0` (event/state schema)
+- `rulesetVersion = 0.2.0` (simulation behavior)
 
 Related docs:
-- `BotInstructions.md` (what bots can write)
-- `ReplayViewerPlan.md` (replay/event schema expectations)
-- `ArenaPlan.md` (arena topology)
+- `BotInstructions.md` (bot language)
+- `ReplayViewerPlan.md` (viewer expectations)
+- `SpecAlignment.md` (docs-to-engine alignment notes)
+
+---
+
+## A) rulesetVersion notes
+
+- `0.2.0` — **implemented** (current behavior):
+  - explicit per-bot 3-slot `loadout` (default-empty)
+  - deterministic loadout normalization with issues surfaced in replay metadata (`loadoutIssues`) for **visible, non-blocking warnings/errors**
+  - `ARMOR` module: passive mitigation (~33%) applies to all damage + speed penalty
+  - mitigation ordering on bullet hits when both apply: `SHIELD` then `ARMOR`
+  - bullets are first-class targets (`TARGET_CLOSEST_BULLET`, `DIST_TO_TARGET_BULLET()`) and bots can evade via `MOVE_AWAY_FROM_TARGET`
+  - bullet target tie-break is deterministic by numeric bullet creation order (`B1 < B2 < …`)
+
+- `0.1.0` — **legacy**:
+  - module capability was inferred from bot source text (temporary shortcut)
+  - no explicit per-bot loadouts
+  - no `ARMOR`
 
 ---
 
@@ -18,8 +42,6 @@ Related docs:
 - Replays store:
   - `state[t]`: **end-of-tick** state for tick `t`
   - `events[t]`: ordered events that occurred **during tick `t`**
-
-(See `ReplayViewerPlan.md` §3.3.)
 
 ---
 
@@ -42,8 +64,7 @@ A match ends when the earliest of the following occurs:
 When `endReason ∈ {TICK_CAP, STALEMATE}` and multiple bots are alive, all survivors tie.
 
 Ruleset parameters (implemented defaults):
-- `tickCap = 600`
-  - UI note: the Workshop exposes `tickCap` as a match config value and should clamp it to a safe range (current UI cap: `<= 2000`).
+- `tickCap = 600` (recommended default; actual value is match input)
 - `stalemateNoDamageGraceTicks = 120`
 - `stalemateCountdownTicks = 30`
 
@@ -59,58 +80,114 @@ Ruleset parameters (implemented defaults):
 ### 1.1 Base stats
 
 Locked ranges:
-- `health` (`hp` in engine state) is `0..100`
+- `hp` is `0..100`
 - `ammo` is `0..100`
 - `energy` is `0..100`
 
 Initial values (implemented):
 - `hp = 100`, `ammo = 100`, `energy = 100`
 
-### 1.1.1) Module availability (current engine simplification)
+### 1.1.1) Module availability
 
-The engine does **not** yet model explicit 3-slot loadouts. Instead it infers capability from bot source text:
-- if the source contains `SAW` (word match) → bot is **saw-capable**
-- if the source contains `SHIELD` (word match) → bot is **shield-capable**
+#### `rulesetVersion = 0.2.0` (implemented; explicit loadouts + `ARMOR`)
 
-Effective slots (current, `rulesetVersion = 0.1.0`):
-- `SLOT1` always exists:
-  - if saw-capable: `SLOT1 = SAW` (toggle weapon)
-  - otherwise: `SLOT1 = BULLET` (ammo weapon)
-- `SLOT2` exists only if shield-capable: `SLOT2 = SHIELD` (toggle defense)
-- `SLOT3` is always empty
+Bots have an explicit **per-bot 3-slot loadout** provided as match input.
 
-Planned (`rulesetVersion > 0.1.0`):
-- Slot modules come from an explicit per-bot `loadout = [slot1, slot2, slot3]`.
-- Default if no loadout is provided: `SLOT1=EMPTY`, `SLOT2=EMPTY`, `SLOT3=EMPTY`.
-- The Workshop/UI will generate locked source headers (`;@slot1`, `;@slot2`, `;@slot3`) as the first 3 non-blank lines to reflect the selected loadout, but gameplay uses match config loadout (not source scanning).
+Loadout shape (input):
+- `loadout = [slot1, slot2, slot3]`
+- each entry is either a module id string or `null`
+- if a bot omits `loadout`, the default is the empty loadout: `[null, null, null]`
+
+Important:
+- The engine does **not** scan `sourceText` for module tokens like `SAW`/`SHIELD`.
+- The engine does **not** read `;@slot*` header directives; those are UI/serialization metadata only.
+
+Recognized module ids:
+- `BULLET | SAW | SHIELD | ARMOR`
+
+Module semantics:
+- `BULLET`: ammo weapon; `USE_SLOTn <BOT_TARGET>` fires a bullet (subject to cooldown + ammo)
+- `SAW`: melee weapon; `SAW ON/OFF` toggles it and drains energy while active; `USE_SLOTn` behaves like turning SAW on when that slot contains SAW
+- `SHIELD`: defense; `SHIELD ON/OFF` toggles it and drains energy while active; `USE_SLOTn` behaves like turning SHIELD on when that slot contains SHIELD
+- `ARMOR` (passive):
+  - mitigation applies to all damage sources (see §2.3)
+  - speed penalty applies if equipped in any slot (see §1.2)
+
+Invalid loadouts do not abort the match; they are **deterministically normalized** and issues are recorded in `loadoutIssues` (intended to be surfaced as a visible, non-blocking warning/error in UIs/replay viewers).
+
+Normalization algorithm (deterministic; applied per bot in order):
+
+Loadout shape/defaulting:
+- missing `loadout` defaults to `[null, null, null]`
+- otherwise: take the first 3 entries; if fewer than 3 entries, pad with `null`
+
+Normalization steps:
+1) Unknown modules → `null`
+   - any string not in `{BULLET, SAW, SHIELD, ARMOR}` becomes `null`
+2) Dedupe modules
+   - keep the earliest slot for each module id
+   - later duplicates become `null`
+3) Weapon limit
+   - at most 1 weapon among `{BULLET, SAW}`
+   - keep the earliest weapon slot; later weapon slots become `null`
+
+Issue recording (`loadoutIssues`):
+- For each slot that gets normalized to `null`, record an issue:
+  - `UNKNOWN_MODULE`: `{ kind: 'UNKNOWN_MODULE', slot, module: <originalString> }`
+  - `DUPLICATE`: `{ kind: 'DUPLICATE', slot, module: <moduleId> }`
+  - `MULTI_WEAPON`: `{ kind: 'MULTI_WEAPON', slot, module: <moduleId> }`
+
+Replay header observability (`rulesetVersion = 0.2.0`):
+- `bots[i].loadout: [slot1, slot2, slot3]` (normalized)
+- `bots[i].loadoutIssues: Array<{ kind: 'UNKNOWN_MODULE'|'DUPLICATE'|'MULTI_WEAPON', slot: 1|2|3, module?: string }>`
+  - omit or set to `[]` when there are no issues
+
+#### `rulesetVersion = 0.1.0` (legacy; inferred modules)
+
+- No explicit loadouts.
+- Capabilities were inferred from bot source text:
+  - if the source contains token `SAW`: saw-capable (SLOT1 behaves as SAW)
+  - if the source contains token `SHIELD`: shield-capable (SLOT2 behaves as SHIELD)
+  - otherwise: SLOT1 behaves as BULLET; SLOT2 and SLOT3 behave as empty
+- `ARMOR` did not exist.
 
 ### 1.2 Speed model (continuous movement)
 
 Ruleset parameters (implemented):
-- `speedUnitsPerTick = 12` (fixed)
+- `baseSpeedUnitsPerTick = 12`
+- if `ARMOR` is equipped in any slot: `speedUnitsPerTick = floor(baseSpeedUnitsPerTick * 3/4)`
+  - with the current base speed: `floor(12 * 3/4) = 9`
+- otherwise: `speedUnitsPerTick = baseSpeedUnitsPerTick`
 
 Bots have continuous world positions `pos = { x, y }` and a **16×16** AABB centered at `pos`.
 
-Movement request → integer delta:
+Arena bounds and clamping (implemented):
+- arena is `192×192` with world bounds `x,y ∈ [0,192]`
+- bot centers are clamped to `x ∈ [8,184]`, `y ∈ [8,184]`
+
+Movement request → integer delta (let `speed := speedUnitsPerTick`):
 - `MOVE <DIR>`:
-  - cardinal: `(±12, 0)` / `(0, ±12)`
-  - diagonal: `(±8, ±8)` (`floor(12 * 0.7071) = 8`)
+  - cardinal: `(±speed, 0)` / `(0, ±speed)`
+  - diagonal: `(±d, ±d)` where `d = floor((speed * 7071 + 5000) / 10000)`
 - `MOVE_TO_*`:
   - compute `(dx,dy) = targetPos - fromPos`
-  - if `sqrt(dx^2 + dy^2) > 12`, scale down deterministically to length `<= 12` using integer math
+  - if `sqrt(dx^2 + dy^2) > speed`, scale down deterministically to length `<= speed` using integer math (see `scaleDeltaToMaxLen`)
 
 ### 1.2.1) Movement resolution + collision (implemented)
 
 Per tick, in `BOT1..BOT4` order:
 1. Compute `candidateToPos = fromPos + delta`.
-2. **Wall clamp** bot centers to `x ∈ [8,184]`, `y ∈ [8,184]`.
+2. **Wall clamp** candidate bot center to `x ∈ [8,184]`, `y ∈ [8,184]`.
 3. **Bot overlap blocking**: walk integer points from `fromPos → candidateToPos` using a Bresenham line.
    - if overlap with any alive bot occurs at any point, stop at the last non-overlapping point.
    - collided bot tie-break: lowest `otherBotId` among overlaps at that first colliding point.
    - emit `BUMP_BOT` for both bots (mover uses requested `dir`, other bot uses `OPPOSITE(dir)`).
-   - apply bot-bump damage (see §4).
+   - apply bot-bump damage (see §4). Damage for an unordered bot pair is applied at most once per tick.
 4. If no overlap occurred and the move was wall-clamped: emit `BUMP_WALL` and apply wall-bump damage (see §3).
 5. If final position differs from `fromPos`: emit `BOT_MOVED`.
+
+Important edge case (implemented):
+- If a bot-bump occurs during a movement attempt, wall bump damage is suppressed for that move.
 
 ### 1.3 Life + death
 
@@ -147,9 +224,23 @@ On death, emit `BOT_DIED { victimBotId, creditedBotId? }` where `creditedBotId =
 ### 2.2 SHIELD mitigation (implemented)
 
 - Shield mitigates **bullet** damage only.
-- If shield is active: `damage = BULLET_DAMAGE - floor(BULLET_DAMAGE / 2)`.
+- If shield is active, transform an incoming bullet damage `amount` into:
+  - `amount := amount - floor(amount / 2)`
 
-`ARMOR` is not implemented.
+### 2.3 ARMOR mitigation (implemented)
+
+`ARMOR` is passive. If `ARMOR` is equipped in any slot:
+
+- Applies to **all** `DAMAGE` sources/kinds (`ENV` wall bumps, `BOT` bumps, `BULLET` hits, `SAW` hits).
+- Mitigation math (integer) on an incoming `amount`:
+  - `amount := amount - floor(amount / 3)` (33% mitigation)
+- Bullet ordering when both apply (important):
+  1) apply `SHIELD`
+  2) apply `ARMOR` to the post-shield `amount`
+
+In other words, for bullets with an active shield and equipped armor:
+- `afterShield = amount - floor(amount / 2)`
+- `finalAmount = afterShield - floor(afterShield / 3)`
 
 ---
 
@@ -172,8 +263,9 @@ Ruleset parameters (implemented):
 Semantics:
 - When a movement attempt causes overlap, emit `BUMP_BOT` for both bots.
 - Apply `botBumpDamage` to both bots (if both are alive at time of application).
-- Damage event form:
-  - for bot A taking bump damage from bot B: `DAMAGE { victimBotId: A, amount: 1, source: "BOT", sourceBotId: B, kind: "BUMP_BOT" }`
+- Damage event form for bot A taking bump damage from bot B:
+  - `DAMAGE { victimBotId: A, amount: 1, source: "BOT", sourceBotId: B, kind: "BUMP_BOT" }`
+- Damage is applied at most once per unordered bot pair per tick.
 
 ---
 
@@ -212,19 +304,21 @@ Ruleset parameters (implemented):
 - `bulletAmmoCost = 1`
 - `bulletCooldownTicks = 4`
 
-Firing:
+Firing (rulesetVersion `0.2.0`, implemented):
 - Requires:
-  - `SLOT1` is `BULLET` (i.e., bot is not saw-capable)
+  - the chosen slot `n` contains `BULLET` in the normalized `loadout`
   - `ammo >= bulletAmmoCost`
-  - `slot1Cooldown == 0`
-- On fire:
-  - resolve target bot id at execution time
-  - compute `vel = Normalize(targetPos - shooterPos) * bulletSpeed`
-    - **current engine:** normalization uses `Math.hypot` + rounding but clamps to ensure `|vel| <= bulletSpeed` and returns integers
-  - compute a **muzzle offset** so bullets spawn outside the shooter AABB:
-    - uses L∞ normalization to `BOT_HALF_SIZE + 2`
-  - spawn `pos = shooterPos + muzzleOffset` (clamped inside arena bounds)
-  - emit `BULLET_SPAWN`
+  - `cooldownRemaining(SLOTn) == 0`
+
+Legacy note (`rulesetVersion = 0.1.0`): module capability was inferred from bot source text and bullets effectively behaved as “SLOT1 unless SAW-capable”.
+
+On fire:
+- resolve target bot id at execution time
+- compute `vel = Normalize(targetPos - shooterPos) * bulletSpeed` using Euclidean normalization (`normalizeToLen`)
+- compute a **muzzle offset** so bullets spawn outside the shooter AABB:
+  - uses L∞ normalization to `BOT_HALF_SIZE + 2 = 10` (`normalizeToMaxAxis`)
+- spawn `pos = shooterPos + muzzleOffset` (clamped inside arena bounds)
+- emit `BULLET_SPAWN`
 
 Movement + collision:
 - Each tick, each bullet advances from `fromPos → candidateToPos`.
@@ -234,7 +328,7 @@ Movement + collision:
 - On hit:
   - emit `BULLET_MOVE` with `toPos` as the hit point
   - emit `BULLET_HIT`
-  - apply damage (shield may reduce)
+  - apply damage (SHIELD may reduce; `ARMOR` may additionally reduce)
   - emit `DAMAGE` with `source = "BULLET"`, `kind = "DIRECT"`, `sourceRef = { type: "BULLET", id }`
   - emit `BULLET_DESPAWN reason=HIT`
 - On wall:
@@ -260,6 +354,17 @@ Ruleset parameters (implemented):
 
 ---
 
+## 5.3 SHIELD (implemented)
+
+Ruleset parameters (implemented):
+- `shieldEnergyDrainPerTick = 1`
+
+Semantics:
+- If `shieldActive`, drains energy each tick; auto-OFF at `energy == 0`.
+- Shield mitigates bullet damage only (see §2.2).
+
+---
+
 ## 7) Powerups (spawn + pickup)
 
 Types (implemented): `HEALTH | AMMO | ENERGY`.
@@ -279,11 +384,15 @@ Spawn behavior (implemented):
   - decrement `spawnRemainingTicks`
   - when it reaches 0, attempt to spawn 1 powerup
   - if `active >= powerupMaxActive`, set `spawnRemainingTicks = 1` (retry next tick)
-  - choose a free anchor among the 45 anchors in stable order (sector asc; center first; zones 1..4)
-  - avoid spawning directly inside a bot AABB
-  - choose type uniformly among `HEALTH|AMMO|ENERGY`
-  - emit `POWERUP_SPAWN { powerupType, loc }`
-  - reset `spawnRemainingTicks` by sampling uniformly from `[min,max]`
+  - build a candidate list from the 45 anchors in stable order (sector asc; center first; zones 1..4):
+    - exclude anchors already occupied by a powerup
+    - exclude anchors currently inside any alive bot AABB
+  - if no candidates exist, set `spawnRemainingTicks = 1` (retry next tick)
+  - otherwise:
+    - choose a candidate uniformly at random (seeded RNG)
+    - choose type uniformly among `HEALTH|AMMO|ENERGY`
+    - emit `POWERUP_SPAWN { powerupType, loc }`
+    - reset `spawnRemainingTicks` by sampling uniformly from `[min,max]`
 
 Pickup behavior (implemented):
 - During pickup phase, for each bot in `BOT1..BOT4` order:

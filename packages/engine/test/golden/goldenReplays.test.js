@@ -4,55 +4,34 @@ import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { compileBotSource, runMatchToReplay } from '@coding-game/engine'
+import { compileBotSource, runMatchToReplay } from '../../src/index.js'
 
-import { stableStringify } from '../_util/stableStringify.js'
-import { sha256Hex } from '../_util/sha256.js'
+import { extractTextFence, buildMatchBotsFromSources, hashReplayCore, hashTicks } from './goldenHarnessUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, '../../../..')
 
-function extractTextFence(md) {
-  const normalized = md.replace(/\r\n?/g, '\n')
-  const m = normalized.match(/```text\s*\n([\s\S]*?)\n?```/)
-  if (!m) throw new Error('No ```text code fence found')
-  return `${m[1]}\n`
+const placeholderSha = '__REPLACE_BY_RUNNING_pnpm_golden_update__'
+
+function envFlag(name) {
+  const raw = process.env[name]
+  if (!raw) return false
+  const v = String(raw).trim().toLowerCase()
+  return v !== '' && v !== '0' && v !== 'false' && v !== 'no'
+}
+
+const strict = envFlag('GOLDEN_STRICT')
+
+function skipOrFail(t, msg) {
+  if (strict) assert.fail(msg)
+  t.skip(msg)
 }
 
 function loadExampleBot(n) {
   const filename = path.join(repoRoot, 'examples', `bot${n}.md`)
   const md = readFileSync(filename, 'utf8')
   return extractTextFence(md)
-}
-
-function stripHeaderSourceText(replay) {
-  // Exclude header.sourceText blobs to keep the golden stable when comments change.
-  const headerBots = (replay.header?.bots ?? []).map((b) => {
-    if (!b || typeof b !== 'object') return b
-    if ('sourceText' in b) return { ...b, sourceText: undefined }
-    return b
-  })
-
-  return { ...(replay.header ?? {}), bots: headerBots }
-}
-
-function hashReplayCore(replay) {
-  const core = {
-    schemaVersion: replay.schemaVersion,
-    rulesetVersion: replay.rulesetVersion,
-    matchSeed: replay.matchSeed,
-    tickCap: replay.tickCap,
-    header: stripHeaderSourceText(replay),
-    state: replay.state,
-    events: replay.events,
-  }
-
-  return sha256Hex(stableStringify(core))
-}
-
-function hashTicks(arr) {
-  return arr.map((v) => sha256Hex(stableStringify(v)))
 }
 
 function assertTickHashesEqual(kind, got, expected) {
@@ -84,12 +63,7 @@ function runScenarioExampleBots({ seed, tickCap, botNums }) {
     assert.deepStrictEqual(compiled.errors ?? [], [], `expected bot${botNums[i]} to compile`)
   }
 
-  const bots = [
-    { slotId: 'BOT1', sourceText: sources[0] },
-    { slotId: 'BOT2', sourceText: sources[1] },
-    { slotId: 'BOT3', sourceText: sources[2] },
-    { slotId: 'BOT4', sourceText: sources[3] },
-  ]
+  const bots = buildMatchBotsFromSources(sources)
 
   const replay = runMatchToReplay({ seed, tickCap, bots })
 
@@ -100,55 +74,46 @@ function runScenarioExampleBots({ seed, tickCap, botNums }) {
   }
 }
 
-test('golden: examples smoke (bot0..bot3)', (t) => {
-  const fixture = loadFixture('examples_smoke_seed123')
-  if (!fixture) {
-    t.skip('golden fixture missing: examples_smoke_seed123.json')
-    return
-  }
+const scenarios = [
+  { fixtureName: 'examples_smoke_seed123', seed: 123, botNums: [0, 1, 2, 3] },
+  { fixtureName: 'examples_patrol_seed456', seed: 456, botNums: [1, 2, 3, 0] },
+  { fixtureName: 'modules_powerups_seed999', seed: 999, botNums: [0, 5, 6, 4] },
+  { fixtureName: 'modules_saw_rush_seed777', seed: 777, botNums: [4, 6, 5, 0] },
+]
 
-  if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    t.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
-    return
-  }
+for (const { fixtureName, seed, botNums } of scenarios) {
+  test(`golden: ${fixtureName}`, (t) => {
+    const fixture = loadFixture(fixtureName)
+    if (!fixture) {
+      skipOrFail(t, `golden fixture missing: ${fixtureName}.json`)
+      return
+    }
 
-  assert.equal(fixture.name, 'examples_smoke_seed123')
-  assert.deepStrictEqual(fixture.params, { seed: 123, tickCap: 50, bots: [0, 1, 2, 3] })
-  assert.ok(Array.isArray(fixture.stateTickSha256), 'fixture.stateTickSha256 must be an array')
-  assert.ok(Array.isArray(fixture.eventsTickSha256), 'fixture.eventsTickSha256 must be an array')
-  assert.ok(fixture.stateTickSha256.length > 0, 'fixture.stateTickSha256 must be non-empty')
-  assert.ok(fixture.eventsTickSha256.length > 0, 'fixture.eventsTickSha256 must be non-empty')
+    if (fixture.coreReplaySha256 === placeholderSha) {
+      skipOrFail(t, 'golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
+      return
+    }
 
-  const got = runScenarioExampleBots({ seed: 123, tickCap: 50, botNums: [0, 1, 2, 3] })
+    assert.equal(fixture.name, fixtureName)
+    assert.equal(fixture.params?.seed, seed)
+    assert.deepStrictEqual(fixture.params?.bots, botNums)
 
-  assert.equal(got.coreReplaySha256, fixture.coreReplaySha256)
-  assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
-  assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
-})
+    assert.ok(Number.isInteger(fixture.params?.tickCap) && fixture.params.tickCap > 0, 'fixture.params.tickCap must be an integer > 0')
 
-test('golden: modules + powerups (bot0,bot5,bot6,bot4)', (t) => {
-  const fixture = loadFixture('modules_powerups_seed999')
-  if (!fixture) {
-    t.skip('golden fixture missing: modules_powerups_seed999.json')
-    return
-  }
+    assert.ok(Array.isArray(fixture.stateTickSha256), 'fixture.stateTickSha256 must be an array')
+    assert.ok(Array.isArray(fixture.eventsTickSha256), 'fixture.eventsTickSha256 must be an array')
+    assert.ok(fixture.stateTickSha256.length > 0, 'fixture.stateTickSha256 must be non-empty')
+    assert.ok(fixture.eventsTickSha256.length > 0, 'fixture.eventsTickSha256 must be non-empty')
 
-  if (fixture.coreReplaySha256 === '__REPLACE_BY_RUNNING_pnpm_golden_update__') {
-    t.skip('golden fixture not generated yet; run `pnpm golden:update` to populate hashes')
-    return
-  }
+    const got = runScenarioExampleBots({
+      seed: fixture.params.seed,
+      tickCap: fixture.params.tickCap,
+      botNums: fixture.params.bots,
+    })
 
-  assert.equal(fixture.name, 'modules_powerups_seed999')
-  assert.deepStrictEqual(fixture.params, { seed: 999, tickCap: 120, bots: [0, 5, 6, 4] })
-  assert.ok(Array.isArray(fixture.stateTickSha256), 'fixture.stateTickSha256 must be an array')
-  assert.ok(Array.isArray(fixture.eventsTickSha256), 'fixture.eventsTickSha256 must be an array')
-  assert.ok(fixture.stateTickSha256.length > 0, 'fixture.stateTickSha256 must be non-empty')
-  assert.ok(fixture.eventsTickSha256.length > 0, 'fixture.eventsTickSha256 must be non-empty')
-
-  const got = runScenarioExampleBots({ seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
-
-  assert.equal(got.coreReplaySha256, fixture.coreReplaySha256)
-  assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
-  assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
-})
+    assert.equal(got.coreReplaySha256, fixture.coreReplaySha256)
+    assertTickHashesEqual('state', got.stateTickSha256, fixture.stateTickSha256)
+    assertTickHashesEqual('events', got.eventsTickSha256, fixture.eventsTickSha256)
+  })
+}
   

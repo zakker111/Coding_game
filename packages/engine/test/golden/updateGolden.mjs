@@ -2,54 +2,19 @@ import { writeFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { compileBotSource, runMatchToReplay } from '@coding-game/engine'
+import { compileBotSource, runMatchToReplay } from '../../src/index.js'
 
 import { stableStringify } from '../_util/stableStringify.js'
-import { sha256Hex } from '../_util/sha256.js'
+import { extractTextFence, buildMatchBotsFromSources, hashReplayCore, hashTicks } from './goldenHarnessUtil.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, '../../../..')
 
-function extractTextFence(md) {
-  const normalized = md.replace(/\r\n?/g, '\n')
-  const m = normalized.match(/```text\s*\n([\s\S]*?)\n?```/)
-  if (!m) throw new Error('No ```text code fence found')
-  return `${m[1]}\n`
-}
-
 function loadExampleBot(n) {
   const filename = path.join(repoRoot, 'examples', `bot${n}.md`)
   const md = readFileSync(filename, 'utf8')
   return extractTextFence(md)
-}
-
-function stripHeaderSourceText(replay) {
-  const headerBots = (replay.header?.bots ?? []).map((b) => {
-    if (!b || typeof b !== 'object') return b
-    if ('sourceText' in b) return { ...b, sourceText: undefined }
-    return b
-  })
-
-  return { ...(replay.header ?? {}), bots: headerBots }
-}
-
-function hashReplayCore(replay) {
-  const core = {
-    schemaVersion: replay.schemaVersion,
-    rulesetVersion: replay.rulesetVersion,
-    matchSeed: replay.matchSeed,
-    tickCap: replay.tickCap,
-    header: stripHeaderSourceText(replay),
-    state: replay.state,
-    events: replay.events,
-  }
-
-  return sha256Hex(stableStringify(core))
-}
-
-function hashTicks(arr) {
-  return arr.map((v) => sha256Hex(stableStringify(v)))
 }
 
 function stablePrettyJson(obj) {
@@ -69,6 +34,7 @@ function buildScenario({ name, seed, tickCap, botNums }) {
   }
 
   const sources = botNums.map((n) => loadExampleBot(n))
+
   for (let i = 0; i < sources.length; i++) {
     const compiled = compileBotSource(sources[i])
     if ((compiled.errors ?? []).length) {
@@ -76,18 +42,16 @@ function buildScenario({ name, seed, tickCap, botNums }) {
     }
   }
 
-  const bots = [
-    { slotId: 'BOT1', sourceText: sources[0] },
-    { slotId: 'BOT2', sourceText: sources[1] },
-    { slotId: 'BOT3', sourceText: sources[2] },
-    { slotId: 'BOT4', sourceText: sources[3] },
-  ]
-
+  const bots = buildMatchBotsFromSources(sources)
   const replay = runMatchToReplay({ seed, tickCap, bots })
+
+  const expectedLen = replay.tickCap + 1
+  if (replay.state.length !== expectedLen) throw new Error(`expected replay.state length ${expectedLen}, got ${replay.state.length}`)
+  if (replay.events.length !== expectedLen) throw new Error(`expected replay.events length ${expectedLen}, got ${replay.events.length}`)
 
   return {
     name,
-    params: { seed, tickCap, bots: [...botNums] },
+    params: { seed, tickCap: replay.tickCap, bots: [...botNums] },
     coreReplaySha256: hashReplayCore(replay),
     stateTickSha256: hashTicks(replay.state),
     eventsTickSha256: hashTicks(replay.events),
@@ -100,6 +64,16 @@ writeFixture(
 )
 
 writeFixture(
+  'examples_patrol_seed456',
+  buildScenario({ name: 'examples_patrol_seed456', seed: 456, tickCap: 80, botNums: [1, 2, 3, 0] })
+)
+
+writeFixture(
   'modules_powerups_seed999',
   buildScenario({ name: 'modules_powerups_seed999', seed: 999, tickCap: 120, botNums: [0, 5, 6, 4] })
+)
+
+writeFixture(
+  'modules_saw_rush_seed777',
+  buildScenario({ name: 'modules_saw_rush_seed777', seed: 777, tickCap: 90, botNums: [4, 6, 5, 0] })
 )

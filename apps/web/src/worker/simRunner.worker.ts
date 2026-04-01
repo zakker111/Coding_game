@@ -1,19 +1,16 @@
-import { runMatchToReplay } from '@coding-game/engine'
-
 import { isRunLocalMessage } from './messages'
-import { mixSeed } from './seed'
+import { runMatchLocal } from './runMatchLocal'
 
 self.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (!isRunLocalMessage(event.data)) return
 
   const { requestId, seed, tickCap, bots } = event.data
-  const mixedSeed = mixSeed(seed, bots)
 
-  const replay = runMatchToReplay({
-    seed: mixedSeed,
+  const replay = runMatchLocal(
+    seed,
     tickCap,
-    bots: bots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText })),
-  })
+    bots.map((b) => ({ slotId: b.slotId, sourceText: b.sourceText, loadout: b.loadout })),
+  )
 
   self.postMessage({
     type: 'RUN_RESULT',
