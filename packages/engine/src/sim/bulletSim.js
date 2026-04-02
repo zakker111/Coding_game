@@ -7,8 +7,7 @@ import {
   BULLET_SPEED_UNITS_PER_TICK,
   SLOT_IDS,
 } from './constants.js'
-import { bresenhamPoints } from './bresenham.js'
-import { clonePos, normalizeToLen, normalizeToMaxAxis, pointInBotAabb } from './arenaMath.js'
+import { clonePos, normalizeToLen, normalizeToMaxAxis, segmentFirstArenaExit, segmentFirstBotAabbHit } from './arenaMath.js'
 
 
 
@@ -57,36 +56,26 @@ export function stepBullets(bullets, bots, tickEvents) {
       y: bullet.pos.y + bullet.vel.y,
     }
 
-    const path = bresenhamPoints(fromPos, candidateTo)
+    const wallHit = segmentFirstArenaExit(fromPos, candidateTo, ARENA_MIN, ARENA_MAX)
+    const botHits = []
 
-    /** @type {{ kind: 'NONE' } | { kind: 'WALL', pos: {x:number,y:number} } | { kind: 'BOT', pos: {x:number,y:number}, victim: any }} */
-    let hit = { kind: 'NONE' }
+    for (const botId of SLOT_IDS) {
+      const bot = botsById(bots, botId)
+      if (!bot || !bot.alive) continue
+      if (bot.botId === bullet.ownerBotId) continue
 
-    for (const p of path) {
-      if (p.x < ARENA_MIN || p.x > ARENA_MAX || p.y < ARENA_MIN || p.y > ARENA_MAX) {
-        hit = {
-          kind: 'WALL',
-          pos: {
-            x: Math.max(ARENA_MIN, Math.min(ARENA_MAX, p.x)),
-            y: Math.max(ARENA_MIN, Math.min(ARENA_MAX, p.y)),
-          },
-        }
-        break
-      }
+      const hit = segmentFirstBotAabbHit(fromPos, candidateTo, bot.pos, BOT_HALF_SIZE)
+      if (!hit) continue
 
-      for (const botId of SLOT_IDS) {
-        const bot = botsById(bots, botId)
-        if (!bot || !bot.alive) continue
-        if (bot.botId === bullet.ownerBotId) continue
-
-        if (pointInBotAabb(bot.pos, p)) {
-          hit = { kind: 'BOT', pos: clonePos(p), victim: bot }
-          break
-        }
-      }
-
-      if (hit.kind !== 'NONE') break
+      botHits.push({
+        kind: 'BOT',
+        victim: bot,
+        t: hit.t,
+        pos: clonePos(hit.pos),
+      })
     }
+
+    const hit = pickEarliestCollision(wallHit, botHits)
 
     const toPos = hit.kind === 'NONE' ? clonePos(candidateTo) : clonePos(hit.pos)
 
@@ -133,23 +122,13 @@ export function stepBullets(bullets, bots, tickEvents) {
         })
       }
 
-      tickEvents.push({
-        type: 'BULLET_DESPAWN',
-        bulletId: bullet.bulletId,
-        reason: 'HIT',
-        pos: clonePos(hit.pos),
-      })
+      emitBulletDespawn(tickEvents, bullet.bulletId, 'HIT', hit.pos)
 
       continue
     }
 
     if (hit.kind === 'WALL') {
-      tickEvents.push({
-        type: 'BULLET_DESPAWN',
-        bulletId: bullet.bulletId,
-        reason: 'WALL',
-        pos: clonePos(hit.pos),
-      })
+      emitBulletDespawn(tickEvents, bullet.bulletId, 'WALL', hit.pos)
       continue
     }
 
@@ -158,12 +137,7 @@ export function stepBullets(bullets, bots, tickEvents) {
     bullet.ttl--
 
     if (bullet.ttl <= 0) {
-      tickEvents.push({
-        type: 'BULLET_DESPAWN',
-        bulletId: bullet.bulletId,
-        reason: 'TTL',
-        pos: clonePos(toPos),
-      })
+      emitBulletDespawn(tickEvents, bullet.bulletId, 'TTL', toPos)
       continue
     }
 
@@ -171,6 +145,40 @@ export function stepBullets(bullets, bots, tickEvents) {
   }
 
   return next
+}
+
+function emitBulletDespawn(tickEvents, bulletId, reason, pos) {
+  tickEvents.push({
+    type: 'BULLET_DESPAWN',
+    bulletId,
+    reason,
+    pos: clonePos(pos),
+  })
+}
+
+function pickEarliestCollision(wallHit, botHits) {
+  /** @type {{ kind: 'NONE' } | { kind: 'WALL', t: number, pos: {x:number,y:number} } | { kind: 'BOT', t: number, pos: {x:number,y:number}, victim: any }} */
+  let bestBotHit = { kind: 'NONE' }
+
+  for (const hit of botHits) {
+    if (bestBotHit.kind === 'NONE' || hit.t < bestBotHit.t || (hit.t === bestBotHit.t && hit.victim.botId < bestBotHit.victim.botId)) {
+      bestBotHit = hit
+    }
+  }
+
+  if (bestBotHit.kind !== 'NONE') {
+    if (!wallHit || wallHit.t >= bestBotHit.t) return bestBotHit
+  }
+
+  if (wallHit) {
+    return {
+      kind: 'WALL',
+      t: wallHit.t,
+      pos: clonePos(wallHit.pos),
+    }
+  }
+
+  return { kind: 'NONE' }
 }
 
 /**

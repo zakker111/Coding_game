@@ -108,6 +108,90 @@ export function clonePos(p) {
   return { x: p.x, y: p.y }
 }
 
+export function roundSweepPoint(fromPos, toPos, t) {
+  const x = fromPos.x + (toPos.x - fromPos.x) * t
+  const y = fromPos.y + (toPos.y - fromPos.y) * t
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+  }
+}
+
+export function segmentFirstBotAabbHit(fromPos, toPos, botPos, halfSize = BOT_HALF_SIZE) {
+  const minX = botPos.x - halfSize
+  const maxX = botPos.x + halfSize
+  const minY = botPos.y - halfSize
+  const maxY = botPos.y + halfSize
+
+  const dx = toPos.x - fromPos.x
+  const dy = toPos.y - fromPos.y
+
+  let tEnter = 0
+  let tExit = 1
+
+  for (const axis of [
+    { p: fromPos.x, d: dx, min: minX, max: maxX },
+    { p: fromPos.y, d: dy, min: minY, max: maxY },
+  ]) {
+    if (axis.d === 0) {
+      if (axis.p < axis.min || axis.p > axis.max) return null
+      continue
+    }
+
+    let t1 = (axis.min - axis.p) / axis.d
+    let t2 = (axis.max - axis.p) / axis.d
+    if (t1 > t2) [t1, t2] = [t2, t1]
+
+    tEnter = Math.max(tEnter, t1)
+    tExit = Math.min(tExit, t2)
+
+    if (tEnter > tExit) return null
+  }
+
+  if (tExit < 0 || tEnter > 1) return null
+
+  const t = Math.max(0, tEnter)
+  const rounded = roundSweepPoint(fromPos, toPos, t)
+
+  return {
+    t,
+    pos: {
+      x: Math.max(minX, Math.min(maxX, rounded.x)),
+      y: Math.max(minY, Math.min(maxY, rounded.y)),
+    },
+  }
+}
+
+export function segmentFirstArenaExit(fromPos, toPos, arenaMin, arenaMax) {
+  const dx = toPos.x - fromPos.x
+  const dy = toPos.y - fromPos.y
+
+  /** @type {{ t: number, pos: { x: number, y: number } } | null} */
+  let best = null
+
+  for (const axis of [
+    { p: fromPos.x, d: dx, bound: dx < 0 ? arenaMin : arenaMax, isMovingOut: toPos.x < arenaMin || toPos.x > arenaMax },
+    { p: fromPos.y, d: dy, bound: dy < 0 ? arenaMin : arenaMax, isMovingOut: toPos.y < arenaMin || toPos.y > arenaMax },
+  ]) {
+    if (!axis.isMovingOut || axis.d === 0) continue
+
+    const t = (axis.bound - axis.p) / axis.d
+    if (t < 0 || t > 1) continue
+
+    const rounded = roundSweepPoint(fromPos, toPos, t)
+    const pos = {
+      x: Math.max(arenaMin, Math.min(arenaMax, rounded.x)),
+      y: Math.max(arenaMin, Math.min(arenaMax, rounded.y)),
+    }
+
+    if (!best || t < best.t) {
+      best = { t, pos }
+    }
+  }
+
+  return best
+}
+
 /**
  * Scale a vector toward a point to length <= maxLen using deterministic integer math.
  *

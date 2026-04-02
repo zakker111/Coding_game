@@ -23,7 +23,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json --noEmit && node --test",
-    "test:golden": "node --test test/golden",
+    "test:golden": "node --test test/golden/goldenReplays.test.js",
     "golden:update": "node test/golden/updateGolden.mjs",
     "golden:check": "node test/golden/checkGoldens.mjs --strict"
   }

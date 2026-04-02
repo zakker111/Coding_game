@@ -40,6 +40,8 @@ This project follows **Semantic Versioning** (SemVer): `MAJOR.MINOR.PATCH`.
 ### Fixed
 - `packages/engine`: fixed VM init corruption in `initBotVm` (could break execution).
 - `TARGET_CLOSEST_BULLET` tie-break now uses numeric bullet creation order (`B1 < B2 < …`, not lexicographic).
+- `packages/engine` bullet collision now resolves the earliest continuous obstacle along the segment instead of relying on stepped Bresenham samples.
+- Replay/engine bullet invariants tightened: bullet lifecycle events now require bounded positions and explicit despawn reasons (`HIT|WALL|TTL`).
 - `packages/replay` sample generator no longer source-scans for module capability; it is loadout-driven (consistent with `rulesetVersion = 0.2.0`).
 - Sample replay starter bot source includes the same `;@slot*` header directives for consistency.
 - Phase 6: golden determinism fixtures committed + enforced in CI.

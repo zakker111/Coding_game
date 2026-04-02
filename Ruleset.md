@@ -322,9 +322,10 @@ On fire:
 
 Movement + collision:
 - Each tick, each bullet advances from `fromPos → candidateToPos`.
-- The engine walks integer points on the segment using Bresenham and finds the first collision:
-  - wall (outside arena bounds)
-  - bot AABB (excluding owner)
+- The engine resolves the earliest collision along the continuous segment:
+  - wall (first arena exit)
+  - bot AABB entry (excluding owner)
+- Replay/event positions use deterministic integer positions derived from that resolved contact point.
 - On hit:
   - emit `BULLET_MOVE` with `toPos` as the hit point
   - emit `BULLET_HIT`
@@ -338,7 +339,9 @@ Movement + collision:
   - when TTL reaches 0: emit `BULLET_DESPAWN reason=TTL`
 
 Tie-breaks:
-- At each stepped point, bots are checked in `BOT1..BOT4` order, so simultaneous overlaps at the same point resolve to the lowest bot id.
+- Smallest collision time `t` wins.
+- If two bot AABBs are entered at the same `t`, the lower bot id wins.
+- Wall collision wins only when arena exit occurs strictly before the earliest bot entry.
 
 ---
 
@@ -403,6 +406,5 @@ Pickup behavior (implemented):
 Lifetime:
 - Each powerup records `expiresAtTick = spawnTick + powerupLifetimeTicks`.
 - At end-of-tick maintenance, expired powerups are removed and emit `POWERUP_DESPAWN reason=RULES`.
-
 
 

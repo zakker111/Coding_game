@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { compileBotSource, runMatchToReplay } from '@coding-game/engine'
+import { ARENA_MAX, ARENA_MIN, BOT_CENTER_MAX, BOT_CENTER_MIN } from '../src/sim/constants.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -113,6 +114,8 @@ test('runMatchToReplay: end-to-end example match replay is deterministic, ends, 
       assertFiniteNumber(b.ammo, `expected finite bot.ammo at t=${s.t} (${b.botId})`)
       assertFiniteNumber(b.energy, `expected finite bot.energy at t=${s.t} (${b.botId})`)
       assertFiniteNumber(b.pc, `expected finite bot.pc at t=${s.t} (${b.botId})`)
+      assert.ok(b.pos.x >= BOT_CENTER_MIN && b.pos.x <= BOT_CENTER_MAX, `expected bot.pos.x in bounds at t=${s.t} (${b.botId})`)
+      assert.ok(b.pos.y >= BOT_CENTER_MIN && b.pos.y <= BOT_CENTER_MAX, `expected bot.pos.y in bounds at t=${s.t} (${b.botId})`)
     }
 
     for (const bl of s.bullets) {
@@ -120,6 +123,8 @@ test('runMatchToReplay: end-to-end example match replay is deterministic, ends, 
       assertFiniteNumber(bl.pos.y, `expected finite bullet.pos.y at t=${s.t} (${bl.bulletId})`)
       assertFiniteNumber(bl.vel.x, `expected finite bullet.vel.x at t=${s.t} (${bl.bulletId})`)
       assertFiniteNumber(bl.vel.y, `expected finite bullet.vel.y at t=${s.t} (${bl.bulletId})`)
+      assert.ok(bl.pos.x >= ARENA_MIN && bl.pos.x <= ARENA_MAX, `expected bullet.pos.x in bounds at t=${s.t} (${bl.bulletId})`)
+      assert.ok(bl.pos.y >= ARENA_MIN && bl.pos.y <= ARENA_MAX, `expected bullet.pos.y in bounds at t=${s.t} (${bl.bulletId})`)
     }
   }
 })
