@@ -9,7 +9,7 @@ describe('mixSeed', () => {
       { slotId: 'BOT2', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
       { slotId: 'BOT3', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
       { slotId: 'BOT4', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
-    ] as const
+    ]
 
     const a = mixSeed(12345, [...bots])
     const b = mixSeed(12345, [...bots])
