@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 
-import type { Loadout, ModuleId, Replay, ReplayEvent, SlotId } from '@coding-game/replay'
+import type { KnownReplayEvent, Loadout, ModuleId, Replay, ReplayEvent, SlotId } from '@coding-game/replay'
 
 import { EXAMPLE_BOTS, EXAMPLE_OPPONENT_IDS } from '../exampleBots'
 import {
@@ -162,6 +162,13 @@ function isRelevantEvent(e: ReplayEvent, botId: SlotId): boolean {
     default:
       return false
   }
+}
+
+function isKnownReplayEventType<TType extends KnownReplayEvent['type']>(
+  e: ReplayEvent,
+  type: TType,
+): e is Extract<KnownReplayEvent, { type: TType }> {
+  return e.type === type
 }
 
 function deriveLoadoutFromScriptOrDefault(sourceText: string): Loadout {
@@ -386,11 +393,15 @@ export function WorkshopPage() {
     for (const b of next.bullets) bulletIds.add(b.bulletId)
 
     const spawnsByBulletId = new Map(
-      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_SPAWN').map((e) => [e.bulletId, e]),
+      (replay.events[t] ?? [])
+        .filter((e): e is Extract<KnownReplayEvent, { type: 'BULLET_SPAWN' }> => isKnownReplayEventType(e, 'BULLET_SPAWN'))
+        .map((e) => [e.bulletId, e]),
     )
 
     const despawnsByBulletId = new Map(
-      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_DESPAWN').map((e) => [e.bulletId, e]),
+      (replay.events[t] ?? [])
+        .filter((e): e is Extract<KnownReplayEvent, { type: 'BULLET_DESPAWN' }> => isKnownReplayEventType(e, 'BULLET_DESPAWN'))
+        .map((e) => [e.bulletId, e]),
     )
 
     const out = [] as Array<{
@@ -498,7 +509,7 @@ export function WorkshopPage() {
   const selectedTickEvents = React.useMemo(() => {
     if (!replay) return []
     const t = clamp(playback.tick, 0, replay.tickCap)
-    return (replay.events[t] ?? []).filter((e) => isRelevantEvent(e, selectedBotId))
+    return (replay.events[t] ?? []).filter((e): e is KnownReplayEvent => isRelevantEvent(e, selectedBotId))
   }, [playback.tick, replay, selectedBotId])
 
   const selectedTickEventLines = React.useMemo(() => {
@@ -1169,8 +1180,8 @@ export function WorkshopPage() {
               {(() => {
                 if (!replay) return <div className="muted">Run a match to inspect execution.</div>
 
-                const exec = selectedTickEvents.find((e) => e.type === 'BOT_EXEC')
-                if (!exec || exec.type !== 'BOT_EXEC') return <div className="muted">(no BOT_EXEC)</div>
+                const exec = selectedTickEvents.find((e): e is Extract<KnownReplayEvent, { type: 'BOT_EXEC' }> => isKnownReplayEventType(e, 'BOT_EXEC'))
+                if (!exec) return <div className="muted">(no BOT_EXEC)</div>
 
                 return (
                   <div className="muted" style={{ lineHeight: 1.5 }}>

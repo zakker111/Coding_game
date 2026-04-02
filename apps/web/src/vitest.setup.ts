@@ -19,7 +19,9 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   })
 }
 
-Object.defineProperty(window, 'devicePixelRatio', {
-  value: 1,
-  writable: true,
-})
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'devicePixelRatio', {
+    value: 1,
+    writable: true,
+  })
+}

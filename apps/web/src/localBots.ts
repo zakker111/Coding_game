@@ -115,10 +115,10 @@ function readLegacyDrafts(): LegacyDrafts | null {
 }
 
 function createLibraryFromLegacyDrafts(legacy: LegacyDrafts, starterSourceText: string): LocalBotLibraryV2 {
-  const bots: LocalBot[] = [1, 2, 3].map((i) => {
-    const slotId = (i === 1 ? 'BOT1' : i === 2 ? 'BOT2' : 'BOT3') as const
+  const bots: LocalBot[] = (['BOT1', 'BOT2', 'BOT3'] as const).map((slotId, i) => {
     const sourceText = legacy[slotId] ?? starterSourceText
-    return normalizeBotFromSource(`my-bot-${i}`, `my-bot-${i}`, sourceText)
+    const botNumber = i + 1
+    return normalizeBotFromSource(`my-bot-${botNumber}`, `my-bot-${botNumber}`, sourceText)
   })
 
   if (typeof legacy.BOT4 === 'string' && legacy.BOT4.length > 0) {

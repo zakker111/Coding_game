@@ -1,15 +1,17 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
+
+import type { BotSpec } from '../messages'
 import { mixSeed } from '../seed'
 
 describe('mixSeed', () => {
   it('is deterministic and sensitive to bot source changes', () => {
-    const bots = [
+    const bots: BotSpec[] = [
       { slotId: 'BOT1', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
       { slotId: 'BOT2', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
       { slotId: 'BOT3', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
       { slotId: 'BOT4', sourceText: 'WAIT 1', loadout: ['BULLET', null, null] },
-    ] as const
+    ]
 
     const a = mixSeed(12345, [...bots])
     const b = mixSeed(12345, [...bots])
