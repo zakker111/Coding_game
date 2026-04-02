@@ -1,7 +1,17 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 
-import type { Loadout, ModuleId, Replay, ReplayEvent, SlotId } from '@coding-game/replay'
+import type {
+  BotExecEvent,
+  BulletSpawnEvent,
+  BulletDespawnEvent,
+  KnownReplayEvent,
+  Loadout,
+  ModuleId,
+  Replay,
+  ReplayEvent,
+  SlotId,
+} from '@coding-game/replay'
 
 import { EXAMPLE_BOTS, EXAMPLE_OPPONENT_IDS } from '../exampleBots'
 import {
@@ -386,11 +396,11 @@ export function WorkshopPage() {
     for (const b of next.bullets) bulletIds.add(b.bulletId)
 
     const spawnsByBulletId = new Map(
-      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_SPAWN').map((e) => [e.bulletId, e]),
+      (replay.events[t] ?? []).filter((e): e is BulletSpawnEvent => e.type === 'BULLET_SPAWN').map((e) => [e.bulletId, e]),
     )
 
     const despawnsByBulletId = new Map(
-      (replay.events[t] ?? []).filter((e) => e.type === 'BULLET_DESPAWN').map((e) => [e.bulletId, e]),
+      (replay.events[t] ?? []).filter((e): e is BulletDespawnEvent => e.type === 'BULLET_DESPAWN').map((e) => [e.bulletId, e]),
     )
 
     const out = [] as Array<{
@@ -507,7 +517,7 @@ export function WorkshopPage() {
     const lines: Array<{ key: string; label: string; detail?: string; tone?: 'muted' | 'bad' | 'good' }> = []
 
     for (let i = 0; i < selectedTickEvents.length; i++) {
-      const e = selectedTickEvents[i]
+      const e = selectedTickEvents[i] as KnownReplayEvent
       switch (e.type) {
         case 'BOT_EXEC': {
           const tone = e.result === 'EXECUTED' ? 'good' : e.reason ? 'bad' : 'muted'
@@ -1169,8 +1179,8 @@ export function WorkshopPage() {
               {(() => {
                 if (!replay) return <div className="muted">Run a match to inspect execution.</div>
 
-                const exec = selectedTickEvents.find((e) => e.type === 'BOT_EXEC')
-                if (!exec || exec.type !== 'BOT_EXEC') return <div className="muted">(no BOT_EXEC)</div>
+                const exec = selectedTickEvents.find((e): e is BotExecEvent => e.type === 'BOT_EXEC')
+                if (!exec) return <div className="muted">(no BOT_EXEC)</div>
 
                 return (
                   <div className="muted" style={{ lineHeight: 1.5 }}>
