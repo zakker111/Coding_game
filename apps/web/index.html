@@ -18,9 +18,11 @@
         const q = params.get('q')
         if (!p) return
 
+        const base = '%BASE_URL%'.replace(/\/+$/, '')
         const restoredPath = decodeURIComponent(p)
         const restoredQuery = q ? `?${decodeURIComponent(q)}` : ''
-        const restored = `${restoredPath}${restoredQuery}${window.location.hash}`
+        const alreadyBased = restoredPath === base || restoredPath.startsWith(`${base}/`)
+        const restored = `${alreadyBased ? restoredPath : `${base}${restoredPath}`}${restoredQuery}${window.location.hash}`
 
         window.history.replaceState(null, '', restored)
       })()

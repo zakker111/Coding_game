@@ -12,8 +12,11 @@ const pkg = JSON.parse(readFileSync(path.join(__dirname, 'package.json'), 'utf8'
 }
 
 const repoRoot = path.resolve(__dirname, '../..')
+const basePath = process.env.PUBLIC_BASE_PATH ?? '/'
+const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`
 
 export default defineConfig({
+  base: normalizedBasePath,
   plugins: [react()],
   server: {
     fs: {

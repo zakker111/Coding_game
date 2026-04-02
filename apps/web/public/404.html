@@ -19,13 +19,12 @@
         const search = window.location.search
         const hash = window.location.hash
 
-        // If we're already at /, don't loop.
-        if (path === '/') return
-
         // Strip leading slash from the query string.
         const q = search.startsWith('?') ? search.slice(1) : search
+        const segments = path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean)
+        const prefix = '../'.repeat(Math.max(1, segments.length - 1))
 
-        const target = `/?p=${encodeURIComponent(path)}&q=${encodeURIComponent(q)}${hash}`
+        const target = `${prefix}?p=${encodeURIComponent(path)}&q=${encodeURIComponent(q)}${hash}`
         window.location.replace(target)
       })()
     </script>
